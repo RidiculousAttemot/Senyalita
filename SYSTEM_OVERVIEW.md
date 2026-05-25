@@ -1,7 +1,7 @@
 # SignLangVisual System Overview
 
 ## Purpose
-Real-time Filipino Sign Language (FSL) translation on a single device. The system captures hand gestures, recognizes the sign using AI, and outputs readable text and audio speech.
+Real-time Filipino Sign Language (FSL) translation on a single device. The system captures hand gestures, recognizes the sign using AI, and outputs readable text and audio speech in English or Tagalog.
 
 ## Core Pipeline
 User performs sign
@@ -9,7 +9,7 @@ User performs sign
 -> Hand detection + preprocessing
 -> Landmark extraction (MediaPipe Hands)
 -> Gesture recognition model (CNN-LSTM)
--> Text output + audio speech
+-> Text output + audio speech (English or Tagalog)
 
 ## System Scope
 - Single-device, real-time translation
@@ -28,7 +28,6 @@ User performs sign
 ## API Usage
 - REST API: app data, logs, and user actions
 - WebSocket API: low-latency UI updates during recognition
-- Model Inference API: runs the classifier on landmark sequences
 - Text-to-Speech API: converts translated text into speech output
 
 ## Why This Stack
@@ -48,6 +47,9 @@ User performs sign
 
 ## Where to Begin
 Start in the frontend with the camera page and MediaPipe integration. The system depends on a stable real-time pipeline before backend features add value.
+
+## Current Focus
+Phase 1: Frontend pipeline (camera, landmarks, and basic text output).
 
 ## Codebase Structure
 - src/app: routes, layouts, and API endpoints
@@ -71,7 +73,13 @@ Start in the frontend with the camera page and MediaPipe integration. The system
 - Environment-based secrets in config
 
 ## AI Placement
-The AI model sits between landmark extraction and text output. MediaPipe Hands provides landmarks, then a CNN-LSTM predicts the gesture class from landmark sequences and outputs text with confidence and optional smoothing.
+The AI model sits between landmark extraction and text output. MediaPipe Hands provides landmarks, then a local CNN-LSTM predicts the gesture class from landmark sequences and outputs text with confidence and optional smoothing.
+
+## AI Capabilities
+- Primary recognition from landmark sequences
+- Top-k suggestion outputs based on confidence
+- Confidence thresholding and retry prompts
+- Reply phrase suggestions mapped from recognized text
 
 ## Two-Way Communication (Reply Flow)
 After receiving translated text, the user can respond by selecting a phrase that plays a short sign video clip (for example, "thank you"). Reply clips are uploaded by the admin and appear as suggested responses. The user can also type a custom reply, which shows a translated video button if a matching clip exists.

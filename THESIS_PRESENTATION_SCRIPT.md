@@ -12,7 +12,7 @@ Communication is essential in daily life, yet Deaf and hard-of-hearing individua
 
 ## Objectives of the Study
 - Develop a real-time sign language recognition system.
-- Translate recognized gestures into text and speech outputs.
+- Translate recognized gestures into text and speech outputs in English or Tagalog.
 - Evaluate the system using ISO/IEC 25010 software quality standards.
 - Assess usability, reliability, functionality, and performance efficiency.
 
@@ -25,6 +25,7 @@ This study benefits:
 
 ## Methodology
 Development began with the frontend camera pipeline and MediaPipe landmarks to ensure real-time processing before adding backend services.
+Phase 1 focuses on webcam capture, landmark rendering, and basic text output.
 ### Research Instrument
 We used a Likert Scale questionnaire aligned with ISO/IEC 25010. Respondents evaluated:
 - Functional suitability
@@ -79,7 +80,6 @@ Mobile target (future-ready):
 ## API Specifications
 - REST API: application data, logs, and user actions
 - WebSocket API: low-latency updates for real-time UI state
-- Model Inference API: runs the classifier on landmark sequences
 - Text-to-Speech API: converts translated text into speech
 
 ## System Design
@@ -115,7 +115,11 @@ Five stages:
 4. Deep learning recognition (CNN-LSTM)
 5. Output (text and speech)
 
+The model also provides top-k suggestion outputs when confidence is high to help users confirm or correct recognition quickly.
+
 The model processes landmark sequences and predicts the sign with confidence, then outputs text and optional speech.
+The output language can be switched between English and Tagalog for accessibility.
+The recognition model runs locally in the client, not through a remote inference API.
 
 ## Data Flow (Summary)
 - User signs in front of the camera.

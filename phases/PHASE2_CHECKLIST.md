@@ -6,6 +6,7 @@ Goal: Add the CNN-LSTM recognition model and basic logging.
 - Load CNN-LSTM model (TensorFlow.js)
 - Accept landmark sequences as input
 - Output predicted class with confidence
+- Add top-k suggestions for user confirmation
 - Add smoothing over recent frames
 
 ## Translation Layer

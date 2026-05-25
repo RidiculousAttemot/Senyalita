@@ -8,6 +8,9 @@ Start with the frontend. The core of this system is real-time camera capture and
 - Camera page with live landmarks
 - Text output panel with placeholder prediction
 
+## Current Focus
+Phase 1: Frontend pipeline only. No backend or model integration yet.
+
 ## User Roles
 - Guest User: uses live translation without logging in
 - Registered User: saves translation history and preferences
@@ -29,8 +32,9 @@ Start with the frontend. The core of this system is real-time camera capture and
 2. Browser requests webcam permission.
 3. MediaPipe Hands extracts landmarks.
 4. CNN-LSTM model predicts the sign label.
-5. System maps label to text.
-6. Text is displayed and spoken via text-to-speech.
+5. System maps label to text and shows top-k suggestions.
+6. User selects output language (English or Tagalog).
+7. Text is displayed and spoken via text-to-speech.
 
 ## Two-Way Communication Flow (Reply)
 1. User reads the translated text.
@@ -55,6 +59,7 @@ Start with the frontend. The core of this system is real-time camera capture and
 ## Key Screens
 - Landing: start translation, short system intro, optional login
 - Camera: live recognition and transcript
+- Language: toggle English or Tagalog output
 - Reply: phrase picker and sign video playback
 - History: saved translations and export
 - Settings: language, voice, and preferences
@@ -71,5 +76,5 @@ Start with the frontend. The core of this system is real-time camera capture and
 - Environment-based secrets and config
 
 ## Notes
-- Core translation runs client-side for low latency.
+- Core translation runs client-side for low latency using our own CNN-LSTM model.
 - Backend is optional at first; add after core works.

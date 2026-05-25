@@ -1,21 +1,22 @@
-# Phase 3 Checklist (Two-Way Reply + Admin)
+# Phase 3 Checklist (Dataset Capture)
 
-Goal: Add reply video flow and admin upload tools.
+Goal: Add a frontend-only dataset capture tool for MediaPipe landmark sequences.
 
-## Reply Flow
-- Add Reply button and phrase picker
-- Show suggested reply clips
-- Allow typed reply with matching clip lookup
-- Play sign video clip on selection
+## Dataset Module
+- Create src/features/dataset with types and helpers
+- Add export helpers for JSON download
 
-## Admin Flow
-- Admin login page
-- Upload labeled reply videos
-- Store and index clips for lookup
+## Camera Integration
+- Add developer dataset capture panel on /camera
+- Require a label before recording
+- Start/stop/clear/export controls
+- Show frame count and duration
+- Enforce 10s / 300 frame limit
 
 ## Validation
-- Reply suggestions appear for known phrases
-- Video playback is reliable
+- Records frames while active
+- Export JSON downloads successfully
+- Existing mock recognition still works
 
 ## Deliverable
-- Demo showing reply selection and video playback
+- Demo showing dataset capture and JSON export

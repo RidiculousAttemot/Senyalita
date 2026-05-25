@@ -9,6 +9,11 @@ This document explains the purpose, naming, and responsibility of each folder in
 - supabase: Supabase config and database migrations
 - tests: integration and e2e tests
 - middleware.ts: Next.js middleware for API and request handling
+- package.json: app scripts and dependencies
+- tsconfig.json: TypeScript configuration
+- next.config.mjs: Next.js configuration
+- next-env.d.ts: Next.js TypeScript declarations
+- .eslintrc.json: lint configuration
 
 ## src
 - app: Next.js routes, layouts, and API routes
@@ -41,6 +46,8 @@ Examples:
 - landmarks: MediaPipe setup and landmark extraction
 - recognition: model inference, smoothing, confidence thresholds
 - translation: label to text mapping
+- translation: label to text mapping with English/Tagalog output
+- suggestions: top-k output and confidence handling
 - speech: text-to-speech playback
 - reply: phrase selection and sign video playback
 - history: logs, export, dataset recording
@@ -106,3 +113,6 @@ No feature-specific logic.
 
 ## Recommended Starting Point
 Build src/app (landing + camera) and src/features/landmarks first, then add src/features/recognition and backend services.
+
+## Current Focus
+Phase 1: frontend pipeline and landmark rendering.
