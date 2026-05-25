@@ -4,7 +4,7 @@ This document explains the purpose, naming, and responsibility of each folder in
 
 ## Root
 - docs: thesis notes, diagrams, design decisions
-- public: static assets served by the web app
+- public: static assets served by the web app (including sign video clips)
 - scripts: dataset prep, exports, and developer tooling
 - supabase: Supabase config and database migrations
 - tests: integration and e2e tests
@@ -42,6 +42,7 @@ Examples:
 - recognition: model inference, smoothing, confidence thresholds
 - translation: label to text mapping
 - speech: text-to-speech playback
+- reply: phrase selection and sign video playback
 - history: logs, export, dataset recording
 
 ### src/shared
@@ -102,3 +103,6 @@ No feature-specific logic.
 ## Notes
 - Empty folders include .gitkeep to preserve structure.
 - This structure is designed for scalability and clear thesis presentation.
+
+## Recommended Starting Point
+Build src/app (landing + camera) and src/features/landmarks first, then add src/features/recognition and backend services.

@@ -24,6 +24,7 @@ This study benefits:
 - Future developers through a foundation for extension and improvement.
 
 ## Methodology
+Development began with the frontend camera pipeline and MediaPipe landmarks to ensure real-time processing before adding backend services.
 ### Research Instrument
 We used a Likert Scale questionnaire aligned with ISO/IEC 25010. Respondents evaluated:
 - Functional suitability
@@ -88,6 +89,16 @@ Camera Input
 -> Landmark Extraction
 -> Deep Learning Recognition
 -> Text and Speech Output
+
+Reply Flow (Two-Way)
+Translated text
+-> User selects a reply phrase or types a response
+-> Suggested reply clips appear
+-> System plays a sign language video clip
+
+Admin Flow (Reply Videos)
+Admin uploads labeled sign language reply videos
+-> Clips are used for reply suggestions
 
 ### Web Dashboard
 - Live camera feed

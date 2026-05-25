@@ -16,6 +16,7 @@ User performs sign
 - Web-based interface
 - Dynamic sign support planned (sequence-based)
 - Public landing page with optional login
+- Two-way communication via sign video playback
 
 ## Recommended Web Stack (Free-Friendly)
 - Frontend: Next.js (TypeScript)
@@ -45,6 +46,9 @@ User performs sign
 6. Connect Supabase for logging and user data.
 7. Later: replace placeholder classifier with CNN-LSTM for dynamic signs.
 
+## Where to Begin
+Start in the frontend with the camera page and MediaPipe integration. The system depends on a stable real-time pipeline before backend features add value.
+
 ## Codebase Structure
 - src/app: routes, layouts, and API endpoints
 - src/features: capture, landmarks, recognition, translation, speech, history
@@ -68,6 +72,9 @@ User performs sign
 
 ## AI Placement
 The AI model sits between landmark extraction and text output. MediaPipe Hands provides landmarks, then a CNN-LSTM predicts the gesture class from landmark sequences and outputs text with confidence and optional smoothing.
+
+## Two-Way Communication (Reply Flow)
+After receiving translated text, the user can respond by selecting a phrase that plays a short sign video clip (for example, "thank you"). Reply clips are uploaded by the admin and appear as suggested responses. The user can also type a custom reply, which shows a translated video button if a matching clip exists.
 
 ## Two-Stage Algorithm Rationale
 We use a two-stage pipeline: MediaPipe Hands extracts reliable hand landmarks, and a CNN-LSTM performs the recognition. This separation improves speed and stability while still capturing both spatial hand shape and temporal motion, which is critical for dynamic signs.

@@ -3,6 +3,11 @@
 ## Where to Begin
 Start with the frontend. The core of this system is real-time camera capture and on-device recognition, which must work before backend services add value. Once the webcam pipeline is stable, add backend features like logging, user profiles, and analytics.
 
+## First Build Target
+- Landing page with Start button
+- Camera page with live landmarks
+- Text output panel with placeholder prediction
+
 ## User Roles
 - Guest User: uses live translation without logging in
 - Registered User: saves translation history and preferences
@@ -27,6 +32,20 @@ Start with the frontend. The core of this system is real-time camera capture and
 5. System maps label to text.
 6. Text is displayed and spoken via text-to-speech.
 
+## Two-Way Communication Flow (Reply)
+1. User reads the translated text.
+2. User taps a Reply button.
+3. System shows suggested reply phrases with video clips.
+4. User selects a phrase (e.g., "thank you") or types a custom reply.
+5. If a matching clip exists, a play button appears.
+6. The system plays a short sign language video clip for the reply.
+5. The signer sees the reply and continues the conversation.
+
+## Admin Flow (Reply Video Management)
+1. Admin signs in.
+2. Admin uploads sign language reply videos with labels.
+3. System saves clips for use in reply suggestions.
+
 ## Data Flow (If Logged In)
 1. User signs in.
 2. Each prediction can be saved as a log entry.
@@ -36,6 +55,7 @@ Start with the frontend. The core of this system is real-time camera capture and
 ## Key Screens
 - Landing: start translation, short system intro, optional login
 - Camera: live recognition and transcript
+- Reply: phrase picker and sign video playback
 - History: saved translations and export
 - Settings: language, voice, and preferences
 
