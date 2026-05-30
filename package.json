@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "validate:dataset": "node scripts/validate-dataset.mjs",
+    "validate:dataset:strict": "node scripts/validate-dataset.mjs --strict"
   },
   "dependencies": {
     "@mediapipe/camera_utils": "0.3.1675466862",

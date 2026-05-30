@@ -1,36 +1,39 @@
     # Phase 1 Checklist (Frontend Pipeline)
 
     Goal: Get a working real-time camera pipeline with landmarks and text output.
-    Current phase: This is the active starting phase.
+    Current phase: Phase 2 (Recognition + Logging).
 
     ## Setup
-    - Create Next.js + TypeScript project
-    - Confirm app boots locally
+    - [x] Create Next.js + TypeScript project
+    - [x] Confirm app boots locally
 
     ## Landing Page
-    - Add a Start button that navigates to the camera page
-    - Add a short system intro
+    - [x] Add a Start button that navigates to the camera page
+    - [x] Add a short system intro
 
     ## Camera Page
-    - Request webcam permission using getUserMedia
-    - Show live video feed
-    - Add a canvas overlay for drawing landmarks
+    - [x] Request webcam permission using getUserMedia
+    - [x] Show live video feed
+    - [x] Add a canvas overlay for drawing landmarks
 
     ## MediaPipe Integration
-    - Load MediaPipe Hands
-    - Draw 21 landmarks on the canvas
-    - Show a basic status indicator (e.g., "Hand detected")
+    - [x] Load MediaPipe Hands
+    - [x] Draw 21 landmarks on the canvas
+    - [x] Show a basic status indicator (e.g., "Hand detected")
 
     ## Output Panel
-    - Add a transcript area
-    - Display placeholder text output
-    - Add a button for text-to-speech (browser TTS)
-    - Add an English/Tagalog output toggle (placeholder only)
+    - [x] Add a transcript area
+    - [x] Display placeholder text output
+    - [x] Add a button for text-to-speech (browser TTS)
+    - [x] Add an English/Tagalog output toggle (placeholder only)
 
     ## Validation
-    - Works in modern desktop browser
-    - Stable frame rate and clean overlay
-    - No blocking errors in console
+    - [x] Works in modern desktop browser
+    - [ ] Stable frame rate and clean overlay
+        Missing: Manual browser test works, but camera/landmark pipeline is slightly laggy and needs optimization.
+    - [ ] No blocking errors in console
+        Missing: console not checked during manual validation.
 
     ## Deliverable
-    - Short demo video of live landmarks and text output
+    - [ ] Short demo video of live landmarks and text output
+        Missing: demo video not found in repo.

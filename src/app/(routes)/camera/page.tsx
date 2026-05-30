@@ -49,6 +49,9 @@ export default function CameraPage() {
   const fpsRef = useRef({ frames: 0, last: performance.now(), value: 0 });
   const languageRef = useRef<LanguageOption>("en");
   const latestResultRef = useRef<PredictionResult>(INITIAL_RESULT.en);
+  const latestStatusRef = useRef<Status>("waiting");
+  const latestHandCountRef = useRef(0);
+  const latestFpsRef = useRef(0);
   const uiTimerRef = useRef<number | null>(null);
   const isRecordingRef = useRef(false);
   const recordingStartRef = useRef<number | null>(null);
@@ -136,6 +139,35 @@ export default function CameraPage() {
     );
   };
 
+  const getCameraErrorMessage = (err: unknown) => {
+    const fallback = "Camera permission denied or unavailable.";
+
+    if (!err || typeof err !== "object") {
+      return fallback;
+    }
+
+    const maybeError = err as { name?: string; message?: string };
+    const name = maybeError.name ?? "UnknownError";
+    const message = maybeError.message ? ` ${maybeError.message}` : "";
+
+    switch (name) {
+      case "NotAllowedError":
+        return `Camera access blocked. Allow camera permission in the browser settings.${message}`;
+      case "NotFoundError":
+        return `No camera device was found. Connect or enable a webcam and try again.${message}`;
+      case "NotReadableError":
+        return `Camera is already in use by another app. Close other apps using the camera and retry.${message}`;
+      case "OverconstrainedError":
+        return `Camera constraints cannot be satisfied. Try a different camera device or resolution.${message}`;
+      case "SecurityError":
+        return `Camera access requires a secure context. Use https or http://localhost.${message}`;
+      case "AbortError":
+        return `Camera request was interrupted. Reload the page and try again.${message}`;
+      default:
+        return `Camera error (${name}).${message}`;
+    }
+  };
+
   const startRecording = () => {
     if (!recordingLabel.trim()) {
       return;
@@ -191,12 +223,31 @@ export default function CameraPage() {
     let hands: any | null = null;
     let cancelled = false;
 
+    const updateCameraUi = () => {
+      setStatusSafe(latestStatusRef.current);
+      setHandCountSafe(latestHandCountRef.current);
+      setFps((prev) =>
+        prev === latestFpsRef.current ? prev : latestFpsRef.current
+      );
+    };
+
     const setup = async () => {
       setStatusSafe("waiting");
+      latestStatusRef.current = "waiting";
       setError(null);
+
+      if (!window.isSecureContext) {
+        setStatusSafe("error");
+        latestStatusRef.current = "error";
+        setError(
+          "Camera access requires a secure context. Use https or http://localhost."
+        );
+        return;
+      }
 
       if (!navigator.mediaDevices?.getUserMedia) {
         setStatusSafe("error");
+        latestStatusRef.current = "error";
         setError("Camera API not supported by this browser.");
         return;
       }
@@ -219,6 +270,7 @@ export default function CameraPage() {
         video.srcObject = stream;
         await video.play();
         setStatusSafe("active");
+        latestStatusRef.current = "active";
 
         const [{ Hands, HAND_CONNECTIONS }, drawingUtils, cameraUtils] =
           await Promise.all([
@@ -273,15 +325,17 @@ export default function CameraPage() {
           const landmarksList = results.multiHandLandmarks ?? [];
           const detectedHands = landmarksList.length;
           const handednessList = results.multiHandedness ?? [];
-
-          const frame: LandmarkFrame = {
-            hands: landmarksList.map((hand: any[]) =>
+          const mappedLandmarks: Array<Array<{ x: number; y: number; z: number }>> =
+            landmarksList.map((hand: any[]) =>
               hand.map((point: any) => ({
                 x: point.x,
                 y: point.y,
                 z: point.z
               }))
-            )
+            );
+
+          const frame: LandmarkFrame = {
+            hands: mappedLandmarks
           };
 
           latestResultRef.current = recognizeMock({
@@ -307,13 +361,9 @@ export default function CameraPage() {
               frames.push({
                 timestampMs: Date.now(),
                 handCount: detectedHands,
-                hands: landmarksList.map((hand: any[], index: number) => ({
+                hands: mappedLandmarks.map((landmarks, index) => ({
                   handedness: handednessList[index]?.label,
-                  landmarks: hand.map((point: any) => ({
-                    x: point.x,
-                    y: point.y,
-                    z: point.z
-                  }))
+                  landmarks
                 }))
               });
             }
@@ -328,14 +378,12 @@ export default function CameraPage() {
             );
             fpsRef.current.frames = 0;
             fpsRef.current.last = now;
-            setFps((prev) =>
-              prev === fpsRef.current.value ? prev : fpsRef.current.value
-            );
+            latestFpsRef.current = fpsRef.current.value;
           }
 
           if (detectedHands > 0) {
-            setHandCountSafe(detectedHands);
-            setStatusSafe(detectedHands === 1 ? "hand-1" : "hand-2");
+            latestHandCountRef.current = detectedHands;
+            latestStatusRef.current = detectedHands === 1 ? "hand-1" : "hand-2";
             for (const landmarks of landmarksList) {
               drawingUtils.drawConnectors(
                 ctx,
@@ -352,8 +400,8 @@ export default function CameraPage() {
               });
             }
           } else {
-            setHandCountSafe(0);
-            setStatusSafe("no-hand");
+            latestHandCountRef.current = 0;
+            latestStatusRef.current = "no-hand";
           }
 
           ctx.restore();
@@ -382,11 +430,13 @@ export default function CameraPage() {
           uiTimerRef.current = window.setInterval(() => {
             updatePredictionUi(latestResultRef.current);
             updateRecordingUi();
+            updateCameraUi();
           }, 200);
         }
       } catch (err) {
         setStatusSafe("error");
-        setError("Camera permission denied or unavailable.");
+        latestStatusRef.current = "error";
+        setError(getCameraErrorMessage(err));
       }
     };
 
