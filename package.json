@@ -12,12 +12,24 @@
     "preprocess:fsl-alphabet": "node scripts/preprocess-fsl-alphabet.mjs",
     "verify:processed:fsl-alphabet": "node scripts/verify-processed-fsl-alphabet.mjs",
     "summarize:processed:fsl-alphabet": "node scripts/summarize-processed-fsl-alphabet.mjs",
-    "train:fsl-alphabet:baseline": "python scripts/train-fsl-alphabet-baseline.py"
+    "train:fsl-alphabet:baseline": "node scripts/train-fsl-alphabet-baseline.mjs",
+    "train:fsl-alphabet:lstm": "node scripts/train-fsl-alphabet-lstm.mjs",
+    "train:fsl-alphabet:bilstm": "node scripts/train-fsl-alphabet-bilstm.mjs",
+    "export:fsl-alphabet:tfjs": "node scripts/export-fsl-alphabet-tfjs.mjs",
+    "train:fsl-alphabet:cnn-lstm": "node scripts/train-fsl-alphabet-cnn-lstm.mjs",
+    "augment:fsl-alphabet": "node scripts/augment-fsl-alphabet.mjs",
+    "preprocess:fsl-alphabet:v2": "node scripts/preprocess-fsl-alphabet-v2.mjs",
+    "audit:fsl-alphabet": "node scripts/audit-fsl-alphabet-dataset.mjs",
+    "evaluate:fsl-alphabet:cross": "node scripts/evaluate-fsl-alphabet-cross.mjs",
+    "train:fsl-alphabet:bilstm:v2": "node scripts/train-fsl-alphabet-bilstm-v2.mjs",
+    "export:fsl-alphabet:bilstm:tfjs": "node scripts/export-fsl-alphabet-bilstm-tfjs.mjs",
+    "export:fsl-alphabet:bilstm:v2:tfjs": "node scripts/export-fsl-alphabet-bilstm-v2-tfjs.mjs"
   },
   "dependencies": {
     "@mediapipe/camera_utils": "0.3.1675466862",
     "@mediapipe/drawing_utils": "0.3.1675466124",
     "@mediapipe/hands": "0.4.1675469240",
+    "@tensorflow/tfjs": "^4.22.0",
     "next": "14.2.5",
     "react": "18.3.1",
     "react-dom": "18.3.1"

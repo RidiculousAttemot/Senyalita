@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
-  LandmarkFrame,
   LanguageOption,
-  PredictionResult,
-  recognizeMock
+  useRecognition,
+  RecognitionState
 } from "@/features/recognition";
 import {
   MAX_FRAMES,
@@ -15,6 +14,15 @@ import {
   downloadJson,
   sanitizeLabel
 } from "@/features/dataset";
+import {
+  createSession,
+  recordPrediction,
+  endSession,
+  getTranscriptEntries,
+  CONFIDENCE_THRESHOLDS,
+  DEFAULT_CONFIDENCE_THRESHOLD,
+  ConfidenceThreshold
+} from "@/features/logging";
 
 type Status =
   | "waiting"
@@ -26,31 +34,12 @@ type Status =
 const SMOOTHING_ALPHA = 0.2;
 const RECORDING_SAMPLE_MS = 60;
 
-const INITIAL_RESULT: Record<LanguageOption, PredictionResult> = {
-  en: {
-    text: "No sign detected yet.",
-    confidence: 0,
-    suggestions: [],
-    handCount: 0,
-    language: "en"
-  },
-  tl: {
-    text: "Wala pang natutukoy na senyas.",
-    confidence: 0,
-    suggestions: [],
-    handCount: 0,
-    language: "tl"
-  }
-};
-
 export default function CameraPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isProcessingRef = useRef(false);
   const lastSizeRef = useRef<{ width: number; height: number } | null>(null);
   const fpsRef = useRef({ frames: 0, last: performance.now(), value: 0 });
-  const languageRef = useRef<LanguageOption>("en");
-  const latestResultRef = useRef<PredictionResult>(INITIAL_RESULT.en);
   const latestStatusRef = useRef<Status>("waiting");
   const latestHandCountRef = useRef(0);
   const latestFpsRef = useRef(0);
@@ -69,18 +58,100 @@ export default function CameraPage() {
     }>
   >([]);
   const stopRequestedRef = useRef(false);
+  const lastHandednessRef = useRef<
+    Array<{ label: string }>
+  >([]);
   const [status, setStatus] = useState<Status>("waiting");
   const [error, setError] = useState<string | null>(null);
   const [handCount, setHandCount] = useState(0);
   const [fps, setFps] = useState(0);
-  const [language, setLanguage] = useState<LanguageOption>("en");
-  const [prediction, setPrediction] = useState<PredictionResult>(
-    INITIAL_RESULT.en
-  );
   const [recordingLabel, setRecordingLabel] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [recordedFrameCount, setRecordedFrameCount] = useState(0);
   const [recordingDurationMs, setRecordingDurationMs] = useState(0);
+
+  const [confidenceThreshold, setConfidenceThreshold] =
+    useState<ConfidenceThreshold>(DEFAULT_CONFIDENCE_THRESHOLD);
+  const [transcript, setTranscript] = useState<string[]>([]);
+  const lastTranscriptLabelRef = useRef("");
+  const sessionIdRef = useRef(createSession());
+  const sessionStartedRef = useRef(new Date().toISOString());
+  const [sessionMetrics, setSessionMetrics] = useState({
+    currentConfidence: 0,
+    avgConfidence: 0,
+    currentInferenceTime: 0,
+    avgInferenceTime: 0,
+    currentFps: 0,
+    avgFps: 0,
+    totalPredictions: 0
+  });
+  const metricsLogRef = useRef<Array<{
+    label: string;
+    confidence: number;
+    topK: Array<{ label: string; confidence: number }>;
+    inferenceTimeMs: number;
+    fps: number;
+  }>>([]);
+  const latestInferenceTimeRef = useRef(0);
+
+  const onPrediction = useCallback(
+    (_result: unknown, inferenceTimeMs: number) => {
+      latestInferenceTimeRef.current = inferenceTimeMs;
+    },
+    []
+  );
+
+  const { state: recognitionState, appendFrame } = useRecognition(onPrediction);
+
+  useEffect(() => {
+    if (recognitionState.stage !== "predicting") return;
+    const result = recognitionState.result;
+    if (!result) return;
+
+    const currentFps = latestFpsRef.current;
+    const inferenceTimeMs = latestInferenceTimeRef.current;
+
+    recordPrediction({
+      sessionId: sessionIdRef.current,
+      predictedLabel: result.label,
+      confidence: result.confidence,
+      topK: result.topK,
+      smoothingEnabled: true,
+      inferenceTimeMs,
+      fps: currentFps
+    });
+
+    const m = metricsLogRef.current;
+    m.push({
+      label: result.label,
+      confidence: result.confidence,
+      topK: result.topK,
+      inferenceTimeMs,
+      fps: currentFps
+    });
+    if (m.length > 100) m.shift();
+    const count = m.length;
+    setSessionMetrics({
+      currentConfidence: result.confidence,
+      avgConfidence: m.reduce((s, e) => s + e.confidence, 0) / count,
+      currentInferenceTime: inferenceTimeMs,
+      avgInferenceTime: m.reduce((s, e) => s + e.inferenceTimeMs, 0) / count,
+      currentFps,
+      avgFps: m.reduce((s, e) => s + e.fps, 0) / count,
+      totalPredictions: m.length
+    });
+
+    if (
+      result.confidence >= confidenceThreshold &&
+      result.label !== lastTranscriptLabelRef.current
+    ) {
+      lastTranscriptLabelRef.current = result.label;
+      setTranscript((t) => [...t, result.label]);
+    }
+  }, [recognitionState, confidenceThreshold]);
+
+  const languageRef = useRef<LanguageOption>("en");
+  const [language, setLanguage] = useState<LanguageOption>("en");
 
   useEffect(() => {
     languageRef.current = language;
@@ -109,26 +180,31 @@ export default function CameraPage() {
     }
   }, [status]);
 
+  const recognitionStatusLabel = useMemo(() => {
+    switch (recognitionState.stage) {
+      case "loading-model":
+        return "Loading model...";
+      case "collecting":
+        return `Collecting sequence (${recognitionState.progress}/${recognitionState.total})`;
+      case "predicting":
+        return "Predicting";
+      case "error":
+        return `Recognition error: ${recognitionState.message}`;
+      default:
+        return "";
+    }
+  }, [recognitionState]);
+
+  const recognitionResult = recognitionState.stage === "predicting"
+    ? recognitionState.result
+    : null;
+
   const setStatusSafe = (next: Status) => {
     setStatus((prev) => (prev === next ? prev : next));
   };
 
   const setHandCountSafe = (count: number) => {
     setHandCount((prev) => (prev === count ? prev : count));
-  };
-
-  const updatePredictionUi = (next: PredictionResult) => {
-    setPrediction((prev) => {
-      if (
-        prev.text === next.text &&
-        prev.confidence === next.confidence &&
-        prev.handCount === next.handCount &&
-        prev.language === next.language
-      ) {
-        return prev;
-      }
-      return next;
-    });
   };
 
   const updateRecordingUi = () => {
@@ -363,6 +439,7 @@ export default function CameraPage() {
           const landmarksList = results.multiHandLandmarks ?? [];
           const detectedHands = landmarksList.length;
           const handednessList = results.multiHandedness ?? [];
+          lastHandednessRef.current = handednessList;
           const mappedLandmarks: Array<Array<{ x: number; y: number; z: number }>> =
             landmarksList.map((hand: any[]) =>
               hand.map((point: any) => ({
@@ -379,15 +456,24 @@ export default function CameraPage() {
           );
           smoothedLandmarksRef.current = smoothedLandmarks;
 
-          const frame: LandmarkFrame = {
-            hands: smoothedLandmarks
-          };
+          let leftHand: { landmarks: Array<{ x: number; y: number; z: number }> } | null = null;
+          let rightHand: { landmarks: Array<{ x: number; y: number; z: number }> } | null = null;
 
-          latestResultRef.current = recognizeMock({
-            frame,
-            handCount: detectedHands,
-            language: languageRef.current
-          });
+          for (let i = 0; i < detectedHands; i += 1) {
+            const handedness = handednessList[i]?.label ?? "";
+            const landmarks = smoothedLandmarks[i] ?? mappedLandmarks[i];
+            const hand = { landmarks };
+
+            if (handedness.toLowerCase().includes("left")) {
+              leftHand = hand;
+            } else {
+              rightHand = hand;
+            }
+          }
+
+          if (detectedHands > 0) {
+            appendFrame(leftHand, rightHand);
+          }
 
           if (isRecordingRef.current) {
             const startTime = recordingStartRef.current ?? Date.now();
@@ -477,7 +563,6 @@ export default function CameraPage() {
 
         if (uiTimerRef.current === null) {
           uiTimerRef.current = window.setInterval(() => {
-            updatePredictionUi(latestResultRef.current);
             updateRecordingUi();
             updateCameraUi();
           }, 200);
@@ -492,6 +577,8 @@ export default function CameraPage() {
     setup();
 
     const cleanupVideoEl = videoRef.current;
+    const cleanupSessionId = sessionIdRef.current;
+    const cleanupSessionStarted = sessionStartedRef.current;
 
     return () => {
       cancelled = true;
@@ -508,15 +595,17 @@ export default function CameraPage() {
       if (cleanupVideoEl) {
         cleanupVideoEl.srcObject = null;
       }
+      endSession(cleanupSessionId, cleanupSessionStarted);
     };
-  }, []);
+  }, [appendFrame]);
 
   const handleSpeak = () => {
     if (!("speechSynthesis" in window)) {
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(prediction.text);
+    const text = recognitionResult?.label ?? "No sign detected";
+    const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = language === "en" ? "en-US" : "fil-PH";
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
@@ -531,6 +620,9 @@ export default function CameraPage() {
         </div>
 
         {error && <p className="error-text">{error}</p>}
+        {recognitionState.stage === "error" && (
+          <p className="error-text">Model: {recognitionState.message}</p>
+        )}
 
         <div className="camera-layout">
           <div className="camera-main">
@@ -541,51 +633,137 @@ export default function CameraPage() {
 
             <section className="panel">
               <h2>Transcript</h2>
-              <p className="mock-label">Mock recognition preview</p>
-              <p className="panel-label">Output language</p>
-              <div className="toggle">
-                <button
-                  className={`toggle-button ${language === "en" ? "active" : ""}`}
-                  type="button"
-                  onClick={() => setLanguage("en")}
-                >
-                  English
-                </button>
-                <button
-                  className={`toggle-button ${language === "tl" ? "active" : ""}`}
-                  type="button"
-                  onClick={() => setLanguage("tl")}
-                >
-                  Tagalog
-                </button>
-              </div>
-              <p className="transcript-text">{prediction.text}</p>
-              <p className="confidence">
-                Confidence: {Math.round(prediction.confidence * 100)}%
+              <p className="recognition-status">
+                {recognitionStatusLabel}
               </p>
-              <div className="suggestions">
-                <p className="panel-label">Top suggestions</p>
-                <ul>
-                  {prediction.suggestions.map((suggestion) => (
-                    <li key={suggestion.text}>
-                      {suggestion.text} ({Math.round(suggestion.confidence * 100)}%)
-                    </li>
-                  ))}
-                </ul>
+
+              {recognitionResult ? (
+                <>
+                  <p className="transcript-text predicted-sign">
+                    {recognitionResult.confidence >= confidenceThreshold
+                      ? recognitionResult.label
+                      : "Low confidence"}
+                  </p>
+                  {recognitionResult.confidence < confidenceThreshold && (
+                    <p className="confidence low-confidence-text">
+                      {Math.round(recognitionResult.confidence * 100)}% &mdash; below threshold
+                    </p>
+                  )}
+                  {recognitionResult.confidence >= confidenceThreshold && (
+                    <p className="confidence">
+                      Confidence: {Math.round(recognitionResult.confidence * 100)}%
+                    </p>
+                  )}
+                  <div className="suggestions">
+                    <p className="panel-label">Top suggestions</p>
+                    <ul>
+                      {recognitionResult.topK.map((suggestion) => (
+                        <li key={suggestion.label}>
+                          {suggestion.label} ({Math.round(suggestion.confidence * 100)}%)
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </>
+              ) : (
+                <p className="transcript-text">
+                  {recognitionState.stage === "loading-model"
+                    ? "Loading recognition model..."
+                    : recognitionState.stage === "collecting"
+                    ? "Collecting landmark sequence..."
+                    : "No sign detected"}
+                </p>
+              )}
+
+              <p className="panel-label" style={{ marginTop: 12 }}>Confidence threshold</p>
+              <div className="toggle">
+                {CONFIDENCE_THRESHOLDS.map((t) => (
+                  <button
+                    key={t}
+                    className={`toggle-button ${confidenceThreshold === t ? "active" : ""}`}
+                    type="button"
+                    onClick={() => setConfidenceThreshold(t)}
+                  >
+                    {Math.round(t * 100)}%
+                  </button>
+                ))}
               </div>
+
+              <p className="panel-label" style={{ marginTop: 12 }}>Running transcript</p>
+              <div className="transcript-display">
+                {transcript.length === 0 ? (
+                  <span className="transcript-empty">No predictions yet</span>
+                ) : (
+                  transcript.map((label, i) => (
+                    <span key={i} className="transcript-char">{label}</span>
+                  ))
+                )}
+              </div>
+
               <div className="summary">
                 <span>Hands detected: {handCount}</span>
-                <span>Mode: Landmark preview</span>
                 <span>FPS: {fps}</span>
               </div>
-              <button className="button" onClick={handleSpeak}>
-                Text-to-Speech
-              </button>
+              <div className="capture-actions">
+                <button
+                  className="button"
+                  onClick={handleSpeak}
+                  disabled={!recognitionResult}
+                >
+                  Text-to-Speech
+                </button>
+                <button
+                  className="button button-secondary"
+                  onClick={() => { setTranscript([]); lastTranscriptLabelRef.current = ""; }}
+                >
+                  Clear transcript
+                </button>
+              </div>
             </section>
           </div>
 
           <section className="panel panel-secondary camera-side">
-            <h2>Developer dataset capture</h2>
+            <h2>Developer evaluation panel</h2>
+            <div className="eval-metrics">
+              <div className="eval-metric">
+                <span className="eval-metric-label">Current confidence</span>
+                <span className="eval-metric-value">
+                  {(sessionMetrics.currentConfidence * 100).toFixed(0)}%
+                </span>
+              </div>
+              <div className="eval-metric">
+                <span className="eval-metric-label">Avg confidence</span>
+                <span className="eval-metric-value">
+                  {(sessionMetrics.avgConfidence * 100).toFixed(0)}%
+                </span>
+              </div>
+              <div className="eval-metric">
+                <span className="eval-metric-label">Current FPS</span>
+                <span className="eval-metric-value">{sessionMetrics.currentFps}</span>
+              </div>
+              <div className="eval-metric">
+                <span className="eval-metric-label">Avg FPS</span>
+                <span className="eval-metric-value">{sessionMetrics.avgFps.toFixed(1)}</span>
+              </div>
+              <div className="eval-metric">
+                <span className="eval-metric-label">Inference time</span>
+                <span className="eval-metric-value">
+                  {sessionMetrics.currentInferenceTime.toFixed(1)}ms
+                </span>
+              </div>
+              <div className="eval-metric">
+                <span className="eval-metric-label">Avg inference time</span>
+                <span className="eval-metric-value">
+                  {sessionMetrics.avgInferenceTime.toFixed(1)}ms
+                </span>
+              </div>
+              <div className="eval-metric">
+                <span className="eval-metric-label">Total predictions</span>
+                <span className="eval-metric-value">{sessionMetrics.totalPredictions}</span>
+              </div>
+            </div>
+
+            <h2 style={{ marginTop: 16 }}>Dataset capture</h2>
             <p className="panel-note">
               Temporary frontend-only tool for preparing CNN-LSTM data. This will
               move to Admin later.

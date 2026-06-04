@@ -24,3 +24,15 @@ export type PredictionResult = {
   handCount: number;
   language: LanguageOption;
 };
+
+export type RecognitionState =
+  | { stage: "loading-model" }
+  | { stage: "collecting"; progress: number; total: number }
+  | { stage: "predicting"; result: RealPredictionResult }
+  | { stage: "error"; message: string };
+
+export type RealPredictionResult = {
+  label: string;
+  confidence: number;
+  topK: Array<{ label: string; confidence: number }>;
+};
