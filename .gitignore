@@ -1,4 +1,6 @@
 node_modules
 .next/
 datasets/raw/**/*.json
+datasets/processed/**/*.json
 !datasets/raw/**/.gitkeep
+!datasets/processed/**/.gitkeep

@@ -48,6 +48,50 @@ main {
   max-width: 960px;
 }
 
+.camera-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(260px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.camera-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.camera-side {
+  position: sticky;
+  top: 24px;
+}
+
+.camera-side.panel {
+  padding: 14px;
+}
+
+.camera-side .panel-note {
+  margin-bottom: 8px;
+}
+
+.camera-side .capture-grid {
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.camera-side .capture-field input {
+  padding: 6px 8px;
+}
+
+.camera-side .capture-actions {
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.camera-side .button {
+  padding: 10px 14px;
+}
+
 .camera-header {
   display: flex;
   align-items: center;
@@ -81,7 +125,6 @@ main {
 .video-wrap {
   position: relative;
   width: 100%;
-  max-width: 720px;
   aspect-ratio: 4 / 3;
   background: #0f172a;
   border-radius: 12px;
@@ -99,7 +142,6 @@ main {
 }
 
 .panel {
-  max-width: 720px;
   background: #ffffff;
   border-radius: 12px;
   padding: 16px;
@@ -229,4 +271,14 @@ main {
 
 .error-text {
   color: #b91c1c;
+}
+
+@media (max-width: 1024px) {
+  .camera-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .camera-side {
+    position: static;
+  }
 }

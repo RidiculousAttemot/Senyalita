@@ -23,6 +23,8 @@ type Status =
   | "hand-1"
   | "hand-2"
   | "error";
+const SMOOTHING_ALPHA = 0.2;
+const RECORDING_SAMPLE_MS = 60;
 
 const INITIAL_RESULT: Record<LanguageOption, PredictionResult> = {
   en: {
@@ -52,6 +54,10 @@ export default function CameraPage() {
   const latestStatusRef = useRef<Status>("waiting");
   const latestHandCountRef = useRef(0);
   const latestFpsRef = useRef(0);
+  const smoothedLandmarksRef = useRef<
+    Array<Array<{ x: number; y: number; z: number }>> | null
+  >(null);
+  const lastRecordSampleRef = useRef(0);
   const uiTimerRef = useRef<number | null>(null);
   const isRecordingRef = useRef(false);
   const recordingStartRef = useRef<number | null>(null);
@@ -169,15 +175,47 @@ export default function CameraPage() {
   };
 
   const startRecording = () => {
-    if (!recordingLabel.trim()) {
-      return;
+    const nextLabel = recordingLabel.trim() || "sample";
+    if (recordingLabel.trim() !== nextLabel) {
+      setRecordingLabel(nextLabel);
     }
     recordedFramesRef.current = [];
     recordingStartRef.current = Date.now();
     stopRequestedRef.current = false;
+    lastRecordSampleRef.current = 0;
     setRecordedFrameCount(0);
     setRecordingDurationMs(0);
     setIsRecording(true);
+  };
+
+  const smoothLandmarks = (
+    previous: Array<Array<{ x: number; y: number; z: number }>> | null,
+    next: Array<Array<{ x: number; y: number; z: number }>>,
+    alpha: number
+  ) => {
+    if (!previous || previous.length !== next.length) {
+      return next;
+    }
+
+    return next.map((hand, handIndex) => {
+      const prevHand = previous[handIndex];
+      if (!prevHand || prevHand.length !== hand.length) {
+        return hand;
+      }
+
+      return hand.map((point, pointIndex) => {
+        const prevPoint = prevHand[pointIndex];
+        if (!prevPoint) {
+          return point;
+        }
+
+        return {
+          x: prevPoint.x + (point.x - prevPoint.x) * alpha,
+          y: prevPoint.y + (point.y - prevPoint.y) * alpha,
+          z: prevPoint.z + (point.z - prevPoint.z) * alpha
+        };
+      });
+    });
   };
 
   const stopRecording = () => {
@@ -290,9 +328,9 @@ export default function CameraPage() {
 
         hands.setOptions({
           maxNumHands: 2,
-          modelComplexity: 0,
-          minDetectionConfidence: 0.5,
-          minTrackingConfidence: 0.5
+          modelComplexity: 1,
+          minDetectionConfidence: 0.6,
+          minTrackingConfidence: 0.6
         });
 
         hands.onResults((results: any) => {
@@ -334,8 +372,15 @@ export default function CameraPage() {
               }))
             );
 
+          const smoothedLandmarks = smoothLandmarks(
+            smoothedLandmarksRef.current,
+            mappedLandmarks,
+            SMOOTHING_ALPHA
+          );
+          smoothedLandmarksRef.current = smoothedLandmarks;
+
           const frame: LandmarkFrame = {
-            hands: mappedLandmarks
+            hands: smoothedLandmarks
           };
 
           latestResultRef.current = recognizeMock({
@@ -358,14 +403,18 @@ export default function CameraPage() {
             }
 
             if (!stopRequestedRef.current) {
-              frames.push({
-                timestampMs: Date.now(),
-                handCount: detectedHands,
-                hands: mappedLandmarks.map((landmarks, index) => ({
-                  handedness: handednessList[index]?.label,
-                  landmarks
-                }))
-              });
+              const nowMs = Date.now();
+              if (nowMs - lastRecordSampleRef.current >= RECORDING_SAMPLE_MS) {
+                lastRecordSampleRef.current = nowMs;
+                frames.push({
+                  timestampMs: nowMs,
+                  handCount: detectedHands,
+                  hands: smoothedLandmarks.map((landmarks, index) => ({
+                    handedness: handednessList[index]?.label,
+                    landmarks
+                  }))
+                });
+              }
             }
           }
 
@@ -384,7 +433,7 @@ export default function CameraPage() {
           if (detectedHands > 0) {
             latestHandCountRef.current = detectedHands;
             latestStatusRef.current = detectedHands === 1 ? "hand-1" : "hand-2";
-            for (const landmarks of landmarksList) {
+            for (const landmarks of smoothedLandmarks) {
               drawingUtils.drawConnectors(
                 ctx,
                 landmarks,
@@ -483,116 +532,120 @@ export default function CameraPage() {
 
         {error && <p className="error-text">{error}</p>}
 
-        <div className="video-wrap">
-          <video ref={videoRef} className="video" playsInline muted />
-          <canvas ref={canvasRef} className="overlay" />
-        </div>
-
-        <section className="panel">
-          <h2>Transcript</h2>
-          <p className="mock-label">Mock recognition preview</p>
-          <p className="panel-label">Output language</p>
-          <div className="toggle">
-            <button
-              className={`toggle-button ${language === "en" ? "active" : ""}`}
-              type="button"
-              onClick={() => setLanguage("en")}
-            >
-              English
-            </button>
-            <button
-              className={`toggle-button ${language === "tl" ? "active" : ""}`}
-              type="button"
-              onClick={() => setLanguage("tl")}
-            >
-              Tagalog
-            </button>
-          </div>
-          <p className="transcript-text">{prediction.text}</p>
-          <p className="confidence">
-            Confidence: {Math.round(prediction.confidence * 100)}%
-          </p>
-          <div className="suggestions">
-            <p className="panel-label">Top suggestions</p>
-            <ul>
-              {prediction.suggestions.map((suggestion) => (
-                <li key={suggestion.text}>
-                  {suggestion.text} ({Math.round(suggestion.confidence * 100)}%)
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="summary">
-            <span>Hands detected: {handCount}</span>
-            <span>Mode: Landmark preview</span>
-            <span>FPS: {fps}</span>
-          </div>
-          <button className="button" onClick={handleSpeak}>
-            Text-to-Speech
-          </button>
-        </section>
-
-        <section className="panel panel-secondary">
-          <h2>Developer dataset capture</h2>
-          <p className="panel-note">
-            Temporary frontend-only tool for preparing CNN-LSTM data. This will
-            move to Admin later.
-          </p>
-          <div className="capture-grid">
-            <label className="capture-field">
-              Sign label
-              <input
-                type="text"
-                placeholder="hello"
-                value={recordingLabel}
-                onChange={(event) => setRecordingLabel(event.target.value)}
-              />
-            </label>
-            <div className="capture-metrics">
-              <span>Frames: {recordedFrameCount}</span>
-              <span>
-                Duration: {(recordingDurationMs / 1000).toFixed(1)}s
-              </span>
-              <span>
-                Limit: {MAX_FRAMES} frames / {MAX_RECORDING_MS / 1000}s
-              </span>
+        <div className="camera-layout">
+          <div className="camera-main">
+            <div className="video-wrap">
+              <video ref={videoRef} className="video" playsInline muted />
+              <canvas ref={canvasRef} className="overlay" />
             </div>
+
+            <section className="panel">
+              <h2>Transcript</h2>
+              <p className="mock-label">Mock recognition preview</p>
+              <p className="panel-label">Output language</p>
+              <div className="toggle">
+                <button
+                  className={`toggle-button ${language === "en" ? "active" : ""}`}
+                  type="button"
+                  onClick={() => setLanguage("en")}
+                >
+                  English
+                </button>
+                <button
+                  className={`toggle-button ${language === "tl" ? "active" : ""}`}
+                  type="button"
+                  onClick={() => setLanguage("tl")}
+                >
+                  Tagalog
+                </button>
+              </div>
+              <p className="transcript-text">{prediction.text}</p>
+              <p className="confidence">
+                Confidence: {Math.round(prediction.confidence * 100)}%
+              </p>
+              <div className="suggestions">
+                <p className="panel-label">Top suggestions</p>
+                <ul>
+                  {prediction.suggestions.map((suggestion) => (
+                    <li key={suggestion.text}>
+                      {suggestion.text} ({Math.round(suggestion.confidence * 100)}%)
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="summary">
+                <span>Hands detected: {handCount}</span>
+                <span>Mode: Landmark preview</span>
+                <span>FPS: {fps}</span>
+              </div>
+              <button className="button" onClick={handleSpeak}>
+                Text-to-Speech
+              </button>
+            </section>
           </div>
-          <div className="capture-actions">
-            <button
-              className="button"
-              type="button"
-              onClick={startRecording}
-              disabled={!recordingLabel.trim() || isRecording}
-            >
-              Start Recording
-            </button>
-            <button
-              className="button button-secondary"
-              type="button"
-              onClick={stopRecording}
-              disabled={!isRecording}
-            >
-              Stop Recording
-            </button>
-            <button
-              className="button button-secondary"
-              type="button"
-              onClick={clearRecording}
-              disabled={isRecording || recordedFrameCount === 0}
-            >
-              Clear Recording
-            </button>
-            <button
-              className="button button-secondary"
-              type="button"
-              onClick={exportRecording}
-              disabled={recordedFrameCount === 0}
-            >
-              Export JSON
-            </button>
-          </div>
-        </section>
+
+          <section className="panel panel-secondary camera-side">
+            <h2>Developer dataset capture</h2>
+            <p className="panel-note">
+              Temporary frontend-only tool for preparing CNN-LSTM data. This will
+              move to Admin later.
+            </p>
+            <div className="capture-grid">
+              <label className="capture-field">
+                Sign label
+                <input
+                  type="text"
+                  placeholder="hello"
+                  value={recordingLabel}
+                  onChange={(event) => setRecordingLabel(event.target.value)}
+                />
+              </label>
+              <div className="capture-metrics">
+                <span>Frames: {recordedFrameCount}</span>
+                <span>
+                  Duration: {(recordingDurationMs / 1000).toFixed(1)}s
+                </span>
+                <span>
+                  Limit: {MAX_FRAMES} frames / {MAX_RECORDING_MS / 1000}s
+                </span>
+              </div>
+            </div>
+            <div className="capture-actions">
+              <button
+                className="button"
+                type="button"
+                onClick={startRecording}
+                disabled={isRecording}
+              >
+                Start Recording
+              </button>
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={stopRecording}
+                disabled={!isRecording}
+              >
+                Stop Recording
+              </button>
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={clearRecording}
+                disabled={isRecording || recordedFrameCount === 0}
+              >
+                Clear Recording
+              </button>
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={exportRecording}
+                disabled={recordedFrameCount === 0}
+              >
+                Export JSON
+              </button>
+            </div>
+          </section>
+        </div>
       </section>
     </main>
   );

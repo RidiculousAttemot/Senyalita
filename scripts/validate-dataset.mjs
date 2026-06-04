@@ -1,9 +1,57 @@
 import fs from "fs";
 import path from "path";
 
-const LABELS = "abcdefghijklmnopqrstuvwxyz".split("");
+const LABELS = [
+  "a",
+  "b",
+  "c",
+  "d",
+  "e",
+  "f",
+  "g",
+  "h",
+  "i",
+  "j",
+  "k",
+  "l",
+  "m",
+  "n",
+  "ñ",
+  "ng",
+  "o",
+  "p",
+  "q",
+  "r",
+  "s",
+  "t",
+  "u",
+  "v",
+  "w",
+  "x",
+  "y",
+  "z"
+];
 const ROOT_DIR = path.join(process.cwd(), "datasets", "raw", "fsl_alphabet");
 const STRICT = process.argv.includes("--strict");
+const PILOT_MIN_SAMPLES = 3;
+const TARGET_SAMPLES = (() => {
+  const flag = "--target";
+  const withValue = process.argv.find((arg) => arg.startsWith(`${flag}=`));
+  if (withValue) {
+    const value = Number(withValue.split("=")[1]);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+
+  const flagIndex = process.argv.indexOf(flag);
+  if (flagIndex !== -1) {
+    const value = Number(process.argv[flagIndex + 1]);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+
+  return null;
+})();
+
+const COVERAGE_TARGET = TARGET_SAMPLES ?? PILOT_MIN_SAMPLES;
 
 const formatNumber = (value) => value.toString().padStart(4, " ");
 
@@ -23,10 +71,25 @@ const getFrameCount = (payload) => {
   return 0;
 };
 
+const isValidPayload = (payload) => {
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+
+  if (typeof payload.frameCount === "number") {
+    return true;
+  }
+
+  return Array.isArray(payload.frames);
+};
+
 const readJson = (filePath) => {
   const raw = fs.readFileSync(filePath, "utf8");
   return JSON.parse(raw);
 };
+
+const invalidJsonFiles = [];
+const invalidStructureFiles = [];
 
 const labelReport = LABELS.map((label) => {
   const labelDir = path.join(ROOT_DIR, label);
@@ -51,8 +114,13 @@ const labelReport = LABELS.map((label) => {
   for (const filePath of jsonFiles) {
     try {
       const payload = readJson(filePath);
+      if (!isValidPayload(payload)) {
+        invalidStructureFiles.push(filePath);
+        continue;
+      }
       totalFrames += getFrameCount(payload);
     } catch (error) {
+      invalidJsonFiles.push(filePath);
       console.warn(`Warning: Failed to read ${filePath}: ${error.message}`);
     }
   }
@@ -70,15 +138,18 @@ const labelReport = LABELS.map((label) => {
 });
 
 const missingLabels = labelReport.filter((item) => !item.exists);
-const lowSampleLabels = labelReport.filter(
-  (item) => item.exists && item.samples > 0 && item.samples < 3
+const belowPilotLabels = labelReport.filter(
+  (item) => item.samples < PILOT_MIN_SAMPLES
 );
-const zeroSampleLabels = labelReport.filter(
-  (item) => item.exists && item.samples === 0
+const belowTargetLabels = labelReport.filter(
+  (item) => item.samples < COVERAGE_TARGET
 );
+const zeroSampleLabels = labelReport.filter((item) => item.exists && item.samples === 0);
 
 console.log("FSL Alphabet Dataset Coverage");
 console.log(`Root: ${ROOT_DIR}`);
+console.log(`Pilot minimum samples: ${PILOT_MIN_SAMPLES}`);
+console.log(`Coverage target samples: ${COVERAGE_TARGET}`);
 console.log("");
 console.log("Label | Samples | Total Frames | Avg Frames");
 console.log("----- | ------- | ------------ | ----------");
@@ -113,19 +184,39 @@ if (zeroSampleLabels.length > 0) {
   );
 }
 
-if (lowSampleLabels.length > 0) {
+if (belowPilotLabels.length > 0) {
   console.log("");
   console.log(
-    `Labels below 3 samples: ${lowSampleLabels
+    `Labels below ${PILOT_MIN_SAMPLES} samples: ${belowPilotLabels
       .map((item) => `${item.label} (${item.samples})`)
       .join(", ")}`
   );
 }
 
+if (COVERAGE_TARGET !== PILOT_MIN_SAMPLES && belowTargetLabels.length > 0) {
+  console.log("");
+  console.log(
+    `Labels below ${COVERAGE_TARGET} samples: ${belowTargetLabels
+      .map((item) => `${item.label} (${item.samples})`)
+      .join(", ")}`
+  );
+}
+
+if (invalidJsonFiles.length > 0) {
+  console.log("");
+  console.log(`Invalid JSON files: ${invalidJsonFiles.length}`);
+}
+
+if (invalidStructureFiles.length > 0) {
+  console.log("");
+  console.log(`Invalid JSON structure files: ${invalidStructureFiles.length}`);
+}
+
 if (STRICT) {
   const strictFailures = missingLabels.length > 0 ||
-    zeroSampleLabels.length > 0 ||
-    lowSampleLabels.length > 0;
+    belowPilotLabels.length > 0 ||
+    invalidJsonFiles.length > 0 ||
+    invalidStructureFiles.length > 0;
 
   if (strictFailures) {
     console.error("");
