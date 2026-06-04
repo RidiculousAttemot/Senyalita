@@ -33,6 +33,12 @@ Verify processed outputs:
 npm run verify:processed:fsl-alphabet
 ```
 
+Summarize processed outputs:
+
+```
+npm run summarize:processed:fsl-alphabet
+```
+
 ## Output Files
 Generated in `datasets/processed/fsl_alphabet/`:
 - labels.json
@@ -43,7 +49,8 @@ Generated in `datasets/processed/fsl_alphabet/`:
 
 Processed files are for future model training only. Preprocessing does not
 prove recognition accuracy. Verification checks shape consistency and label
-mapping only.
+mapping only. The summary script is a sanity-check/inspection tool before
+model design and still does not measure recognition accuracy.
 
 ## Sequence Shape
 - Sequence length: 120 frames
@@ -65,3 +72,6 @@ still preprocessing only, not model training.
 ## Important Note
 - Do not train a model in this step
 - Do not train word gestures yet
+
+## Next Document
+See the model planning outline in `docs/fsl-alphabet-model-design.md`.

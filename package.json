@@ -10,7 +10,9 @@
     "validate:dataset": "node scripts/validate-dataset.mjs",
     "validate:dataset:strict": "node scripts/validate-dataset.mjs --strict",
     "preprocess:fsl-alphabet": "node scripts/preprocess-fsl-alphabet.mjs",
-    "verify:processed:fsl-alphabet": "node scripts/verify-processed-fsl-alphabet.mjs"
+    "verify:processed:fsl-alphabet": "node scripts/verify-processed-fsl-alphabet.mjs",
+    "summarize:processed:fsl-alphabet": "node scripts/summarize-processed-fsl-alphabet.mjs",
+    "train:fsl-alphabet:baseline": "python scripts/train-fsl-alphabet-baseline.py"
   },
   "dependencies": {
     "@mediapipe/camera_utils": "0.3.1675466862",
