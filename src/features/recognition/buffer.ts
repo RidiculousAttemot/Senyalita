@@ -33,25 +33,18 @@ export class SequenceBuffer {
     return this.frames.length;
   }
 
-  get isFull(): boolean {
-    return this.frames.length >= SEQUENCE_LENGTH;
-  }
-
-  get progress(): number {
-    return Math.min(this.frames.length, SEQUENCE_LENGTH);
-  }
-
   sampleTemporal(): Float32Array | null {
-    if (this.frames.length < SEQUENCE_LENGTH) {
+    if (this.frames.length < TEMPORAL_STEPS) {
       return null;
     }
 
-    const recent = this.frames.slice(-SEQUENCE_LENGTH);
+    const available = Math.min(this.frames.length, SEQUENCE_LENGTH);
+    const recent = this.frames.slice(-available);
     const sampled = new Float32Array(TEMPORAL_STEPS * FEATURE_DIMENSION);
 
     for (let step = 0; step < TEMPORAL_STEPS; step += 1) {
       const frameIndex = Math.round(
-        (step * (SEQUENCE_LENGTH - 1)) / (TEMPORAL_STEPS - 1)
+        (step * (available - 1)) / (TEMPORAL_STEPS - 1)
       );
       const frame = recent[frameIndex];
       const destOffset = step * FEATURE_DIMENSION;

@@ -27,8 +27,7 @@ export type PredictionResult = {
 
 export type RecognitionState =
   | { stage: "loading-model" }
-  | { stage: "collecting"; progress: number; total: number }
-  | { stage: "predicting"; result: RealPredictionResult }
+  | { stage: "predicting"; result: RealPredictionResult | null }
   | { stage: "error"; message: string };
 
 export type RealPredictionResult = {

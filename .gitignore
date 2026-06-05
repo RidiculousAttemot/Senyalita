@@ -6,3 +6,5 @@ datasets/processed/**/*.json
 !datasets/processed/**/.gitkeep
 models/**/model.json
 models/**/model.joblib
+
+.vercel

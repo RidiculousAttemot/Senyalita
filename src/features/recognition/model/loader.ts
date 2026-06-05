@@ -1,8 +1,8 @@
 import * as tf from "@tensorflow/tfjs";
 import { InferenceResult, ModelLoadResult } from "./types";
 
-const MODEL_URL = "/models/fsl_alphabet/bilstm_v2_tfjs/model.json";
-const LABELS_URL = "/models/fsl_alphabet/bilstm_v2_tfjs/labels.json";
+const MODEL_URL = "/models/fsl_unified/bilstm_tfjs/model.json";
+const LABELS_URL = "/models/fsl_unified/bilstm_tfjs/labels.json";
 
 type Loadable = {
   status: "loading" | "ready" | "error";
@@ -46,8 +46,9 @@ const loadModel = async (): Promise<Loadable> => {
       }
 
       const modelTopology = JSON.parse(modelJson.modelTopology);
-      const weightSpecs = modelJson.weightsManifest[0].weights;
-      const weightsUrl = `${MODEL_URL.replace("model.json", "")}${weightSpecs[0].paths[0]}`;
+      const manifest = modelJson.weightsManifest[0];
+      const weightSpecs = manifest.weights;
+      const weightsUrl = `${MODEL_URL.replace("model.json", "")}${manifest.paths[0]}`;
 
       const weightsResponse = await fetch(weightsUrl);
       if (!weightsResponse.ok) {
@@ -106,7 +107,10 @@ const infer = async (features: Float32Array): Promise<InferenceResult | null> =>
     const probabilities = await output.data();
 
     const probsArray = Array.from(probabilities);
-    const labelId = probsArray.indexOf(Math.max(...probsArray));
+    let labelId = 0;
+    for (let i = 1; i < probsArray.length; i++) {
+      if (probsArray[i] > probsArray[labelId]) labelId = i;
+    }
     const confidence = probsArray[labelId];
 
     const indexed = probsArray.map((p, i) => ({ index: i, probability: p }));
@@ -125,7 +129,7 @@ const infer = async (features: Float32Array): Promise<InferenceResult | null> =>
 
     tf.dispose([input, output]);
     return result;
-  } catch (err) {
+  } catch {
     return null;
   }
 };

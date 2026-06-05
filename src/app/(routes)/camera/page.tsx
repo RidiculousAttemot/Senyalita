@@ -152,6 +152,15 @@ export default function CameraPage() {
 
   const languageRef = useRef<LanguageOption>("en");
   const [language, setLanguage] = useState<LanguageOption>("en");
+  const rawFramesRef = useRef<
+    Array<{
+      timestampMs: number;
+      handCount: number;
+      hands: Array<{ handedness?: string; landmarks: Array<{ x: number; y: number; z: number }> }>;
+    }>
+  >([]);
+  const [showLabelPicker, setShowLabelPicker] = useState(false);
+  const [pendingCorrectLabel, setPendingCorrectLabel] = useState<string | null>(null);
 
   useEffect(() => {
     languageRef.current = language;
@@ -160,6 +169,16 @@ export default function CameraPage() {
   useEffect(() => {
     isRecordingRef.current = isRecording;
   }, [isRecording]);
+
+  const saveWithLabel = (label: string) => {
+    const frames = rawFramesRef.current;
+    if (frames.length < 30) return;
+    const startedAtMs = frames[0].timestampMs;
+    const endedAtMs = frames[frames.length - 1].timestampMs;
+    const payload = createExportPayload({ label, frames, startedAtMs, endedAtMs });
+    const filename = buildExportFilename(label, Date.now());
+    downloadJson(filename, payload);
+  };
 
   const statusLabel = useMemo(() => {
     switch (status) {
@@ -184,10 +203,8 @@ export default function CameraPage() {
     switch (recognitionState.stage) {
       case "loading-model":
         return "Loading model...";
-      case "collecting":
-        return `Collecting sequence (${recognitionState.progress}/${recognitionState.total})`;
       case "predicting":
-        return "Predicting";
+        return recognitionState.result ? "Predicting" : "Collecting frames...";
       case "error":
         return `Recognition error: ${recognitionState.message}`;
       default:
@@ -456,6 +473,19 @@ export default function CameraPage() {
           );
           smoothedLandmarksRef.current = smoothedLandmarks;
 
+          const rawRecord = {
+            timestampMs: performance.now(),
+            handCount: detectedHands,
+            hands: smoothedLandmarks.map((landmarks, index) => ({
+              handedness: handednessList[index]?.label,
+              landmarks
+            }))
+          };
+          rawFramesRef.current.push(rawRecord);
+          if (rawFramesRef.current.length > 120) {
+            rawFramesRef.current.shift();
+          }
+
           let leftHand: { landmarks: Array<{ x: number; y: number; z: number }> } | null = null;
           let rightHand: { landmarks: Array<{ x: number; y: number; z: number }> } | null = null;
 
@@ -664,15 +694,59 @@ export default function CameraPage() {
                       ))}
                     </ul>
                   </div>
+                  <div className="capture-actions" style={{ marginTop: 8 }}>
+                    <button
+                      className="button"
+                      type="button"
+                      onClick={() => saveWithLabel(recognitionResult.label)}
+                    >
+                      Accept
+                    </button>
+                    <button
+                      className="button button-secondary"
+                      type="button"
+                      onClick={() => setShowLabelPicker(true)}
+                    >
+                      Reject
+                    </button>
+                  </div>
                 </>
               ) : (
                 <p className="transcript-text">
                   {recognitionState.stage === "loading-model"
                     ? "Loading recognition model..."
-                    : recognitionState.stage === "collecting"
-                    ? "Collecting landmark sequence..."
                     : "No sign detected"}
                 </p>
+              )}
+              {showLabelPicker && (
+                <div className="label-picker-overlay">
+                  <div className="label-picker">
+                    <p className="panel-label">Select correct label</p>
+                    <div className="label-picker-grid">
+                      {["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z"].map((lbl) => (
+                        <button
+                          key={lbl}
+                          className="label-picker-button"
+                          type="button"
+                          onClick={() => {
+                            saveWithLabel(lbl);
+                            setShowLabelPicker(false);
+                          }}
+                        >
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      className="button button-secondary"
+                      type="button"
+                      onClick={() => setShowLabelPicker(false)}
+                      style={{ marginTop: 8 }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
               )}
 
               <p className="panel-label" style={{ marginTop: 12 }}>Confidence threshold</p>

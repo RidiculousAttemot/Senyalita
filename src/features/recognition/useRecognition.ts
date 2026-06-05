@@ -9,7 +9,6 @@ import { translateResult } from "./translation";
 import { loadModel, infer } from "./model";
 
 const INFERENCE_INTERVAL_MS = 200;
-const SMOOTHING_WINDOW = 10;
 
 export type RecognitionControls = {
   state: RecognitionState;
@@ -45,25 +44,18 @@ export const useRecognition = (
     const init = async () => {
       bufferRef.current = new SequenceBuffer();
       smootherRef.current = new PredictionSmoother();
+      modelReadyRef.current = false;
+
       const result = await loadModel();
 
       if (!mounted) return;
 
       if (result.status === "ready") {
         modelReadyRef.current = true;
-        setState({ stage: "collecting", progress: 0, total: 120 });
+        setState({ stage: "predicting", result: null });
 
         inferenceTimerRef.current = setInterval(() => {
           if (!modelReadyRef.current || !bufferRef.current) return;
-
-          if (!bufferRef.current.isFull) {
-            setState({
-              stage: "collecting",
-              progress: bufferRef.current.progress,
-              total: 120
-            });
-            return;
-          }
 
           const sampled = bufferRef.current.sampleTemporal();
           if (!sampled) return;
@@ -88,8 +80,6 @@ export const useRecognition = (
             onPredictionRef.current?.(inference, inferenceTimeMs);
           });
         }, INFERENCE_INTERVAL_MS);
-
-        setState({ stage: "collecting", progress: 0, total: 120 });
       } else {
         setState({
           stage: "error",
@@ -121,7 +111,7 @@ export const useRecognition = (
   const resetRecognition = useCallback(() => {
     bufferRef.current?.reset();
     smootherRef.current?.reset();
-    setState({ stage: "collecting", progress: 0, total: 120 });
+    setState({ stage: "predicting", result: null });
   }, []);
 
   return { state, appendFrame, resetRecognition };

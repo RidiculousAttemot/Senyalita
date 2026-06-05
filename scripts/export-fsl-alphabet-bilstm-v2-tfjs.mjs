@@ -33,7 +33,7 @@ const main = async () => {
   const model = tf.sequential();
 
   model.add(tf.layers.bidirectional({
-    layer: tf.layers.lstm({ units: HIDDEN_SIZE, returnSequences: false }),
+    layer: tf.layers.lstm({ units: HIDDEN_SIZE, returnSequences: false, recurrentActivation: "sigmoid" }),
     inputShape: [TEMPORAL_STEPS, FEATURE_DIMENSION],
     mergeMode: "concat"
   }));
