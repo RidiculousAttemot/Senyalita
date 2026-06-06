@@ -1,10 +1,54 @@
-node_modules
+# Dependencies
+node_modules/
+.npm
+
+# Next.js & build outputs
 .next/
+out/
+dist/
+build/
+
+# Datasets
 datasets/raw/**/*.json
 datasets/processed/**/*.json
 !datasets/raw/**/.gitkeep
 !datasets/processed/**/.gitkeep
-models/**/model.json
-models/**/model.joblib
 
+# Models and training artifacts
+models/
+*.joblib
+*.pkl
+*.h5
+.weights/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Vercel
 .vercel
+
+# Kaggle cache
+~/.cache/kagglehub/

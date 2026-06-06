@@ -1,0 +1,112 @@
+{
+  "source": "kaggle:japorton/fsl-dataset",
+  "path": "C:\\Users\\tuf\\.cache\\kagglehub\\datasets\\japorton\\fsl-dataset\\versions\\1",
+  "total_files": 11700,
+  "total_size_mb": 133.84913730621338,
+  "structure": {
+    "Collated\\A": {
+      "files": 450,
+      "size_mb": 3.195505142211914
+    },
+    "Collated\\B": {
+      "files": 450,
+      "size_mb": 5.728750228881836
+    },
+    "Collated\\C": {
+      "files": 450,
+      "size_mb": 4.5627899169921875
+    },
+    "Collated\\D": {
+      "files": 450,
+      "size_mb": 5.594344139099121
+    },
+    "Collated\\E": {
+      "files": 450,
+      "size_mb": 4.391021728515625
+    },
+    "Collated\\F": {
+      "files": 450,
+      "size_mb": 6.099535942077637
+    },
+    "Collated\\G": {
+      "files": 450,
+      "size_mb": 4.22097110748291
+    },
+    "Collated\\H": {
+      "files": 450,
+      "size_mb": 7.011933326721191
+    },
+    "Collated\\I": {
+      "files": 450,
+      "size_mb": 5.176076889038086
+    },
+    "Collated\\J": {
+      "files": 450,
+      "size_mb": 4.084800720214844
+    },
+    "Collated\\K": {
+      "files": 450,
+      "size_mb": 4.802133560180664
+    },
+    "Collated\\L": {
+      "files": 450,
+      "size_mb": 5.900496482849121
+    },
+    "Collated\\M": {
+      "files": 450,
+      "size_mb": 4.5343475341796875
+    },
+    "Collated\\N": {
+      "files": 450,
+      "size_mb": 4.1372528076171875
+    },
+    "Collated\\O": {
+      "files": 450,
+      "size_mb": 3.7519025802612305
+    },
+    "Collated\\P": {
+      "files": 450,
+      "size_mb": 5.577457427978516
+    },
+    "Collated\\Q": {
+      "files": 450,
+      "size_mb": 3.766519546508789
+    },
+    "Collated\\R": {
+      "files": 450,
+      "size_mb": 6.072071075439453
+    },
+    "Collated\\S": {
+      "files": 450,
+      "size_mb": 4.028448104858398
+    },
+    "Collated\\T": {
+      "files": 450,
+      "size_mb": 4.885140419006348
+    },
+    "Collated\\U": {
+      "files": 450,
+      "size_mb": 7.2303314208984375
+    },
+    "Collated\\V": {
+      "files": 450,
+      "size_mb": 5.168135643005371
+    },
+    "Collated\\W": {
+      "files": 450,
+      "size_mb": 7.496827125549316
+    },
+    "Collated\\X": {
+      "files": 450,
+      "size_mb": 5.566867828369141
+    },
+    "Collated\\Y": {
+      "files": 450,
+      "size_mb": 5.823722839355469
+    },
+    "Collated\\Z": {
+      "files": 450,
+      "size_mb": 5.041753768920898
+    }
+  }
+}

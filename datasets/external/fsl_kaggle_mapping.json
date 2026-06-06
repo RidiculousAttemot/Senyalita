@@ -1,0 +1,170 @@
+{
+  "matched": [
+    {
+      "label": "a",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 0
+    },
+    {
+      "label": "b",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 1
+    },
+    {
+      "label": "c",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 2
+    },
+    {
+      "label": "d",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 3
+    },
+    {
+      "label": "e",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 4
+    },
+    {
+      "label": "f",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 5
+    },
+    {
+      "label": "g",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 6
+    },
+    {
+      "label": "h",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 7
+    },
+    {
+      "label": "i",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 8
+    },
+    {
+      "label": "j",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 9
+    },
+    {
+      "label": "k",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 10
+    },
+    {
+      "label": "l",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 11
+    },
+    {
+      "label": "m",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 12
+    },
+    {
+      "label": "n",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 13
+    },
+    {
+      "label": "o",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 16
+    },
+    {
+      "label": "p",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 17
+    },
+    {
+      "label": "q",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 18
+    },
+    {
+      "label": "r",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 19
+    },
+    {
+      "label": "s",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 20
+    },
+    {
+      "label": "t",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 21
+    },
+    {
+      "label": "u",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 22
+    },
+    {
+      "label": "v",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 23
+    },
+    {
+      "label": "w",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 24
+    },
+    {
+      "label": "x",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 25
+    },
+    {
+      "label": "y",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 26
+    },
+    {
+      "label": "z",
+      "source": "kaggle",
+      "count": 450,
+      "customCount": 27
+    }
+  ],
+  "missing": [
+    "ñ",
+    "ng"
+  ],
+  "kaggleOnly": [],
+  "analysis": {
+    "coverage": "92.86",
+    "missingCount": 2,
+    "kaggleOnlyCount": 0
+  }
+}
