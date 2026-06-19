@@ -1,26 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;1,800&family=Inter:wght@400;500;600;700&display=swap');
-
-:root {
-  --lp-bg-left: #DEB8A0;
-  --lp-bg-center: #EDE8DF;
-  --lp-primary: #8B3A1F;
-  --lp-primary-lt: #C4522A;
-  --lp-text-dark: #1C1A17;
-  --lp-text-sub: #5C5248;
-  --lp-text-muted: #9C9189;
-  --lp-badge-bg: #F5EDE6;
-  --lp-card-bg: #FFFFFF;
-  --lp-card-border: #EDE0D8;
-
-  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-smooth: cubic-bezier(0.65, 0, 0.35, 1);
-}
-
-* {
-  scroll-behavior: smooth;
-}
-
 .landingPage {
   position: relative;
   min-height: 100vh;
