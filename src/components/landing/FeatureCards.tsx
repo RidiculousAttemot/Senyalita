@@ -32,14 +32,14 @@ const cards: Card[] = [
     title: 'Type → Sign',
     desc: 'Type any message and a signing avatar performs it live.',
     cta: 'Start Typing →',
-    to: '/translate'
+    to: '/type-to-sign'
   },
   {
     icon: <CameraIcon />,
     title: 'Sign → Text',
     desc: 'Fingerspell to the camera — your signs become text and speech.',
     cta: 'Open Camera →',
-    to: '/conversation'
+    to: '/sign-to-text'
   }
 ];
 
