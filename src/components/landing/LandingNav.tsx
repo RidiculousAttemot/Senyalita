@@ -21,7 +21,7 @@ export default function LandingNav() {
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
           </svg>
         </span>
-        <span className={styles.brandName}>SignBridge</span>
+        <span className={styles.brandName}>SIGNWITHUS</span>
       </Link>
 
       <div className={styles.links}>
@@ -37,7 +37,7 @@ export default function LandingNav() {
       </div>
 
       <Link href="/translate" className={styles.cta}>
-        <span>Open SignBridge</span>
+        <span>Open App</span>
         <svg className={styles.ctaArrow} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
           <path d="M5 12h14M13 5l7 7-7 7"/>
         </svg>

@@ -52,7 +52,7 @@ export default function HeroSection() {
         </h1>
 
         <p className={`${styles.body} ${stagger('delay3')}`}>
-          SignBridge lets Deaf and hearing people talk, collaborate, and learn
+          SIGNWITHUS lets Deaf and hearing people talk, collaborate, and learn
           together. Type and a signing avatar appears. Sign to the camera and it
           becomes text — and is spoken aloud. Two directions, one shared screen,
           in real time.
