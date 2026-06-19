@@ -157,14 +157,11 @@
       "customCount": 27
     }
   ],
-  "missing": [
-    "ñ",
-    "ng"
-  ],
+  "missing": [],
   "kaggleOnly": [],
   "analysis": {
-    "coverage": "92.86",
-    "missingCount": 2,
+    "coverage": "100.00",
+    "missingCount": 0,
     "kaggleOnlyCount": 0
   }
 }

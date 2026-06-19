@@ -5,13 +5,23 @@ import {
   TranscriptEntry
 } from "./types";
 import {
-  saveLog,
-  saveSession,
-  getSession,
-  getSessions,
-  getLogs,
-  getAllLogs
+  saveLog as saveLogLocal,
+  saveSession as saveSessionLocal,
+  getSession as getSessionLocal,
+  getSessions as getSessionsLocal,
+  getLogs as getLogsLocal,
+  getAllLogs as getAllLogsLocal,
+  saveTranscriptLocal,
+  getTranscripts as getTranscriptsLocal,
+  getAllTranscripts as getAllTranscriptsLocal
 } from "./storage";
+import {
+  queuePrediction,
+  queueTranscript,
+  queueEndSession,
+  isAuthenticated,
+  initSync
+} from "./sync";
 
 let nextId = Date.now();
 
@@ -32,6 +42,7 @@ export type RecordPredictionParams = {
   smoothingEnabled: boolean;
   inferenceTimeMs: number;
   fps: number;
+  startedAt?: string;
 };
 
 export const recordPrediction = (params: RecordPredictionParams): LogEntry => {
@@ -45,12 +56,25 @@ export const recordPrediction = (params: RecordPredictionParams): LogEntry => {
     inferenceTimeMs: params.inferenceTimeMs,
     fps: params.fps
   };
-  saveLog(entry);
+
+  saveLogLocal(entry);
+
+  if (isAuthenticated()) {
+    queuePrediction({
+      sessionId: params.sessionId,
+      predictedLabel: params.predictedLabel,
+      confidence: params.confidence,
+      topK: params.topK,
+      inferenceTimeMs: params.inferenceTimeMs,
+      startedAt: params.startedAt
+    });
+  }
+
   return entry;
 };
 
 export const endSession = (sessionId: string, startedAt: string): Session => {
-  const logs = getLogs(sessionId);
+  const logs = getLogsLocal(sessionId);
   const count = logs.length;
   const avgConf =
     count > 0
@@ -72,13 +96,18 @@ export const endSession = (sessionId: string, startedAt: string): Session => {
     averageInferenceTime: avgTime,
     averageFps: avgFps
   };
-  saveSession(session);
+  saveSessionLocal(session);
+
+  if (isAuthenticated()) {
+    queueEndSession({ sessionId });
+  }
+
   return session;
 };
 
 export const getSessionAnalytics = (sessionId: string): SessionAnalytics => {
-  const logs = getLogs(sessionId);
-  const session = getSession(sessionId);
+  const logs = getLogsLocal(sessionId);
+  const session = getSessionLocal(sessionId);
 
   const labelCounts: Record<string, number> = {};
   let totalConf = 0;
@@ -129,23 +158,33 @@ export const getSessionAnalytics = (sessionId: string): SessionAnalytics => {
 };
 
 export const getTranscriptEntries = (sessionId: string): TranscriptEntry[] => {
-  const logs = getLogs(sessionId);
-  const entries: TranscriptEntry[] = [];
-  let lastLabel = "";
+  return getTranscriptsLocal(sessionId);
+};
 
-  for (const log of logs) {
-    if (log.predictedLabel !== lastLabel) {
-      entries.push({ label: log.predictedLabel, timestamp: log.timestamp });
-      lastLabel = log.predictedLabel;
-    }
+export const saveTranscriptEntry = (input: {
+  sessionId: string;
+  label: string;
+  timestamp?: string;
+}): TranscriptEntry => {
+  const entry: TranscriptEntry = {
+    label: input.label,
+    timestamp: input.timestamp ?? new Date().toISOString(),
+    sessionId: input.sessionId
+  };
+  saveTranscriptLocal(entry);
+
+  if (isAuthenticated()) {
+    queueTranscript({
+      sessionId: input.sessionId,
+      content: input.label
+    });
   }
-
-  return entries;
+  return entry;
 };
 
 export const getAllSessionAnalytics = () => {
-  const sessions = getSessions();
-  const allLogs = getAllLogs();
+  const sessions = getSessionsLocal();
+  const allLogs = getAllLogsLocal();
 
   const labelCounts: Record<string, number> = {};
   let totalConf = 0;
@@ -181,4 +220,8 @@ export const getAllSessionAnalytics = () => {
     totalDurationMs,
     labelCounts
   };
+};
+
+export const initializeLogging = (authenticated: boolean) => {
+  initSync({ authenticated });
 };

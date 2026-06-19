@@ -178,7 +178,7 @@ This document lists all figures required for the thesis manuscript with suggeste
 
 ## Figure 17: Per-Label Test Support
 
-**Caption:** Distribution of test samples per label (542 total, ~19 per label). The dataset is well-balanced across all 28 labels, with support ranging from 18 (c, ñ, ng, p, z) to 22 (w).
+**Caption:** Distribution of test samples per label (506 total, ~19 per label). The dataset is well-balanced across all 26 labels, with support ranging from 18 (c, p, z) to 22 (w).
 
 **Suggested format:** Bar chart with labels on x-axis and sample count on y-axis.
 

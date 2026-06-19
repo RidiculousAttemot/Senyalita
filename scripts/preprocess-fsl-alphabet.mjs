@@ -16,8 +16,6 @@ const LABELS = [
   "l",
   "m",
   "n",
-  "ñ",
-  "ng",
   "o",
   "p",
   "q",

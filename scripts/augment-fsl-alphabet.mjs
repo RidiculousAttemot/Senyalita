@@ -80,7 +80,7 @@ const applyHandDropout = (frames, dropoutProb, rng) => {
 
 const LABELS = [
   "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
-  "n", "ñ", "ng", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"
+  "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"
 ];
 
 const augmentationPresets = [

@@ -1,6 +1,6 @@
 # FSL Combined Dataset Validation Report
 
-**Generated:** 2026-06-06T14:41:12.639Z
+**Generated:** 2026-06-07T02:31:50.285Z
 **Dataset:** Kaggle FSL + Custom SignLangVisual
 
 ## File Validation
@@ -9,8 +9,8 @@
 
 ## Labels Validation
 
-✅ All 28 labels present
-Labels: a, b, c, d, e, f, g, h, i, j, k, l, m, n, ñ, ng, o, p, q, r, s, t, u, v, w, x, y, z
+✅ All 26 labels present
+Labels: a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z
 
 ## Metadata Validation
 
@@ -20,120 +20,114 @@ Labels: a, b, c, d, e, f, g, h, i, j, k, l, m, n, ñ, ng, o, p, q, r, s, t, u, v
 |----------|-------|
 | Sequence Length | 120 |
 | Feature Dimension | 126 |
-| Custom Samples | 597 |
-| Kaggle Samples | 11700 |
-| Total Samples | 12297 |
-| Merged At | 2026-06-06T14:40:26.512Z |
+| Custom Samples | 557 |
+| Kaggle Samples | 10865 |
+| Total Samples | 11422 |
+| Merged At | 2026-06-07T02:10:16.642Z |
 
 ## Split Validation
 
 ### train ✅
 
-- Samples: 8595
-- Labels covered: 28/28
+- Samples: 7983
+- Labels covered: 0/26
 
 | Label | Count |
 |-------|-------|
-| a | 329 |
-| b | 330 |
-| c | 329 |
-| d | 331 |
-| e | 329 |
-| f | 329 |
-| g | 330 |
-| h | 329 |
-| i | 330 |
-| j | 329 |
-| k | 330 |
-| l | 329 |
-| m | 329 |
-| n | 329 |
-| ñ | 14 |
-| ng | 14 |
-| o | 330 |
-| p | 329 |
-| q | 329 |
-| r | 329 |
-| s | 329 |
-| t | 329 |
-| u | 330 |
-| v | 329 |
-| w | 331 |
-| x | 330 |
-| y | 331 |
-| z | 329 |
+| a | 0 |
+| b | 0 |
+| c | 0 |
+| d | 0 |
+| e | 0 |
+| f | 0 |
+| g | 0 |
+| h | 0 |
+| i | 0 |
+| j | 0 |
+| k | 0 |
+| l | 0 |
+| m | 0 |
+| n | 0 |
+| o | 0 |
+| p | 0 |
+| q | 0 |
+| r | 0 |
+| s | 0 |
+| t | 0 |
+| u | 0 |
+| v | 0 |
+| w | 0 |
+| x | 0 |
+| y | 0 |
+| z | 0 |
 
 ### validation ✅
 
-- Samples: 1827
-- Labels covered: 28/28
+- Samples: 1700
+- Labels covered: 0/26
 
 | Label | Count |
 |-------|-------|
-| a | 70 |
-| b | 70 |
-| c | 70 |
-| d | 70 |
-| e | 70 |
-| f | 70 |
-| g | 70 |
-| h | 70 |
-| i | 70 |
-| j | 70 |
-| k | 70 |
-| l | 70 |
-| m | 70 |
-| n | 70 |
-| ñ | 3 |
-| ng | 3 |
-| o | 70 |
-| p | 70 |
-| q | 70 |
-| r | 70 |
-| s | 70 |
-| t | 70 |
-| u | 70 |
-| v | 70 |
-| w | 71 |
-| x | 70 |
-| y | 70 |
-| z | 70 |
+| a | 0 |
+| b | 0 |
+| c | 0 |
+| d | 0 |
+| e | 0 |
+| f | 0 |
+| g | 0 |
+| h | 0 |
+| i | 0 |
+| j | 0 |
+| k | 0 |
+| l | 0 |
+| m | 0 |
+| n | 0 |
+| o | 0 |
+| p | 0 |
+| q | 0 |
+| r | 0 |
+| s | 0 |
+| t | 0 |
+| u | 0 |
+| v | 0 |
+| w | 0 |
+| x | 0 |
+| y | 0 |
+| z | 0 |
 
 ### test ✅
 
-- Samples: 1875
-- Labels covered: 28/28
+- Samples: 1739
+- Labels covered: 0/26
 
 | Label | Count |
 |-------|-------|
-| a | 72 |
-| b | 72 |
-| c | 71 |
-| d | 72 |
-| e | 72 |
-| f | 72 |
-| g | 72 |
-| h | 72 |
-| i | 72 |
-| j | 72 |
-| k | 72 |
-| l | 72 |
-| m | 72 |
-| n | 72 |
-| ñ | 3 |
-| ng | 3 |
-| o | 72 |
-| p | 71 |
-| q | 72 |
-| r | 72 |
-| s | 72 |
-| t | 72 |
-| u | 72 |
-| v | 72 |
-| w | 72 |
-| x | 72 |
-| y | 72 |
-| z | 71 |
+| a | 0 |
+| b | 0 |
+| c | 0 |
+| d | 0 |
+| e | 0 |
+| f | 0 |
+| g | 0 |
+| h | 0 |
+| i | 0 |
+| j | 0 |
+| k | 0 |
+| l | 0 |
+| m | 0 |
+| n | 0 |
+| o | 0 |
+| p | 0 |
+| q | 0 |
+| r | 0 |
+| s | 0 |
+| t | 0 |
+| u | 0 |
+| v | 0 |
+| w | 0 |
+| x | 0 |
+| y | 0 |
+| z | 0 |
 
 ## Summary
 
@@ -141,10 +135,10 @@ Labels: a, b, c, d, e, f, g, h, i, j, k, l, m, n, ñ, ng, o, p, q, r, s, t, u, v
 
 ### Statistics
 
-- Train set: 8595 (69.9%)
-- Validation set: 1827 (14.9%)
-- Test set: 1875 (15.2%)
-- **Total: 12297**
+- Train set: 7983 (69.9%)
+- Validation set: 1700 (14.9%)
+- Test set: 1739 (15.2%)
+- **Total: 11422**
 
 ### Next Steps
 

@@ -5,7 +5,7 @@ const PROCESSED_DIR = path.join(process.cwd(), "datasets", "processed", "fsl_alp
 const RAW_DIR = path.join(process.cwd(), "datasets", "raw", "fsl_alphabet");
 const DOCS_DIR = path.join(process.cwd(), "docs");
 
-const LABELS = ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","ñ","ng","o","p","q","r","s","t","u","v","w","x","y","z"];
+const LABELS = ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z"];
 
 const readJson = (filePath) => JSON.parse(fs.readFileSync(filePath, "utf8"));
 const ensureDir = (dirPath) => { if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true }); };

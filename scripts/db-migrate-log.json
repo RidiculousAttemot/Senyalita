@@ -1,0 +1,35 @@
+[
+  {
+    "file": "0001_profiles.sql",
+    "status": "ok"
+  },
+  {
+    "file": "0002_translations.sql",
+    "status": "ok"
+  },
+  {
+    "file": "0003_gestures.sql",
+    "status": "ok"
+  },
+  {
+    "file": "0004_rls.sql",
+    "status": "fail",
+    "error": "relation \"public.transcripts\" does not exist"
+  },
+  {
+    "file": "0005_admin.sql",
+    "status": "ok"
+  },
+  {
+    "file": "0006_storage.sql",
+    "status": "ok"
+  },
+  {
+    "file": "0007_seed.sql",
+    "status": "ok"
+  },
+  {
+    "file": "0008_transcripts.sql",
+    "status": "ok"
+  }
+]

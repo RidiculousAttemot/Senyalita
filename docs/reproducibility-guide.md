@@ -36,8 +36,6 @@ datasets/raw/fsl_alphabet/
     ...
   ...
   z/
-  ñ/
-  ng/
 ```
 
 ### 2. Validate Raw Dataset
@@ -194,7 +192,7 @@ Each trained model directory contains:
 |---|---|
 | `config.json` | Training configuration (hidden size, epochs, learning rate, etc.) |
 | `metrics.json` | Evaluation metrics (accuracy, F1, confusion matrix, per-label metrics) |
-| `labels.json` | 28-class label mapping (a–z, ñ, ng) |
+| `labels.json` | 26-class label mapping (a–z) |
 | `confusion_matrix.json` | Per-split confusion matrices |
 | `training_history.json` | Per-epoch loss and accuracy |
 | `model.json` | Serialized model weights |

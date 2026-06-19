@@ -1,0 +1,22 @@
+{
+  "campaign": "V",
+  "priority": 2,
+  "f1_current": null,
+  "support_current": 4,
+  "difficulty": "hard",
+  "top_confusion": "U",
+  "target_samples": 20,
+  "target_signers": 5,
+  "target_environments": ["home", "office", "classroom"],
+  "signing_variations": ["slow", "normal", "fast"],
+  "collection_strategy": "Fingerspelling workshop focused on differentiating U/V handshapes. Collect multiple angles including side views to capture finger separation cues.",
+  "success_criteria": {
+    "min_samples": 15,
+    "min_signers": 3,
+    "min_environments": 2,
+    "target_f1_after": 75.0
+  },
+  "confusion_pairs": ["U"],
+  "created_at": "2026-06-16",
+  "status": "planned"
+}

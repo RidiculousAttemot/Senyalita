@@ -16,7 +16,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const KAGGLE_EXTRACTION_DIR = path.join(process.cwd(), 'datasets', 'external', 'fsl_kaggle_landmarks');
+const KAGGLE_EXTRACTION_DIR = path.join(process.cwd(), 'datasets', 'processed', 'fsl_kaggle_landmarks');
 const CUSTOM_DATASET_DIR = path.join(process.cwd(), 'datasets', 'processed', 'fsl_alphabet');
 const OUTPUT_DIR = path.join(process.cwd(), 'datasets', 'processed', 'fsl_alphabet_combined');
 const SEQUENCE_LENGTH = 120;
@@ -31,7 +31,7 @@ const SPLIT_RATIOS = {
 
 const LABELS = [
   'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
-  'ñ', 'ng', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'
+  'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'
 ];
 
 const ensureDir = (dirPath) => {
@@ -120,10 +120,15 @@ const loadKaggleDataset = () => {
 const mergeDatasets = (customData, kaggleData) => {
   console.log('\n🔄 Merging datasets...');
 
+  const labelToId = Object.fromEntries(LABELS.map((l, i) => [l, i]));
+
   const mergedSamples = [
     ...customData.samples,
     ...kaggleData.samples
-  ];
+  ].map((sample) => ({
+    ...sample,
+    labelId: labelToId[sample.label] ?? sample.labelId
+  }));
 
   const stats = {
     totalSamples: mergedSamples.length,
@@ -132,7 +137,6 @@ const mergeDatasets = (customData, kaggleData) => {
     labelCounts: {}
   };
 
-  // Count by label
   for (const label of LABELS) {
     stats.labelCounts[label] = mergedSamples.filter(s => s.label === label).length;
   }
@@ -226,7 +230,7 @@ const validateSplit = (splits) => {
   return allCovered;
 };
 
-const saveDataset = (splits, labels, stats, splitStats) => {
+const saveDataset = async (splits, labels, stats, splitStats) => {
   console.log('\n💾 Saving combined dataset...');
 
   ensureDir(OUTPUT_DIR);
@@ -273,13 +277,78 @@ const saveDataset = (splits, labels, stats, splitStats) => {
     JSON.stringify(metadata, null, 2)
   );
 
-  // Save splits without pretty-printing to reduce string size
+  // Save splits via a streaming writer to avoid the 512MB JSON string limit.
+  // We write the structure in fixed-shape pieces: header → array open →
+  // sample 0 → sample 1 → ... → array close → footer.
+  const formatValue = (value) => {
+    if (typeof value === "number") {
+      if (Number.isInteger(value)) return value.toString();
+      return Number(value).toString();
+    }
+    if (typeof value === "string") return JSON.stringify(value);
+    if (value === null) return "null";
+    if (typeof value === "boolean") return value ? "true" : "false";
+    if (Array.isArray(value)) {
+      if (value.length === 0) return "[]";
+      return "[" + value.map(formatValue).join(",") + "]";
+    }
+    if (typeof value === "object") {
+      const keys = Object.keys(value);
+      return "{" + keys.map(k => JSON.stringify(k) + ":" + formatValue(value[k])).join(",") + "}";
+    }
+    return JSON.stringify(value);
+  };
+
   for (const [splitName, splitSamples] of Object.entries(splits)) {
     try {
       const splitPath = path.join(OUTPUT_DIR, `${splitName}.json`);
-      const json = JSON.stringify({ samples: splitSamples });
-      fs.writeFileSync(splitPath, json);
-      console.log(`✓ Saved ${splitName} split (${splitSamples.length} samples, ${(json.length / (1024 * 1024)).toFixed(2)} MB)`);
+      const out = fs.createWriteStream(splitPath);
+      const bytesWritten = { n: 0 };
+      out.on("error", (err) => { console.error(`❌ Stream error saving ${splitName}:`, err.message); });
+      const writeChunk = (chunk) => {
+        return new Promise((resolve, reject) => {
+          if (!out.write(chunk)) out.once("drain", resolve);
+          else resolve();
+          bytesWritten.n += Buffer.byteLength(chunk, "utf8");
+        });
+      };
+      out.write(`{"sequenceLength":${SEQUENCE_LENGTH},"featureDimension":${FEATURE_DIMENSION},"samples":[`);
+      for (let i = 0; i < splitSamples.length; i++) {
+        const chunk = (i === 0 ? "" : ",") + formatValue(splitSamples[i]);
+        await writeChunk(chunk);
+        if ((i + 1) % 500 === 0) console.log(`  ${splitName}: ${i + 1}/${splitSamples.length} (${(bytesWritten.n / (1024 * 1024)).toFixed(1)} MB)`);
+      }
+      out.write("]}");
+      await new Promise((resolve) => out.end(resolve));
+      console.log(`✓ Saved ${splitName} split (${splitSamples.length} samples, ${(bytesWritten.n / (1024 * 1024)).toFixed(2)} MB)`);
+
+      // Also write an NDJSON version: the FIRST line is a header object with
+      // {sequenceLength, featureDimension, totalSamples, labels, splitName}.
+      // Every subsequent line is a single sample object. The trainer can read
+      // line-by-line so the 1.2GB train file never has to be a single string.
+      const ndPath = path.join(OUTPUT_DIR, `${splitName}.ndjson`);
+      const ndOut = fs.createWriteStream(ndPath);
+      const ndBytes = { n: 0 };
+      const writeNdChunk = (c) => new Promise((resolve) => {
+        if (!ndOut.write(c)) ndOut.once("drain", resolve); else resolve();
+        ndBytes.n += Buffer.byteLength(c, "utf8");
+      });
+      const ndHeader = JSON.stringify({
+        _header: true,
+        sequenceLength: SEQUENCE_LENGTH,
+        featureDimension: FEATURE_DIMENSION,
+        splitName,
+        totalSamples: splitSamples.length,
+        labels: LABELS
+      });
+      await writeNdChunk(ndHeader + "\n");
+      for (let i = 0; i < splitSamples.length; i++) {
+        const line = JSON.stringify(splitSamples[i]);
+        await writeNdChunk(line + "\n");
+        if ((i + 1) % 1000 === 0) console.log(`  ${splitName} ndjson: ${i + 1}/${splitSamples.length}`);
+      }
+      await new Promise((resolve) => ndOut.end(resolve));
+      console.log(`✓ Saved ${splitName} NDJSON (${(ndBytes.n / (1024 * 1024)).toFixed(2)} MB)`);
     } catch (err) {
       console.error(`❌ Error saving ${splitName}:`, err.message);
       throw err;

@@ -8,7 +8,7 @@ This document contains publication-ready tables for the thesis manuscript.
 
 | Feature | Value |
 |---|---|
-| Total labels | 28 (a–z, ñ, ng) |
+| Total labels | 26 (a–z) |
 | Total samples (v1) | 597 |
 | Total samples (v2) | 3,592 |
 | Virtual signers | 6 (S01 original + S02–S06 augmented) |

@@ -25,6 +25,7 @@ export const CONFIDENCE_THRESHOLDS: ConfidenceThreshold[] = [0.50, 0.60, 0.70, 0
 export const DEFAULT_CONFIDENCE_THRESHOLD: ConfidenceThreshold = 0.60;
 
 export type TranscriptEntry = {
+  sessionId: string;
   label: string;
   timestamp: string;
 };

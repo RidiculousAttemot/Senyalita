@@ -11865,10 +11865,7 @@
     ".jpg": 11700
   },
   "unsupportedFormats": {},
-  "missingLabels": [
-    "ñ",
-    "ng"
-  ],
+  "missingLabels": [],
   "duplicateFiles": [
     {
       "hash": "45a4222926e26f018c0c5e09e681ba7c",

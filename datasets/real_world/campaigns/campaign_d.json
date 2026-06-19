@@ -1,0 +1,22 @@
+{
+  "campaign": "D",
+  "priority": 6,
+  "f1_current": null,
+  "support_current": 4,
+  "difficulty": "medium",
+  "top_confusion": "P",
+  "target_samples": 20,
+  "target_signers": 5,
+  "target_environments": ["home", "office", "classroom"],
+  "signing_variations": ["slow", "normal", "fast"],
+  "collection_strategy": "Fingerspelling collection emphasizing D handshape (index finger up, rest in fist). Collect from multiple angles to capture finger orientation.",
+  "success_criteria": {
+    "min_samples": 15,
+    "min_signers": 3,
+    "min_environments": 2,
+    "target_f1_after": 75.0
+  },
+  "confusion_pairs": ["P"],
+  "created_at": "2026-06-16",
+  "status": "planned"
+}

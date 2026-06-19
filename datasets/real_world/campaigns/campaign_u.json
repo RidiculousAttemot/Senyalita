@@ -1,0 +1,22 @@
+{
+  "campaign": "U",
+  "priority": 3,
+  "f1_current": null,
+  "support_current": 4,
+  "difficulty": "hard",
+  "top_confusion": "V",
+  "target_samples": 20,
+  "target_signers": 5,
+  "target_environments": ["home", "office", "classroom"],
+  "signing_variations": ["slow", "normal", "fast"],
+  "collection_strategy": "Fingerspelling workshop paired with V campaign. Emphasize index-middle finger together vs apart. Collect from signers with varying hand shapes/sizes.",
+  "success_criteria": {
+    "min_samples": 15,
+    "min_signers": 3,
+    "min_environments": 2,
+    "target_f1_after": 75.0
+  },
+  "confusion_pairs": ["V"],
+  "created_at": "2026-06-16",
+  "status": "planned"
+}

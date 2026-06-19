@@ -92,8 +92,8 @@ At 13.57 ms average inference time (73.7 FPS), the TF.js BiLSTM model has ~86% h
 
 | Metric | Value |
 |---|---|
-| Total samples | 3,592 |
-| Labels | 28 (a–z, ñ, ng) |
+| Total samples | 3,352 |
+| Labels | 26 (a–z) |
 | Signers | 6 (1 original + 5 augmented) |
 | Training samples | 2,508 |
 | Validation samples | 542 |

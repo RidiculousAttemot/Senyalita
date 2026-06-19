@@ -1,0 +1,135 @@
+{
+  "auditDate": "2026-06-16T04:31:51.645Z",
+  "summary": {
+    "totalDatasets": 3,
+    "totalSamples": 6038,
+    "totalLabels": 131,
+    "totalTemporalSamples": 6038,
+    "totalStaticSamples": 0,
+    "overallTemporalRatio": 1
+  },
+  "datasets": [
+    {
+      "name": "fsl_alphabet_v2",
+      "exists": true,
+      "type": "temporal",
+      "totalSamples": 3352,
+      "temporalSamples": 3352,
+      "staticSamples": 0,
+      "temporalRatio": 1,
+      "numClasses": 26,
+      "numSigners": 6,
+      "imbalanceRatio": 1.2,
+      "minClass": [
+        "z",
+        120
+      ],
+      "maxClass": [
+        "w",
+        144
+      ],
+      "deviceTypes": [
+        "webcam-aug",
+        "webcam"
+      ],
+      "lightingConditions": [
+        "indoor-angled",
+        "indoor-varied",
+        "indoor-partial",
+        "outdoor-sim",
+        "indoor",
+        "low-light"
+      ],
+      "splits": [
+        "train",
+        "validation",
+        "test"
+      ],
+      "errors": []
+    },
+    {
+      "name": "fsl_105",
+      "exists": true,
+      "type": "temporal",
+      "totalSamples": 2129,
+      "temporalSamples": 2129,
+      "staticSamples": 0,
+      "temporalRatio": 1,
+      "numClasses": 105,
+      "numSigners": 105,
+      "imbalanceRatio": 1.2222222222222223,
+      "minClass": [
+        "GRANDFATHER",
+        18
+      ],
+      "maxClass": [
+        "CORRECT",
+        22
+      ],
+      "deviceTypes": [
+        "mobile"
+      ],
+      "lightingConditions": [
+        "studio"
+      ],
+      "splits": [
+        "train",
+        "test"
+      ],
+      "errors": []
+    },
+    {
+      "name": "fsl_alphabet",
+      "exists": true,
+      "type": "temporal",
+      "totalSamples": 557,
+      "temporalSamples": 557,
+      "staticSamples": 0,
+      "temporalRatio": 1,
+      "numClasses": 26,
+      "numSigners": 1,
+      "imbalanceRatio": 1.2,
+      "minClass": [
+        "z",
+        20
+      ],
+      "maxClass": [
+        "w",
+        24
+      ],
+      "deviceTypes": [
+        "unknown"
+      ],
+      "lightingConditions": [
+        "unknown"
+      ],
+      "splits": [
+        "train",
+        "validation",
+        "test"
+      ],
+      "errors": []
+    }
+  ],
+  "mergedTraining": {
+    "currentModel": "fsl_unified/bilstm",
+    "datasetsUsed": [
+      "fsl_alphabet_v2",
+      "fsl_105"
+    ],
+    "datasetsNotUsed": [
+      "fsl_alphabet"
+    ],
+    "inferenceMetrics": {
+      "accuracy": 0.8884297520661157,
+      "macroF1": 0.8345437926106731,
+      "weightedF1": 0.8851070132579997,
+      "loss": 0.37702604055649924
+    }
+  },
+  "labelCoverage": {
+    "totalUniqueLabels": 131,
+    "labelsMissingFromTraining": [],
+    "labelsInTrainingButNotInUniverse": []
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "phase": "Phase 33 — Real-World Data Collection",
+  "generated": "2026-06-16",
+  "campaigns": [
+    "campaign_im_fine.json",
+    "campaign_v.json",
+    "campaign_u.json",
+    "campaign_m.json",
+    "campaign_n.json",
+    "campaign_d.json",
+    "campaign_p.json",
+    "campaign_q.json"
+  ],
+  "total_target_samples": 160,
+  "total_target_signers": 5,
+  "total_target_environments": 3,
+  "status": "planned"
+}

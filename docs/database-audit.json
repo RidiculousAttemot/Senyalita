@@ -1,0 +1,811 @@
+{
+  "timestamp": "2026-06-07T15:43:26.641Z",
+  "database": {
+    "profiles": {
+      "exists": true,
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "email",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "display_name",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "role",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'user'::text"
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ],
+      "indexes": [
+        {
+          "indexname": "profiles_created_at_idx",
+          "indexdef": "CREATE INDEX profiles_created_at_idx ON public.profiles USING btree (created_at DESC)"
+        },
+        {
+          "indexname": "profiles_pkey",
+          "indexdef": "CREATE UNIQUE INDEX profiles_pkey ON public.profiles USING btree (id)"
+        },
+        {
+          "indexname": "profiles_role_idx",
+          "indexdef": "CREATE INDEX profiles_role_idx ON public.profiles USING btree (role)"
+        }
+      ],
+      "policies": [
+        {
+          "policyname": "profiles_insert",
+          "cmd": "INSERT",
+          "qual": null,
+          "with_check": "(auth.uid() = id)"
+        },
+        {
+          "policyname": "profiles_select_self_or_admin",
+          "cmd": "SELECT",
+          "qual": "((auth.uid() = id) OR (EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text)))))",
+          "with_check": null
+        },
+        {
+          "policyname": "profiles_update_admin",
+          "cmd": "UPDATE",
+          "qual": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text))))",
+          "with_check": null
+        },
+        {
+          "policyname": "profiles_update_self",
+          "cmd": "UPDATE",
+          "qual": "(auth.uid() = id)",
+          "with_check": "((auth.uid() = id) AND (role = ( SELECT profiles_1.role\n   FROM profiles profiles_1\n  WHERE (profiles_1.id = auth.uid()))))"
+        }
+      ],
+      "rls": {
+        "rls_enabled": true,
+        "rls_forced": false
+      }
+    },
+    "translation_sessions": {
+      "exists": true,
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "user_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "started_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "ended_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "duration_ms",
+          "data_type": "bigint",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "source",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'web'::text"
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ],
+      "indexes": [
+        {
+          "indexname": "translation_sessions_active_idx",
+          "indexdef": "CREATE INDEX translation_sessions_active_idx ON public.translation_sessions USING btree (user_id) WHERE (ended_at IS NULL)"
+        },
+        {
+          "indexname": "translation_sessions_pkey",
+          "indexdef": "CREATE UNIQUE INDEX translation_sessions_pkey ON public.translation_sessions USING btree (id)"
+        },
+        {
+          "indexname": "translation_sessions_user_idx",
+          "indexdef": "CREATE INDEX translation_sessions_user_idx ON public.translation_sessions USING btree (user_id, started_at DESC)"
+        }
+      ],
+      "policies": [
+        {
+          "policyname": "translation_sessions_delete_self",
+          "cmd": "DELETE",
+          "qual": "(user_id = auth.uid())",
+          "with_check": null
+        },
+        {
+          "policyname": "translation_sessions_insert_self",
+          "cmd": "INSERT",
+          "qual": null,
+          "with_check": "(user_id = auth.uid())"
+        },
+        {
+          "policyname": "translation_sessions_select_self",
+          "cmd": "SELECT",
+          "qual": "((user_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text)))))",
+          "with_check": null
+        },
+        {
+          "policyname": "translation_sessions_update_self",
+          "cmd": "UPDATE",
+          "qual": "(user_id = auth.uid())",
+          "with_check": "(user_id = auth.uid())"
+        }
+      ],
+      "rls": {
+        "rls_enabled": true,
+        "rls_forced": false
+      }
+    },
+    "translation_logs": {
+      "exists": true,
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "session_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "user_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "gesture_label",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "confidence",
+          "data_type": "numeric",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "inference_time_ms",
+          "data_type": "numeric",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "selected_reply",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "was_custom_reply",
+          "data_type": "boolean",
+          "is_nullable": "NO",
+          "column_default": "false"
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ],
+      "indexes": [
+        {
+          "indexname": "translation_logs_label_idx",
+          "indexdef": "CREATE INDEX translation_logs_label_idx ON public.translation_logs USING btree (gesture_label)"
+        },
+        {
+          "indexname": "translation_logs_pkey",
+          "indexdef": "CREATE UNIQUE INDEX translation_logs_pkey ON public.translation_logs USING btree (id)"
+        },
+        {
+          "indexname": "translation_logs_session_idx",
+          "indexdef": "CREATE INDEX translation_logs_session_idx ON public.translation_logs USING btree (session_id, created_at)"
+        },
+        {
+          "indexname": "translation_logs_user_idx",
+          "indexdef": "CREATE INDEX translation_logs_user_idx ON public.translation_logs USING btree (user_id, created_at DESC)"
+        }
+      ],
+      "policies": [
+        {
+          "policyname": "translation_logs_delete_self",
+          "cmd": "DELETE",
+          "qual": "(user_id = auth.uid())",
+          "with_check": null
+        },
+        {
+          "policyname": "translation_logs_insert_self",
+          "cmd": "INSERT",
+          "qual": null,
+          "with_check": "(user_id = auth.uid())"
+        },
+        {
+          "policyname": "translation_logs_select_self",
+          "cmd": "SELECT",
+          "qual": "((user_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text)))))",
+          "with_check": null
+        },
+        {
+          "policyname": "translation_logs_update_self",
+          "cmd": "UPDATE",
+          "qual": "(user_id = auth.uid())",
+          "with_check": "(user_id = auth.uid())"
+        }
+      ],
+      "rls": {
+        "rls_enabled": true,
+        "rls_forced": false
+      }
+    },
+    "transcripts": {
+      "exists": true,
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "session_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "user_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "content",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ],
+      "indexes": [
+        {
+          "indexname": "transcripts_pkey",
+          "indexdef": "CREATE UNIQUE INDEX transcripts_pkey ON public.transcripts USING btree (id)"
+        },
+        {
+          "indexname": "transcripts_session_idx",
+          "indexdef": "CREATE INDEX transcripts_session_idx ON public.transcripts USING btree (session_id, created_at DESC)"
+        },
+        {
+          "indexname": "transcripts_user_idx",
+          "indexdef": "CREATE INDEX transcripts_user_idx ON public.transcripts USING btree (user_id, created_at DESC)"
+        }
+      ],
+      "policies": [
+        {
+          "policyname": "transcripts_delete_self",
+          "cmd": "DELETE",
+          "qual": "(user_id = auth.uid())",
+          "with_check": null
+        },
+        {
+          "policyname": "transcripts_insert_self",
+          "cmd": "INSERT",
+          "qual": null,
+          "with_check": "(user_id = auth.uid())"
+        },
+        {
+          "policyname": "transcripts_select_self",
+          "cmd": "SELECT",
+          "qual": "((user_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text)))))",
+          "with_check": null
+        },
+        {
+          "policyname": "transcripts_update_self",
+          "cmd": "UPDATE",
+          "qual": "(user_id = auth.uid())",
+          "with_check": "(user_id = auth.uid())"
+        }
+      ],
+      "rls": {
+        "rls_enabled": true,
+        "rls_forced": false
+      }
+    },
+    "gestures": {
+      "exists": true,
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "label",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "description",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "''::text"
+        },
+        {
+          "column_name": "video_path",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "thumbnail_path",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "is_active",
+          "data_type": "boolean",
+          "is_nullable": "NO",
+          "column_default": "true"
+        },
+        {
+          "column_name": "display_order",
+          "data_type": "integer",
+          "is_nullable": "NO",
+          "column_default": "0"
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "status",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'approved'::text"
+        }
+      ],
+      "indexes": [
+        {
+          "indexname": "gestures_active_idx",
+          "indexdef": "CREATE INDEX gestures_active_idx ON public.gestures USING btree (is_active, display_order)"
+        },
+        {
+          "indexname": "gestures_label_key",
+          "indexdef": "CREATE UNIQUE INDEX gestures_label_key ON public.gestures USING btree (label)"
+        },
+        {
+          "indexname": "gestures_pkey",
+          "indexdef": "CREATE UNIQUE INDEX gestures_pkey ON public.gestures USING btree (id)"
+        },
+        {
+          "indexname": "gestures_status_idx",
+          "indexdef": "CREATE INDEX gestures_status_idx ON public.gestures USING btree (status, is_active, display_order)"
+        }
+      ],
+      "policies": [
+        {
+          "policyname": "gestures_admin_write",
+          "cmd": "ALL",
+          "qual": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text))))",
+          "with_check": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text))))"
+        },
+        {
+          "policyname": "gestures_select_authenticated",
+          "cmd": "SELECT",
+          "qual": "(((status = 'approved'::text) AND (is_active = true)) OR (EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text)))))",
+          "with_check": null
+        }
+      ],
+      "rls": {
+        "rls_enabled": true,
+        "rls_forced": false
+      }
+    },
+    "gesture_replies": {
+      "exists": true,
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "gesture_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "reply_text",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "display_order",
+          "data_type": "integer",
+          "is_nullable": "NO",
+          "column_default": "0"
+        },
+        {
+          "column_name": "is_active",
+          "data_type": "boolean",
+          "is_nullable": "NO",
+          "column_default": "true"
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "video_path",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        }
+      ],
+      "indexes": [
+        {
+          "indexname": "gesture_replies_gesture_idx",
+          "indexdef": "CREATE INDEX gesture_replies_gesture_idx ON public.gesture_replies USING btree (gesture_id, display_order) WHERE (is_active = true)"
+        },
+        {
+          "indexname": "gesture_replies_pkey",
+          "indexdef": "CREATE UNIQUE INDEX gesture_replies_pkey ON public.gesture_replies USING btree (id)"
+        },
+        {
+          "indexname": "gesture_replies_video_idx",
+          "indexdef": "CREATE INDEX gesture_replies_video_idx ON public.gesture_replies USING btree (gesture_id) WHERE (video_path IS NOT NULL)"
+        }
+      ],
+      "policies": [
+        {
+          "policyname": "gesture_replies_admin_write",
+          "cmd": "ALL",
+          "qual": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text))))",
+          "with_check": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text))))"
+        },
+        {
+          "policyname": "gesture_replies_select_authenticated",
+          "cmd": "SELECT",
+          "qual": "((is_active = true) OR (EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text)))))",
+          "with_check": null
+        }
+      ],
+      "rls": {
+        "rls_enabled": true,
+        "rls_forced": false
+      }
+    },
+    "feedback": {
+      "exists": true,
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "user_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "session_id",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "gesture_label",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "rating",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "comment",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ],
+      "indexes": [
+        {
+          "indexname": "feedback_gesture_idx",
+          "indexdef": "CREATE INDEX feedback_gesture_idx ON public.feedback USING btree (gesture_label)"
+        },
+        {
+          "indexname": "feedback_pkey",
+          "indexdef": "CREATE UNIQUE INDEX feedback_pkey ON public.feedback USING btree (id)"
+        },
+        {
+          "indexname": "feedback_rating_idx",
+          "indexdef": "CREATE INDEX feedback_rating_idx ON public.feedback USING btree (rating, created_at DESC)"
+        },
+        {
+          "indexname": "feedback_user_idx",
+          "indexdef": "CREATE INDEX feedback_user_idx ON public.feedback USING btree (user_id, created_at DESC)"
+        }
+      ],
+      "policies": [
+        {
+          "policyname": "feedback_delete_admin",
+          "cmd": "DELETE",
+          "qual": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text))))",
+          "with_check": null
+        },
+        {
+          "policyname": "feedback_insert_self",
+          "cmd": "INSERT",
+          "qual": null,
+          "with_check": "(user_id = auth.uid())"
+        },
+        {
+          "policyname": "feedback_select_self",
+          "cmd": "SELECT",
+          "qual": "((user_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text)))))",
+          "with_check": null
+        },
+        {
+          "policyname": "feedback_update_admin",
+          "cmd": "UPDATE",
+          "qual": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text))))",
+          "with_check": null
+        }
+      ],
+      "rls": {
+        "rls_enabled": true,
+        "rls_forced": false
+      }
+    },
+    "model_metrics_daily": {
+      "exists": true,
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "day",
+          "data_type": "date",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "total_predictions",
+          "data_type": "integer",
+          "is_nullable": "NO",
+          "column_default": "0"
+        },
+        {
+          "column_name": "low_confidence_count",
+          "data_type": "integer",
+          "is_nullable": "NO",
+          "column_default": "0"
+        },
+        {
+          "column_name": "unknown_count",
+          "data_type": "integer",
+          "is_nullable": "NO",
+          "column_default": "0"
+        },
+        {
+          "column_name": "avg_confidence",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "avg_inference_ms",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "failure_rate",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ],
+      "indexes": [
+        {
+          "indexname": "model_metrics_daily_day_idx",
+          "indexdef": "CREATE INDEX model_metrics_daily_day_idx ON public.model_metrics_daily USING btree (day DESC)"
+        },
+        {
+          "indexname": "model_metrics_daily_day_key",
+          "indexdef": "CREATE UNIQUE INDEX model_metrics_daily_day_key ON public.model_metrics_daily USING btree (day)"
+        },
+        {
+          "indexname": "model_metrics_daily_pkey",
+          "indexdef": "CREATE UNIQUE INDEX model_metrics_daily_pkey ON public.model_metrics_daily USING btree (id)"
+        }
+      ],
+      "policies": [
+        {
+          "policyname": "model_metrics_admin_write",
+          "cmd": "ALL",
+          "qual": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text))))",
+          "with_check": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text))))"
+        },
+        {
+          "policyname": "model_metrics_select_admin",
+          "cmd": "SELECT",
+          "qual": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text))))",
+          "with_check": null
+        }
+      ],
+      "rls": {
+        "rls_enabled": true,
+        "rls_forced": false
+      }
+    }
+  },
+  "functions": [
+    {
+      "routine_name": "demote_user",
+      "routine_type": "FUNCTION"
+    },
+    {
+      "routine_name": "get_admin_analytics",
+      "routine_type": "FUNCTION"
+    },
+    {
+      "routine_name": "get_model_metrics_daily",
+      "routine_type": "FUNCTION"
+    },
+    {
+      "routine_name": "handle_new_user",
+      "routine_type": "FUNCTION"
+    },
+    {
+      "routine_name": "promote_user",
+      "routine_type": "FUNCTION"
+    },
+    {
+      "routine_name": "sync_transcript_user",
+      "routine_type": "FUNCTION"
+    },
+    {
+      "routine_name": "sync_translation_log_user",
+      "routine_type": "FUNCTION"
+    },
+    {
+      "routine_name": "touch_updated_at",
+      "routine_type": "FUNCTION"
+    },
+    {
+      "routine_name": "upsert_model_metrics_daily",
+      "routine_type": "FUNCTION"
+    }
+  ],
+  "storage": {
+    "buckets": [
+      {
+        "id": "gesture-videos",
+        "name": "gesture-videos",
+        "public": true,
+        "file_size_limit": "52428800",
+        "allowed_mime_types": [
+          "video/mp4",
+          "video/webm",
+          "video/quicktime",
+          "image/jpeg",
+          "image/png",
+          "image/webp"
+        ]
+      }
+    ],
+    "policies": [
+      {
+        "policyname": "gesture-videos admin delete",
+        "cmd": "DELETE",
+        "qual": "((bucket_id = 'gesture-videos'::text) AND (EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text)))))"
+      },
+      {
+        "policyname": "gesture-videos admin insert",
+        "cmd": "INSERT",
+        "qual": null
+      },
+      {
+        "policyname": "gesture-videos admin update",
+        "cmd": "UPDATE",
+        "qual": "((bucket_id = 'gesture-videos'::text) AND (EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text)))))"
+      },
+      {
+        "policyname": "gesture-videos read",
+        "cmd": "SELECT",
+        "qual": "(bucket_id = 'gesture-videos'::text)"
+      }
+    ]
+  }
+}

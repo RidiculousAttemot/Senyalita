@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 
-const LABELS = ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","ñ","ng","o","p","q","r","s","t","u","v","w","x","y","z"];
+const LABELS = ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z"];
 
 const INPUT_DIR = path.join(process.cwd(), "datasets", "raw", "fsl_alphabet");
 const OUTPUT_DIR = path.join(process.cwd(), "datasets", "processed", "fsl_alphabet_v2");

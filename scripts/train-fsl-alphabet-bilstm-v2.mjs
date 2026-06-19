@@ -1,12 +1,16 @@
 import fs from "fs";
 import path from "path";
 
-const INPUT_DIR = path.join(process.cwd(), "datasets", "processed", "fsl_alphabet_v2");
-const OUTPUT_DIR = path.join(process.cwd(), "models", "fsl_alphabet", "bilstm_v2");
+const INPUT_DIR = process.env.INPUT_DIR
+  ? path.resolve(process.env.INPUT_DIR)
+  : path.join(process.cwd(), "datasets", "processed", "fsl_alphabet_v2");
+const OUTPUT_DIR = process.env.OUTPUT_DIR
+  ? path.resolve(process.env.OUTPUT_DIR)
+  : path.join(process.cwd(), "models", "fsl_alphabet", "bilstm_v2");
 
 const SEQUENCE_LENGTH = 120;
 const FEATURE_DIMENSION = 126;
-const OUTPUT_CLASSES = 28;
+const OUTPUT_CLASSES = 26;
 const RANDOM_SEED = 2026;
 const TEMPORAL_STEPS = Number.parseInt(process.env.FSL_BILSTM_V2_TEMPORAL_STEPS ?? "30", 10);
 const HIDDEN_SIZE = Number.parseInt(process.env.FSL_BILSTM_V2_HIDDEN_SIZE ?? "32", 10);
@@ -56,7 +60,51 @@ const buildSparseFrame = (frame) => {
   return { indices: Uint16Array.from(indices), values: Float32Array.from(values) };
 };
 
+const loadSplitNdjson = (splitName, frameIndices) => {
+  // Stream the NDJSON file line-by-line so the 1.2GB train file never has to
+  // be a single string. Converts each sample to the trainer's sparse-frame
+  // representation on the fly and drops the full sequence to keep memory low.
+  const splitPath = path.join(INPUT_DIR, `${splitName}.ndjson`);
+  if (!fs.existsSync(splitPath)) return null;
+  const samples = [];
+  let header = null;
+  const stream = fs.createReadStream(splitPath, { encoding: "utf8", highWaterMark: 1 << 20 });
+  let leftover = "";
+  return new Promise((resolve, reject) => {
+    stream.on("data", (chunk) => {
+      const text = leftover + chunk;
+      let newlineIdx;
+      let start = 0;
+      while ((newlineIdx = text.indexOf("\n", start)) !== -1) {
+        const line = text.slice(start, newlineIdx);
+        start = newlineIdx + 1;
+        if (!line) continue;
+        const obj = JSON.parse(line);
+        if (obj._header) { header = obj; continue; }
+        samples.push({
+          label: obj.label, labelId: obj.labelId,
+          signerId: obj.signerId,
+          frames: frameIndices.map((frameIndex) => buildSparseFrame(obj.sequence[frameIndex]))
+        });
+      }
+      leftover = text.slice(start);
+    });
+    stream.on("end", () => {
+      if (!header) return reject(new Error("NDJSON missing header"));
+      if (header.sequenceLength !== SEQUENCE_LENGTH) return reject(new Error("Sequence length mismatch."));
+      if (header.featureDimension !== FEATURE_DIMENSION) return reject(new Error("Feature dimension mismatch."));
+      if (samples.length === 0) return reject(new Error("No samples."));
+      resolve(samples);
+    });
+    stream.on("error", reject);
+  });
+};
+
 const loadSplit = (splitName, labelsData, frameIndices) => {
+  const ndPath = path.join(INPUT_DIR, `${splitName}.ndjson`);
+  if (fs.existsSync(ndPath)) {
+    return loadSplitNdjson(splitName, frameIndices);
+  }
   const splitPath = path.join(INPUT_DIR, `${splitName}.json`);
   const payload = readJson(splitPath);
   if (payload.sequenceLength !== SEQUENCE_LENGTH) throw new Error("Sequence length mismatch.");
@@ -326,19 +374,19 @@ const saveOutputs = ({ labelsData, metadata, model, frameIndices, trainMetrics, 
 
 const formatPercent = (value) => `${(value * 100).toFixed(2)}%`;
 
-const main = () => {
+const main = async () => {
   const labelsData = readJson(path.join(INPUT_DIR, "labels.json"));
   const metadata = readJson(path.join(INPUT_DIR, "metadata.json"));
 
   if (!labelsData || typeof labelsData !== "object") throw new Error("labels.json is invalid.");
-  if (!Array.isArray(labelsData.labels) || labelsData.labels.length !== OUTPUT_CLASSES) throw new Error("Expected 28 classes.");
+  if (!Array.isArray(labelsData.labels) || labelsData.labels.length !== OUTPUT_CLASSES) throw new Error(`Expected ${OUTPUT_CLASSES} classes.`);
   if (metadata.sequenceLength !== SEQUENCE_LENGTH) throw new Error("Sequence length mismatch.");
   if (metadata.featureDimension !== FEATURE_DIMENSION) throw new Error("Feature dimension mismatch.");
 
   const frameIndices = temporalFrameIndices();
-  const trainSamples = loadSplit("train", labelsData, frameIndices);
-  const validationSamples = loadSplit("validation", labelsData, frameIndices);
-  const testSamples = loadSplit("test", labelsData, frameIndices);
+  const trainSamples = await loadSplit("train", labelsData, frameIndices);
+  const validationSamples = await loadSplit("validation", labelsData, frameIndices);
+  const testSamples = await loadSplit("test", labelsData, frameIndices);
   const model = createModel(labelsData.labels.length);
   const history = [];
   const rng = mulberry32(RANDOM_SEED + 1);
@@ -382,4 +430,4 @@ const main = () => {
   console.log(`Outputs saved to ${OUTPUT_DIR}`);
 };
 
-try { main(); } catch (error) { console.error("BiLSTM v2 training failed:", error instanceof Error ? error.message : error); process.exit(1); }
+try { await main(); } catch (error) { console.error("BiLSTM v2 training failed:", error instanceof Error ? `${error.message}\n${error.stack}` : error); process.exit(1); }

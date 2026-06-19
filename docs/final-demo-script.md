@@ -1,92 +1,164 @@
-# v1.0.0 Final Demo Recording Script
+# Final Demonstration Script
 
-## Prerequisites
-- Node.js 18+, npm
-- Camera (built-in or external USB)
-- Well-lit room, plain background
-- Speaker/headphones for TTS audio
+## Setup
 
-## Setup (1–2 min)
-1. Open the project in VS Code.
-2. Terminal: `npm run dev` — dev server starts at http://localhost:3000.
-3. Open Chrome/Edge at http://localhost:3000.
+- **Device**: Laptop with webcam (720p+)
+- **Browser**: Chrome (latest)
+- **Network**: Stable internet connection
+- **Display**: 1920×1080 external monitor preferred
+- **Audio**: Speakers or headphones for TTS demo
+- **Lighting**: Well-lit environment, no backlight
 
-## Demo Walkthrough
+Total estimated time: **10 minutes**
 
-### 1. Landing Page (30s)
-- Show the page title, brief intro text.
-- Click **Start** → navigates to `/camera`.
+---
 
-### 2. Camera Permission (15s)
-- Browser prompts for camera access → **Allow**.
-- Live feed appears with hand landmark overlay.
+## Demo Sequence
 
-### 3. No-Hand / One-Hand / Two-Hand Detection (30s)
-- Keep hands away from camera → status shows "No hand detected".
-- Hold one hand up → "1 hand detected".
-- Hold both hands up → "2 hands detected".
-- Point out the FPS counter updating in real time.
+### 0. Opening (30s)
 
-### 4. Model Loading (15s)
-- First load: observe "Loading model..." state (~1s).
-- After load, "Collecting sequence..." appears with progress 0/120 → 120/120.
+> "Good morning/afternoon. Today I will demonstrate SignLangVisual, a real-time Filipino Sign Language recognition and communication system."
 
-### 5. Alphabet Recognition — Strong Labels (1 min)
-- Sign **a, b, d, g, w, y** slowly (one at a time).
-- Hold each sign steady for ~2 seconds.
-- Show the predicted letter, confidence %, and top-3 suggestions.
-- These labels have perfect F1=1.0 and should show confidence >90%.
+---
 
-### 6. Alphabet Recognition — Confusable Labels (1 min)
-- Sign **u** (index up), **v** (peace sign), **r** (crossed index/middle).
-- Show that u/v/r may occasionally confuse each other.
-- Demonstrate the confidence threshold: when confidence <60%, the prediction is rejected (show "Collecting sequence..." reset).
-- Sign **b** and **c** — note they may also confuse (2 test errors).
+### 1. Login (45s)
 
-### 7. Prediction Smoothing (30s)
-- Quickly switch between two signs (e.g., **a** → **g**).
-- Show that the prediction smoothly transitions (majority vote over last 10).
+| Time | Action | Screen | Narration |
+|------|--------|--------|-----------|
+| 0:00 | Open browser, navigate to app URL | Landing page | "We start at the landing page" |
+| 0:15 | Click Login | Login form | "Logging in with a demo account" |
+| 0:30 | Enter credentials, submit | Dashboard | "As you can see, authentication works seamlessly" |
 
-### 8. Session Logging (30s)
-- Sign **h-e-l-l-o** (one at a time, ~2s each).
-- Click **End Session**.
-- Show the session summary: timestamp, prediction history, per-frame confidence.
+---
 
-### 9. Transcript and Export (45s)
-- Show the transcript panel with the sequence of recognized letters.
-- Click **Export JSON** → save file, open in VS Code/Notepad to show structure.
-- Click **Export CSV** → save file, show the flattened per-frame data.
+### 2. Open Camera (45s)
 
-### 10. TTS (30s)
-- Highlight the transcript text.
-- Click **Text-to-Speech** → audio plays the transcript.
-- Toggle **English / Tagalog** → transcript text and TTS language change.
+| Time | Action | Screen | Narration |
+|------|--------|--------|-----------|
+| 0:45 | Click Camera button in nav | Camera page | "Opening the camera page" |
+| 0:55 | Camera activates | Live feed | "The browser requests camera permission" |
+| 1:10 | Hand landmarks appear | Canvas overlay | "MediaPipe detects 21 hand landmarks in real-time" |
+| 1:20 | FPS counter visible | Debug overlay | "Running at 30 FPS" |
 
-### 11. History Page (30s)
-- Click **History** link in nav.
-- Show the list of past sessions with timestamps.
-- Click a session to view details (transcript, predictions, export options).
+---
 
-## Closing Statement (15s)
+### 3. Recognize Alphabet Sign (60s)
 
-> "This concludes the v1.0.0 demonstration of the real-time FSL alphabet recognition system using a BiLSTM v2 model with 98.15% test accuracy, running entirely in the browser with TensorFlow.js."
+| Time | Action | Screen | Narration |
+|------|--------|--------|-----------|
+| 1:30 | Sign letter "A" | Recognition shows "A" | "Performing the FSL sign for letter A" |
+| 1:40 | Sign letter "B" | Shows "B" | "Letter B — recognized at 95% confidence" |
+| 1:50 | Sign letter "C" | Shows "C" | "Letter C" |
+| 2:00 | Sign "THANK YOU" | Shows "THANK YOU" | "Now a common phrase — it translates in real-time" |
 
-## Quick Checklist
+---
 
-- [ ] Landing page → camera permission
-- [ ] No/one/two hand detection
-- [ ] Model loading + sequence collection
-- [ ] Strong label recognition (a, b, d, g, w, y)
-- [ ] Confusable label recognition (u/v/r)
-- [ ] Confidence threshold rejection
-- [ ] Prediction smoothing between signs
-- [ ] Session logging + end session
-- [ ] Transcript generation
-- [ ] JSON export
-- [ ] CSV export
-- [ ] Text-to-Speech (English)
-- [ ] Text-to-Speech (Tagalog)
-- [ ] History page
-- [ ] Session detail view
+### 4. Recognize Phrase Sign (60s)
 
-## Total Demo Time: ~7–8 minutes
+| Time | Action | Screen | Narration |
+|------|--------|--------|-----------|
+| 2:15 | Sign "HELLO" | Shows "HELLO" | "The model can recognize 133 different gestures" |
+| 2:25 | Sign "GOOD MORNING" | Shows "GOOD MORNING" | "Good Morning — this is one of 106 phrase classes" |
+| 2:35 | Sign "HOW ARE YOU" | Shows "HOW ARE YOU" | "How are you" |
+| 2:45 | Sign "IM FINE" | Shows "IM FINE" | "I'm fine" |
+| 2:55 | Sign "GOODBYE" | Shows "GOODBYE" | "Goodbye" |
+
+---
+
+### 5. Show Suggested Replies (45s)
+
+| Time | Action | Screen | Narration |
+|------|--------|--------|-----------|
+| 3:00 | Sign "THANK YOU" again | Transcript + replies | "When a gesture is recognized, context-aware replies appear" |
+| 3:15 | Point to reply chips | "You're welcome", etc. | "These are automatically generated from the database" |
+| 3:30 | Click "You're welcome" | Reply appended | "One click sends the response" |
+
+---
+
+### 6. Play Response Video (45s)
+
+| Time | Action | Screen | Narration |
+|------|--------|--------|-----------|
+| 3:45 | Sign "HELLO" | Reply with ▶ FSL button | "Some replies have FSL response videos" |
+| 3:55 | Click ▶ FSL button | Video modal opens | "A video demonstrates the FSL response" |
+| 4:10 | Video plays | FSL demonstration | "This helps hearing users respond in sign language" |
+
+---
+
+### 7. Start Conversation Session (120s)
+
+| Time | Action | Screen | Narration |
+|------|--------|--------|-----------|
+| 4:30 | Navigate to `/conversation` | 3-panel layout | "The conversation page has three panels" |
+| 4:45 | Sign "HELLO" | Auto-appended center | "Left: camera, Center: transcript, Right: session info" |
+| 5:00 | Click reply "Hello! How are you?" | Reply appears | "The hearing user can respond with one click" |
+| 5:15 | Sign "IM FINE" | Appended | "The conversation flows naturally" |
+| 5:30 | Click "Glad to hear it" | Appended | "Multiple exchanges in real-time" |
+| 5:45 | Enable Guided Mode | Badge shows ON | "Guided mode prevents duplicate predictions" |
+| 6:00 | Sign "THANK YOU" | Locked prediction | "The prediction locks until you release it" |
+
+---
+
+### 8. Export Transcript (30s)
+
+| Time | Action | Screen | Narration |
+|------|--------|--------|-----------|
+| 6:30 | Click Export TXT | File downloads | "The entire conversation can be exported" |
+| 6:45 | Open exported file | Text file | "All messages are timestamped with sender information" |
+
+---
+
+### 9. View Analytics (45s)
+
+| Time | Action | Screen | Narration |
+|------|--------|--------|-----------|
+| 7:00 | Open admin menu | Admin overview | "Switching to admin view" |
+| 7:10 | Click Analytics | Analytics dashboard | "The analytics dashboard shows recognition statistics" |
+| 7:25 | Scroll through charts | Top gestures, daily activity | "Top gestures, user activity, confidence rates" |
+| 7:35 | Click Conversations | Conversation analytics | "Conversation-specific metrics" |
+
+---
+
+### 10. Open Admin Dashboard (45s)
+
+| Time | Action | Screen | Narration |
+|------|--------|--------|-----------|
+| 8:00 | Click Gestures | Gesture list | "The admin can manage all 133 gestures" |
+| 8:15 | Click Users | User management | "User roles and permissions" |
+| 8:25 | Click Imports | Import tool | "Bulk import from model labels" |
+
+---
+
+### Closing (30s)
+
+| Time | Action | Screen | Narration |
+|------|--------|--------|-----------|
+| 8:45 | Return to home | Landing page | "That concludes the demonstration" |
+| 9:00 | — | — | "SignLangVisual is deployed, validated, and ready for real-world use. I welcome your questions." |
+
+---
+
+## Timing Summary
+
+| Segment | Duration |
+|---------|----------|
+| Opening | 0:30 |
+| Login | 0:45 |
+| Open camera | 0:45 |
+| Alphabet recognition | 1:00 |
+| Phrase recognition | 1:00 |
+| Suggested replies | 0:45 |
+| Response video | 0:45 |
+| Conversation session | 2:00 |
+| Export transcript | 0:30 |
+| View analytics | 0:45 |
+| Admin dashboard | 0:45 |
+| Closing | 0:30 |
+| **Total** | **~10 minutes** |
+
+## Contingency Plan
+
+- **Camera fails**: Pre-recorded demo video ready
+- **Model fails to load**: Have screenshots of all features
+- **Network issues**: Local dev server as fallback
+- **Time pressure**: Skip segments 5, 6 (reply + video), focus on recognition + conversation

@@ -1,0 +1,86 @@
+{
+  "name": "Real-World Collection Pipeline",
+  "created": "2026-06-16T07:17:36.755Z",
+  "targetSigners": 5,
+  "diversityRequirements": {
+    "skinTones": [
+      "light",
+      "medium",
+      "dark",
+      "olive",
+      "brown"
+    ],
+    "lightingConditions": [
+      "bright-indoor",
+      "dim-indoor",
+      "outdoor-shade",
+      "outdoor-sun",
+      "backlit",
+      "side-lit"
+    ],
+    "cameraPositions": [
+      "chest-level",
+      "face-level",
+      "slightly-above",
+      "slightly-below",
+      "angled-left",
+      "angled-right"
+    ],
+    "backgrounds": [
+      "solid-wall",
+      "cluttered",
+      "window",
+      "outdoor",
+      "dark"
+    ]
+  },
+  "signsToCollect": [
+    "a",
+    "b",
+    "c",
+    "d",
+    "e",
+    "f",
+    "g",
+    "h",
+    "i",
+    "j",
+    "THANK YOU",
+    "GOOD MORNING",
+    "HELLO",
+    "YES",
+    "NO"
+  ],
+  "collectionPipeline": [
+    {
+      "step": 1,
+      "description": "Setup MediaPipe hand tracking in browser"
+    },
+    {
+      "step": 2,
+      "description": "Capture 120-frame sequence at 30fps per sign"
+    },
+    {
+      "step": 3,
+      "description": "Extract 126 MediaPipe landmarks per frame"
+    },
+    {
+      "step": 4,
+      "description": "Validate landmark quality (>60% nonzero)"
+    },
+    {
+      "step": 5,
+      "description": "Store as JSON with metadata (signer, lighting, background, position)"
+    },
+    {
+      "step": 6,
+      "description": "Review and label each capture"
+    }
+  ],
+  "validationCriteria": {
+    "minFrames": 30,
+    "maxFrames": 300,
+    "landmarkCompleteness": 0.6,
+    "minConfidence": 0.7
+  }
+}

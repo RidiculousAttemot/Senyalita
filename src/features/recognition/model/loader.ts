@@ -66,7 +66,7 @@ const loadModel = async (): Promise<Loadable> => {
 
       const model = await tf.loadLayersModel(tf.io.fromMemory(artifacts));
 
-      const warmupInput = tf.zeros([1, 30, 126]);
+      const warmupInput = tf.zeros([1, 30, FEATURE_DIMENSION]);
       model.predict(warmupInput);
       tf.dispose(warmupInput);
 
@@ -96,13 +96,16 @@ const getCachedResult = (): ModelLoadResult => {
   };
 };
 
+const FEATURE_DIMENSION = 126;
+
 const infer = async (features: Float32Array): Promise<InferenceResult | null> => {
   if (cache.status !== "ready" || !cache.model) {
     return null;
   }
 
   try {
-    const input = tf.tensor3d(features, [1, 30, 126]);
+    const timesteps = features.length / FEATURE_DIMENSION;
+    const input = tf.tensor3d(features, [1, timesteps, FEATURE_DIMENSION]);
     const output = cache.model.predict(input) as tf.Tensor;
     const probabilities = await output.data();
 
@@ -115,7 +118,7 @@ const infer = async (features: Float32Array): Promise<InferenceResult | null> =>
 
     const indexed = probsArray.map((p, i) => ({ index: i, probability: p }));
     indexed.sort((a, b) => b.probability - a.probability);
-    const topK = indexed.slice(0, 3).map((item) => ({
+    const topK = indexed.slice(0, 5).map((item) => ({
       label: cache.labels[item.index] ?? "?",
       confidence: item.probability
     }));

@@ -16,10 +16,10 @@ const KAGGLE_EXTRACTION_DIR = path.join(process.cwd(), 'datasets', 'external', '
 const CUSTOM_DATASET_DIR = path.join(process.cwd(), 'datasets', 'processed', 'fsl_alphabet');
 const MAPPING_OUTPUT = path.join(process.cwd(), 'docs', 'fsl-kaggle-label-mapping.md');
 
-// FSL alphabet labels (28 total)
+// FSL alphabet labels (26 total)
 const EXPECTED_LABELS = [
   'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
-  'ñ', 'ng', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'
+  'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'
 ];
 
 const ensureDir = (dirPath) => {

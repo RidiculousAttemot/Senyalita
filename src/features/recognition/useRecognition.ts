@@ -1,19 +1,37 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { RecognitionState, RealPredictionResult } from "./types";
+import { RecognitionState, RealPredictionResult, RecognitionCategory } from "./types";
 import { InferenceResult } from "./model";
 import { SequenceBuffer, HandData } from "./buffer";
 import { PredictionSmoother } from "./smoothing";
-import { translateResult } from "./translation";
+import { MotionDetector, MotionState } from "./motionDetection";
+import { translateResult, getRecognitionCategory } from "./translation";
 import { loadModel, infer } from "./model";
+import { ModeManager, type RecognitionMode } from "./recognitionModes";
 
-const INFERENCE_INTERVAL_MS = 200;
+const INFERENCE_INTERVAL_MS = 100;
+const FAST_INFERENCE_INTERVAL_MS = 50;
+const EARLY_INFERENCE_INTERVAL_MS = 30;
+const MIN_FRAMES_FOR_EARLY_INFERENCE = 5;
+const MIN_FRAMES_FOR_FAST_INFERENCE = 8;
+const FREEZE_HYSTERESIS_FRAMES = 10;
+const EARLY_CONFIDENCE_THRESHOLD = 0.85;
+const STABLE_FREEZE_FRAMES = 8;
+const UI_UPDATE_INTERVAL_MS = 300;
 
 export type RecognitionControls = {
   state: RecognitionState;
   appendFrame: (left: HandData | null, right: HandData | null) => void;
   resetRecognition: () => void;
+  bufferLength: number;
+  bufferCap: number;
+  minimumFrames: number;
+  inferenceTimeMs: number;
+  frozenPrediction: RealPredictionResult | null;
+  motionState: MotionState;
+  mode: RecognitionMode;
+  setMode: (mode: RecognitionMode) => void;
 };
 
 export type OnPredictionCallback = (
@@ -22,7 +40,8 @@ export type OnPredictionCallback = (
 ) => void;
 
 export const useRecognition = (
-  onPrediction?: OnPredictionCallback
+  onPrediction?: OnPredictionCallback,
+  fastMode?: boolean
 ): RecognitionControls => {
   const [state, setState] = useState<RecognitionState>({
     stage: "loading-model"
@@ -30,13 +49,29 @@ export const useRecognition = (
 
   const bufferRef = useRef<SequenceBuffer | null>(null);
   const smootherRef = useRef<PredictionSmoother | null>(null);
+  const motionDetectorRef = useRef<MotionDetector | null>(null);
+  const modeManagerRef = useRef<ModeManager | null>(null);
   const modelReadyRef = useRef(false);
-  const lastInferenceTimeRef = useRef(0);
   const inferenceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const predictionsRef = useRef<RealPredictionResult[]>([]);
-  const latestFrameTimeRef = useRef(0);
   const onPredictionRef = useRef(onPrediction);
+  const [frozenPrediction, setFrozenPrediction] = useState<RealPredictionResult | null>(null);
+  const [motionState, setMotionState] = useState<MotionState>("idle");
+  const [mode, setModeState] = useState<RecognitionMode>("auto");
+  const freezeCounterRef = useRef(0);
+  const noMotionCounterRef = useRef(0);
+  const [bufferLength, setBufferLength] = useState(0);
+  const [inferenceTimeMs, setInferenceTimeMs] = useState(0);
+  const lastStaticFrameRef = useRef<Float32Array | null>(null);
+  const stableLabelRef = useRef<string | null>(null);
+  const stableCountRef = useRef(0);
+  const lastResultRef = useRef<string | null>(null);
+  const lastUiUpdateRef = useRef(0);
   onPredictionRef.current = onPrediction;
+
+  const setMode = useCallback((newMode: RecognitionMode) => {
+    setModeState(newMode);
+    modeManagerRef.current?.setMode(newMode);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -44,6 +79,8 @@ export const useRecognition = (
     const init = async () => {
       bufferRef.current = new SequenceBuffer();
       smootherRef.current = new PredictionSmoother();
+      motionDetectorRef.current = new MotionDetector();
+      modeManagerRef.current = new ModeManager();
       modelReadyRef.current = false;
 
       const result = await loadModel();
@@ -52,34 +89,84 @@ export const useRecognition = (
 
       if (result.status === "ready") {
         modelReadyRef.current = true;
+
         setState({ stage: "predicting", result: null });
 
-        inferenceTimerRef.current = setInterval(() => {
+        const interval = fastMode ? FAST_INFERENCE_INTERVAL_MS : INFERENCE_INTERVAL_MS;
+        const earlyInterval = fastMode ? EARLY_INFERENCE_INTERVAL_MS : FAST_INFERENCE_INTERVAL_MS;
+
+        inferenceTimerRef.current = setInterval(async () => {
           if (!modelReadyRef.current || !bufferRef.current) return;
 
-          const sampled = bufferRef.current.sampleTemporal();
-          if (!sampled) return;
+          const currentMode = modeManagerRef.current?.getMode() ?? "auto";
 
-          const inferStart = performance.now();
-          infer(sampled).then((inference) => {
-            if (!inference || !mounted) return;
-            const inferenceTimeMs = performance.now() - inferStart;
+          // Use adaptive sampling for early prediction
+          const { sample, usedEarly, frameCount } = bufferRef.current.adaptiveSample(EARLY_CONFIDENCE_THRESHOLD);
+          if (!sample) return;
 
-            const translated = translateResult(inference);
+            const inferStart = performance.now();
+
+          try {
+            const temporalResult = await infer(sample);
+            if (!temporalResult || !mounted) return;
+            const elapsed = performance.now() - inferStart;
+
+            // Debounce inference time display to avoid extra re-renders
+            if (performance.now() - lastUiUpdateRef.current > UI_UPDATE_INTERVAL_MS) {
+              setInferenceTimeMs(elapsed);
+              lastUiUpdateRef.current = performance.now();
+            }
+
+            const translated = translateResult(temporalResult);
             const smoothed = smootherRef.current?.smooth(translated) ?? translated;
 
-            setState({
-              stage: "predicting",
-              result: {
-                label: smoothed.label,
-                confidence: smoothed.confidence,
-                topK: smoothed.topK
-              }
-            });
+            const result: RealPredictionResult = {
+              label: smoothed.label,
+              confidence: smoothed.confidence,
+              topK: smoothed.topK,
+              category: getRecognitionCategory(smoothed),
+              recognitionSource: "temporal",
+            };
 
-            onPredictionRef.current?.(inference, inferenceTimeMs);
-          });
-        }, INFERENCE_INTERVAL_MS);
+            // Skip state update if result hasn't changed to avoid re-renders
+            const resultKey = `${result.label}:${result.confidence.toFixed(3)}`;
+            if (resultKey !== lastResultRef.current || performance.now() - lastUiUpdateRef.current > UI_UPDATE_INTERVAL_MS) {
+              lastResultRef.current = resultKey;
+              setState({ stage: "predicting", result });
+            }
+
+            // Motion-aware stabilization: freeze when stable + no motion
+            if (motionDetectorRef.current && motionDetectorRef.current.getState() === "idle" && smoothed.confidence >= 0.6) {
+              freezeCounterRef.current++;
+              if (freezeCounterRef.current >= FREEZE_HYSTERESIS_FRAMES) {
+                setFrozenPrediction(result);
+              }
+            } else {
+              freezeCounterRef.current = 0;
+              setFrozenPrediction(null);
+            }
+
+            // Early prediction detection: high confidence with few frames
+            if (usedEarly && smoothed.confidence >= EARLY_CONFIDENCE_THRESHOLD) {
+              if (smoothed.label === stableLabelRef.current) {
+                stableCountRef.current++;
+                if (stableCountRef.current >= 3) {
+                  if (bufferRef.current) {
+                    bufferRef.current.reset();
+                  }
+                  stableCountRef.current = 0;
+                }
+              } else {
+                stableLabelRef.current = smoothed.label;
+                stableCountRef.current = 0;
+              }
+            }
+
+            onPredictionRef.current?.(temporalResult, elapsed);
+          } catch {
+            if (!mounted) return;
+          }
+        }, fastMode ? earlyInterval : interval);
       } else {
         setState({
           stage: "error",
@@ -97,12 +184,29 @@ export const useRecognition = (
         inferenceTimerRef.current = null;
       }
     };
-  }, []);
+  }, [fastMode]);
 
   const appendFrame = useCallback(
     (left: HandData | null, right: HandData | null) => {
+      const now = performance.now();
       if (bufferRef.current) {
         bufferRef.current.append(left, right);
+        // Debounce buffer length updates to reduce re-renders
+        if (now - lastUiUpdateRef.current > UI_UPDATE_INTERVAL_MS) {
+          setBufferLength(bufferRef.current.length);
+        }
+      }
+      if (motionDetectorRef.current) {
+        const newState = motionDetectorRef.current.update(left, right);
+        if (newState === "gesturing") {
+          freezeCounterRef.current = 0;
+          setFrozenPrediction(null);
+          stableLabelRef.current = null;
+          stableCountRef.current = 0;
+        }
+        if (now - lastUiUpdateRef.current > UI_UPDATE_INTERVAL_MS) {
+          setMotionState(newState);
+        }
       }
     },
     []
@@ -111,8 +215,28 @@ export const useRecognition = (
   const resetRecognition = useCallback(() => {
     bufferRef.current?.reset();
     smootherRef.current?.reset();
+    motionDetectorRef.current?.reset();
+    modeManagerRef.current?.reset();
+    setFrozenPrediction(null);
+    setMotionState("idle");
+    setModeState("auto");
     setState({ stage: "predicting", result: null });
+    stableLabelRef.current = null;
+    stableCountRef.current = 0;
+    noMotionCounterRef.current = 0;
   }, []);
 
-  return { state, appendFrame, resetRecognition };
+  return {
+    state,
+    appendFrame,
+    resetRecognition,
+    bufferLength,
+    bufferCap: 30,
+    minimumFrames: 5,
+    inferenceTimeMs,
+    frozenPrediction,
+    motionState,
+    mode,
+    setMode,
+  };
 };

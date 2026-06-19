@@ -17,10 +17,10 @@ const KAGGLE_CACHE_PATH = path.join(os.homedir(), '.cache', 'kagglehub', 'datase
 const OUTPUT_DIR = path.join(process.cwd(), 'datasets', 'external');
 const AUDIT_OUTPUT = path.join(process.cwd(), 'docs', 'fsl-kaggle-dataset-audit.md');
 
-// FSL alphabet labels (28 total)
+// FSL alphabet labels (26 total)
 const EXPECTED_LABELS = [
   'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
-  'ñ', 'ng', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'
+  'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'
 ];
 
 const ensureDir = (dirPath) => {
@@ -84,18 +84,8 @@ const inspectDataset = (datasetPath) => {
 
     if (!stat.isDirectory()) continue;
 
-    // Normalize label name (handle special characters)
-    let labelKey = labelDir.toLowerCase();
-    
-    // Check if this is a valid FSL label
-    if (!EXPECTED_LABELS.includes(labelKey)) {
-      // Try to map it
-      if (labelKey === 'ñ' || labelKey === '√±' || labelKey === 'n-tilde') {
-        labelKey = 'ñ';
-      } else if (labelKey === 'ng') {
-        labelKey = 'ng';
-      }
-    }
+    // Normalize label name
+    const labelKey = labelDir.toLowerCase();
 
     stats.labels[labelKey] = {
       count: 0,

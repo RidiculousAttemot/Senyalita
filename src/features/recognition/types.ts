@@ -30,8 +30,14 @@ export type RecognitionState =
   | { stage: "predicting"; result: RealPredictionResult | null }
   | { stage: "error"; message: string };
 
+export type RecognitionSource = "static" | "temporal" | "hybrid" | "unknown";
+
 export type RealPredictionResult = {
   label: string;
   confidence: number;
   topK: Array<{ label: string; confidence: number }>;
+  category: RecognitionCategory;
+  recognitionSource: RecognitionSource;
 };
+
+export type RecognitionCategory = "alphabet" | "phrase";

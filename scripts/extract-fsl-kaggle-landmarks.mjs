@@ -25,7 +25,7 @@ const FEATURE_DIMENSION = 126;
 
 const LABELS = [
   'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
-  'ñ', 'ng', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'
+  'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'
 ];
 
 const ensureDir = (dirPath) => {
@@ -246,18 +246,10 @@ const processDataset = () => {
     if (!stat.isDirectory()) continue;
 
     let label = labelDir.toLowerCase();
-    
-    // Map label (handle special cases)
+
     if (!LABELS.includes(label)) {
-      // Try alternative mappings
-      if (label === 'ñ' || label === 'n-tilde') {
-        label = 'ñ';
-      } else if (label === 'ng') {
-        label = 'ng';
-      } else {
-        console.warn(`⚠️  Skipping unknown label: ${labelDir}`);
-        continue;
-      }
+      console.warn(`⚠️  Skipping unknown label: ${labelDir}`);
+      continue;
     }
 
     const labelId = LABELS.indexOf(label);

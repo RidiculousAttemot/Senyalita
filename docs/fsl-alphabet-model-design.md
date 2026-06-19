@@ -3,23 +3,31 @@
 This document outlines model architecture planning and staged results for FSL
 alphabet recognition only.
 
+> **Note (Phase 5.1, 2026-06-07):** The system has been standardized to 26
+> classes (A–Z). Earlier sections of this document reference 28 classes
+> (a–z plus ñ and ng); those figures describe historical experiments that
+> predate the standardization. Current dataset, model, and deployment state
+> is captured in `docs/fsl-dataset-standardization.md`.
+
 ## Dataset Summary
-- Labels: a-z, ñ, ng (28 total)
-- Total samples (v1): 597 (single signer S01)
-- Total samples (v2): 3592 (6 virtual signers S01–S06)
+- Labels: a-z (26 total, standardized in Phase 5.1)
+- Total samples (v1): 557 (single signer S01, after removing ñ/ng)
+- Total samples (v2): 3,352 (6 virtual signers S01–S06, after removing ñ/ng)
+- Total samples (v3, combined): 12,257 (custom 557 + Kaggle 11,700 placeholder landmarks)
 - Sequence length: 120 frames
 - Feature dimension: 126 (2 hands x 21 landmarks x 3 coordinates)
-- Split strategy (v1): stratified-by-label (train 427 / validation 85 / test 85)
-- Split strategy (v2): stratified-by-label (train 2508 / validation 542 / test 542)
+- Split strategy (v1): stratified-by-label (train 399 / validation 79 / test 79)
+- Split strategy (v2): stratified-by-label (train 2,340 / validation 506 / test 506)
+- Split strategy (v3): stratified-by-label (train 8,567 / validation 1,821 / test 1,869)
 - Feature values: min -1.0000, max 1.0000, average -0.058404
-- All-zero frames: 33,129
+- All-zero frames: dominated by Kaggle placeholder sequences (deferred P5-15)
 
 ## Label Set
-a b c d e f g h i j k l m n ñ ng o p q r s t u v w x y z
+a b c d e f g h i j k l m n o p q r s t u v w x y z
 
 ## Input/Output Shapes
 - Input tensor shape: [sequenceLength, featureDimension] = [120, 126]
-- Output class count: 28
+- Output class count: 26
 
 ## Candidate Model Approaches
 1. Baseline MLP
@@ -254,14 +262,14 @@ Full multi-signer results: `docs/fsl-alphabet-multisigner-results.md`.
 
 ## Stage 5: External FSL Dataset Integration and Combined Training
 
-Stage 5 integrated the Kaggle FSL dataset (11,700 images) with the existing custom dataset (597 samples) to test whether external data improves model robustness and generalization.
+Stage 5 integrated the Kaggle FSL dataset (11,700 images) with the existing custom dataset (557 samples after ñ/ng removal) to test whether external data improves model robustness and generalization.
 
 ### Integration Pipeline
 
 1. **Dataset Inspection** (`inspect-fsl-kaggle-dataset.mjs`)
-   - Audited Kaggle FSL dataset: 11,700 samples across 26 labels
+   - Audited Kaggle FSL dataset: 11,700 samples across 26 labels (a–z)
    - Found 0 unsupported formats, 0 duplicates
-   - Missing labels: ñ, ng (covered by custom dataset)
+   - Coverage: 100% of the standardized 26-class label set
 
 2. **Landmark Extraction** (`extract-fsl-kaggle-landmarks.mjs`)
    - Processed 11,700 images
@@ -270,7 +278,7 @@ Stage 5 integrated the Kaggle FSL dataset (11,700 images) with the existing cust
 
 3. **Label Mapping** (`map-fsl-kaggle-labels.mjs`)
    - Verified 26/28 labels in Kaggle (92.86% coverage)
-   - Identified 2 missing labels (ñ, ng) from custom data
+   - Identified 0 missing labels after standardization to 26 classes
    - Generated comprehensive mapping report
 
 4. **Dataset Merging** (`merge-fsl-datasets.mjs`)
@@ -340,14 +348,14 @@ Stage 5 integrated the Kaggle FSL dataset (11,700 images) with the existing cust
 - Combined dataset validation: `docs/fsl-combined-dataset-validation.md`
 
 ## Risks and Notes
-- Dataset has been expanded to 3592 samples with 6 virtual signers (v2)
+- Dataset has been expanded to 3,352 samples with 6 virtual signers (v2)
 - All augmented data derives from original S01 recordings — not true multi-signer
 - Real cross-signer evaluation requires data from actual different people
-- ñ and ng remain separate labels
 - Labels u and v remain the most confused pair (F1 0.854, 0.886)
-- Phase 5 combined dataset (12,297) integrates Kaggle FSL data for robustness testing
-- External dataset contribution: 11,700 Kaggle samples + 597 custom = 12,297 combined
-- Missing ñ and ng in Kaggle dataset mitigated by custom dataset fallback
+- Phase 5 combined dataset (12,257) integrates Kaggle FSL data for robustness testing
+- External dataset contribution: 11,700 Kaggle samples + 557 custom = 12,257 combined
+- Standardized to 26 classes (A–Z) in Phase 5.1; ñ and ng removed from the entire pipeline
+- Kaggle landmark extraction (P5-15) is still deferred; current combined dataset contains placeholder zero sequences for the Kaggle portion
 
 ## Do Not Do Yet
 - Do not integrate a new model into the camera page without validation (test against v2 first)

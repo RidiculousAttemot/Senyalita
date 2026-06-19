@@ -1,7 +1,44 @@
-import { LogEntry, Session } from "./types";
+import { LogEntry, Session, TranscriptEntry } from "./types";
 
 const LOGS_KEY = "fsl_recognition_logs";
 const SESSIONS_KEY = "fsl_recognition_sessions";
+const TRANSCRIPTS_KEY = "fsl_transcripts";
+const QUEUE_KEY = "fsl_pending_queue";
+const SYNC_META_KEY = "fsl_sync_meta";
+const IMPORTED_FLAG_KEY = "fsl_history_imported";
+
+export type PendingOperation =
+  | {
+      kind: "prediction";
+      id: string;
+      enqueuedAt: string;
+      sessionId: string;
+      predictedLabel: string;
+      confidence: number;
+      topK: Array<{ label: string; confidence: number }>;
+      inferenceTimeMs: number;
+      startedAt?: string;
+    }
+  | {
+      kind: "transcript";
+      id: string;
+      enqueuedAt: string;
+      sessionId: string;
+      content: string;
+      startedAt?: string;
+    }
+  | {
+      kind: "end-session";
+      id: string;
+      enqueuedAt: string;
+      sessionId: string;
+    };
+
+export type SyncMeta = {
+  lastSyncAt: string | null;
+  lastFlushCount: number;
+  lastError: string | null;
+};
 
 function isLocalStorageAvailable(): boolean {
   try {
@@ -14,7 +51,7 @@ function isLocalStorageAvailable(): boolean {
   }
 }
 
-const useLocalStorage = isLocalStorageAvailable();
+const useLocalStorage = typeof window !== "undefined" && isLocalStorageAvailable();
 
 function readItem<T>(key: string, fallback: T): T {
   if (!useLocalStorage) return fallback;
@@ -89,11 +126,93 @@ export const deleteSession = (sessionId: string): void => {
     LOGS_KEY,
     logs.filter((l) => !l.id.startsWith(sessionId))
   );
+  const transcripts = readItem<TranscriptEntry[]>(TRANSCRIPTS_KEY, []);
+  writeItem(
+    TRANSCRIPTS_KEY,
+    transcripts.filter((t) => t.sessionId !== sessionId)
+  );
 };
 
 export const clearAll = (): void => {
-  if (useLocalStorage) {
-    localStorage.removeItem(LOGS_KEY);
-    localStorage.removeItem(SESSIONS_KEY);
-  }
+  if (!useLocalStorage) return;
+  localStorage.removeItem(LOGS_KEY);
+  localStorage.removeItem(SESSIONS_KEY);
+  localStorage.removeItem(TRANSCRIPTS_KEY);
+};
+
+export const saveTranscriptLocal = (entry: TranscriptEntry): void => {
+  const transcripts = readItem<TranscriptEntry[]>(TRANSCRIPTS_KEY, []);
+  const filtered = transcripts.filter(
+    (t) => !(t.sessionId === entry.sessionId && t.label === entry.label)
+  );
+  filtered.push(entry);
+  writeItem(TRANSCRIPTS_KEY, filtered);
+};
+
+export const getTranscripts = (sessionId: string): TranscriptEntry[] => {
+  const transcripts = readItem<TranscriptEntry[]>(TRANSCRIPTS_KEY, []);
+  return transcripts
+    .filter((t) => t.sessionId === sessionId)
+    .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+};
+
+export const getAllTranscripts = (): TranscriptEntry[] => {
+  return readItem<TranscriptEntry[]>(TRANSCRIPTS_KEY, []);
+};
+
+export const enqueueOperation = (op: PendingOperation): void => {
+  const queue = readItem<PendingOperation[]>(QUEUE_KEY, []);
+  if (queue.some((existing) => existing.id === op.id)) return;
+  queue.push(op);
+  writeItem(QUEUE_KEY, queue);
+};
+
+export const dequeueOperations = (ids: string[]): void => {
+  const queue = readItem<PendingOperation[]>(QUEUE_KEY, []);
+  const idSet = new Set(ids);
+  writeItem(
+    QUEUE_KEY,
+    queue.filter((op) => !idSet.has(op.id))
+  );
+};
+
+export const readQueue = (): PendingOperation[] => {
+  return readItem<PendingOperation[]>(QUEUE_KEY, []);
+};
+
+export const clearQueue = (): void => {
+  if (useLocalStorage) localStorage.removeItem(QUEUE_KEY);
+};
+
+export const readSyncMeta = (): SyncMeta => {
+  return readItem<SyncMeta>(SYNC_META_KEY, {
+    lastSyncAt: null,
+    lastFlushCount: 0,
+    lastError: null
+  });
+};
+
+export const writeSyncMeta = (meta: Partial<SyncMeta>): void => {
+  const current = readSyncMeta();
+  writeItem(SYNC_META_KEY, { ...current, ...meta });
+};
+
+export const hasImportedHistory = (): boolean => {
+  return readItem<boolean>(IMPORTED_FLAG_KEY, false);
+};
+
+export const markHistoryImported = (): void => {
+  writeItem(IMPORTED_FLAG_KEY, true);
+};
+
+export const resetImportedFlag = (): void => {
+  if (useLocalStorage) localStorage.removeItem(IMPORTED_FLAG_KEY);
+};
+
+export const getLocalDataForImport = () => {
+  return {
+    sessions: readItem<Session[]>(SESSIONS_KEY, []),
+    logs: readItem<LogEntry[]>(LOGS_KEY, []),
+    transcripts: readItem<TranscriptEntry[]>(TRANSCRIPTS_KEY, [])
+  };
 };

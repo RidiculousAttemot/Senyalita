@@ -16,7 +16,7 @@
 
 **Environmental generalizability.** Systematic testing was performed only in controlled lighting conditions (normal room lighting). Results in low-light, bright outdoor, or backlit environments may differ. Camera distance testing was informal and suggests degradation beyond 1.5m.
 
-**Language scope.** The system recognizes only the 28 FSL alphabet handshapes (a–z, ñ, ng). It does not recognize words, phrases, non-manual signals (facial expressions, head movements), or the full grammatical structure of Filipino Sign Language. This limits its applicability as a complete communication aid.
+**Language scope.** The system recognizes only the 26 FSL alphabet handshapes (a–z). It does not recognize words, phrases, non-manual signals (facial expressions, head movements), or the full grammatical structure of Filipino Sign Language. This limits its applicability as a complete communication aid.
 
 **Hardware dependency.** Recognition quality depends on the camera's ability to capture clear hand images at 30 FPS. Lower-quality cameras, unusual camera angles, or cameras with different field-of-view characteristics may reduce landmark detection accuracy.
 

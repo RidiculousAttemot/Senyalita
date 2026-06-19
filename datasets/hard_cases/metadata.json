@@ -1,0 +1,64 @@
+{
+  "pairs": {
+    "m__VS__n": {
+      "trueLabel": "m",
+      "predLabel": "n",
+      "confusionCount": 4,
+      "samplesAdded": 88
+    },
+    "n__VS__m": {
+      "trueLabel": "n",
+      "predLabel": "m",
+      "confusionCount": 0,
+      "samplesAdded": 88
+    },
+    "d__VS__p": {
+      "trueLabel": "d",
+      "predLabel": "p",
+      "confusionCount": 0,
+      "samplesAdded": 96
+    },
+    "p__VS__d": {
+      "trueLabel": "p",
+      "predLabel": "d",
+      "confusionCount": 0,
+      "samplesAdded": 84
+    },
+    "p__VS__q": {
+      "trueLabel": "p",
+      "predLabel": "q",
+      "confusionCount": 0,
+      "samplesAdded": 84
+    },
+    "q__VS__p": {
+      "trueLabel": "q",
+      "predLabel": "p",
+      "confusionCount": 0,
+      "samplesAdded": 88
+    },
+    "v__VS__u": {
+      "trueLabel": "v",
+      "predLabel": "u",
+      "confusionCount": 10,
+      "samplesAdded": 88
+    },
+    "u__VS__r": {
+      "trueLabel": "u",
+      "predLabel": "r",
+      "confusionCount": 3,
+      "samplesAdded": 92
+    },
+    "GOOD EVENING__VS__GOOD AFTERNOON": {
+      "trueLabel": "GOOD EVENING",
+      "predLabel": "GOOD AFTERNOON",
+      "confusionCount": 2,
+      "samplesAdded": 17
+    },
+    "IM FINE__VS__HELLO": {
+      "trueLabel": "IM FINE",
+      "predLabel": "HELLO",
+      "confusionCount": 3,
+      "samplesAdded": 16
+    }
+  }
+}
