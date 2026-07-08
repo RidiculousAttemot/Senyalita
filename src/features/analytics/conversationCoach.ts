@@ -433,7 +433,7 @@ export class ConversationCoach {
       "DON'T UNDERSTAND": "Don't Understand",
       "DON'T KNOW": "Don't Know",
       "HARD OF HEARING": "Hard of Hearing",
-      "WEELCHAIR PERSON": "Wheelchair Person",
+      "WHEELCHAIR PERSON": "Wheelchair Person",
       "DEAF BLIND": "Deaf-Blind",
       "NO SUGAR": "No Sugar",
     };

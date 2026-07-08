@@ -1,4 +1,6 @@
-import { Link, NavLink } from 'react-router-dom';
+'use client';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import styles from './AppNav.module.css';
 
 const KeyboardIcon = () => (
@@ -22,16 +24,17 @@ const VideoCamIcon = () => (
 );
 
 export default function AppNav({ activePage, showCameraBtn, onCameraToggle, cameraActive }) {
+  const pathname = usePathname();
   return (
     <nav className={styles.nav}>
       <div className={styles.left}>
-        <Link to="/" className={styles.homeLink}>
+        <Link href="/" className={styles.homeLink}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
           Home
         </Link>
-        <Link to="/" className={styles.brand}>
+        <Link href="/" className={styles.brand}>
           <span className={styles.brandIcon}>
             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
@@ -43,24 +46,20 @@ export default function AppNav({ activePage, showCameraBtn, onCameraToggle, came
 
       <div className={styles.center}>
         <div className={styles.tabPill}>
-          <NavLink
-            to="/type-to-sign"
-            className={({ isActive }) =>
-              `${styles.tab} ${isActive ? styles.tabActive : ''}`
-            }
+          <Link
+            href="/type-to-sign"
+            className={`${styles.tab} ${pathname === '/type-to-sign' ? styles.tabActive : ''}`}
           >
             <KeyboardIcon />
             Type → Sign
-          </NavLink>
-          <NavLink
-            to="/sign-to-text"
-            className={({ isActive }) =>
-              `${styles.tab} ${isActive ? styles.tabActive : ''}`
-            }
+          </Link>
+          <Link
+            href="/sign-to-text"
+            className={`${styles.tab} ${pathname === '/sign-to-text' ? styles.tabActive : ''}`}
           >
             <CameraIcon />
             Sign → Text
-          </NavLink>
+          </Link>
         </div>
       </div>
 

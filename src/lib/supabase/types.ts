@@ -113,7 +113,7 @@ export type AdminAnalytics = {
 
 export type TelemetryEvent = {
   id: string;
-  event_type: "recognition_success" | "recognition_failure" | "low_confidence" | "ai_reply_used" | "conversation_completed" | "session_abandoned" | "gesture_used" | "reply_used";
+  event_type: "recognition_success" | "recognition_failure" | "low_confidence" | "ai_reply_used" | "conversation_completed" | "session_abandoned" | "gesture_used" | "reply_used" | "translation_started" | "translation_completed" | "translation_failed" | "model_loaded" | "model_prediction" | "admin_login" | "retraining_started" | "retraining_completed";
   event_data: Record<string, unknown>;
   user_id: string | null;
   session_id: string | null;
@@ -326,6 +326,69 @@ export type DailyPerformance = {
   p95_inference_time_ms: number | null;
   model_version: string | null;
   signer_count: number | null;
+  created_at: string;
+};
+
+// Phase 44 — Supabase Integration
+export type TextToSignLog = {
+  id: string;
+  input_text: string;
+  translated_gloss: string | null;
+  confidence_score: number | null;
+  processing_time_ms: number | null;
+  unknown_token_count: number;
+  model_version: string | null;
+  user_id: string | null;
+  session_id: string | null;
+  source: "web" | "api" | "mobile";
+  success: boolean;
+  error_message: string | null;
+  created_at: string;
+};
+
+export type DriftSnapshot = {
+  id: string;
+  snapshot_date: string;
+  model_version: string;
+  total_samples: number;
+  class_accuracy: Record<string, number>;
+  overall_accuracy: number | null;
+  drift_score: number | null;
+  distribution_shift: Record<string, unknown> | null;
+  low_confidence_rate: number | null;
+  unknown_rate: number | null;
+  notes: string | null;
+  created_at: string;
+};
+
+export type RetrainingJob = {
+  id: string;
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  trigger_reason: string;
+  dataset_version_id: string | null;
+  model_version_id: string | null;
+  accuracy_before: number | null;
+  accuracy_after: number | null;
+  started_at: string | null;
+  completed_at: string | null;
+  error_message: string | null;
+  metrics_snapshot: Record<string, unknown> | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DeploymentHistory = {
+  id: string;
+  model_version_id: string;
+  environment: "development" | "staging" | "production";
+  status: "pending" | "deploying" | "active" | "rolled_back" | "failed";
+  deployed_by: string | null;
+  deployed_at: string | null;
+  rollback_at: string | null;
+  rollback_reason: string | null;
+  validation_status: string | null;
+  notes: string | null;
   created_at: string;
 };
 
@@ -1244,6 +1307,138 @@ type Tables = {
       was_accepted?: boolean;
       context_topic?: string | null;
       conversation_id?: string | null;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  text_to_sign_logs: {
+    Row: TextToSignLog;
+    Insert: {
+      id?: string;
+      input_text: string;
+      translated_gloss?: string | null;
+      confidence_score?: number | null;
+      processing_time_ms?: number | null;
+      unknown_token_count?: number;
+      model_version?: string | null;
+      user_id?: string | null;
+      session_id?: string | null;
+      source?: TextToSignLog["source"];
+      success?: boolean;
+      error_message?: string | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      input_text?: string;
+      translated_gloss?: string | null;
+      confidence_score?: number | null;
+      processing_time_ms?: number | null;
+      unknown_token_count?: number;
+      model_version?: string | null;
+      user_id?: string | null;
+      session_id?: string | null;
+      source?: TextToSignLog["source"];
+      success?: boolean;
+      error_message?: string | null;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  drift_snapshots: {
+    Row: DriftSnapshot;
+    Insert: {
+      id?: string;
+      snapshot_date?: string;
+      model_version: string;
+      total_samples?: number;
+      class_accuracy?: Record<string, number>;
+      overall_accuracy?: number | null;
+      drift_score?: number | null;
+      distribution_shift?: Record<string, unknown> | null;
+      low_confidence_rate?: number | null;
+      unknown_rate?: number | null;
+      notes?: string | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      snapshot_date?: string;
+      model_version?: string;
+      total_samples?: number;
+      class_accuracy?: Record<string, number>;
+      overall_accuracy?: number | null;
+      drift_score?: number | null;
+      distribution_shift?: Record<string, unknown> | null;
+      low_confidence_rate?: number | null;
+      unknown_rate?: number | null;
+      notes?: string | null;
+      created_at?: string;
+    };
+    Relationships: [];
+  };
+  retraining_jobs: {
+    Row: RetrainingJob;
+    Insert: {
+      id?: string;
+      status?: RetrainingJob["status"];
+      trigger_reason: string;
+      dataset_version_id?: string | null;
+      model_version_id?: string | null;
+      accuracy_before?: number | null;
+      accuracy_after?: number | null;
+      started_at?: string | null;
+      completed_at?: string | null;
+      error_message?: string | null;
+      metrics_snapshot?: Record<string, unknown> | null;
+      created_by?: string | null;
+      created_at?: string;
+      updated_at?: string;
+    };
+    Update: {
+      id?: string;
+      status?: RetrainingJob["status"];
+      trigger_reason?: string;
+      dataset_version_id?: string | null;
+      model_version_id?: string | null;
+      accuracy_before?: number | null;
+      accuracy_after?: number | null;
+      started_at?: string | null;
+      completed_at?: string | null;
+      error_message?: string | null;
+      metrics_snapshot?: Record<string, unknown> | null;
+      created_by?: string | null;
+      created_at?: string;
+      updated_at?: string;
+    };
+    Relationships: [];
+  };
+  deployment_history: {
+    Row: DeploymentHistory;
+    Insert: {
+      id?: string;
+      model_version_id: string;
+      environment: DeploymentHistory["environment"];
+      status?: DeploymentHistory["status"];
+      deployed_by?: string | null;
+      deployed_at?: string | null;
+      rollback_at?: string | null;
+      rollback_reason?: string | null;
+      validation_status?: string | null;
+      notes?: string | null;
+      created_at?: string;
+    };
+    Update: {
+      id?: string;
+      model_version_id?: string;
+      environment?: DeploymentHistory["environment"];
+      status?: DeploymentHistory["status"];
+      deployed_by?: string | null;
+      deployed_at?: string | null;
+      rollback_at?: string | null;
+      rollback_reason?: string | null;
+      validation_status?: string | null;
+      notes?: string | null;
       created_at?: string;
     };
     Relationships: [];

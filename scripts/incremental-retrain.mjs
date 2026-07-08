@@ -46,11 +46,11 @@ const OUTPUT_DIR = process.argv.find(a => a.startsWith("--output-dir="))?.split(
 const VERSION_OVERRIDE = process.argv.find(a => a.startsWith("--version="))?.split("=")[1];
 
 // Paths
-const PRODUCTION_DATASET_DIR = resolve(root, "datasets/processed/fsl_unified");
-const PRODUCTION_MODEL_CONFIG = resolve(root, "models/fsl_unified/bilstm/config.json");
-const PRODUCTION_LABELS = resolve(root, "models/fsl_unified/bilstm/labels.json");
+const PRODUCTION_DATASET_DIR = resolve(root, "datasets/processed/fsl_unified_v4");
+const PRODUCTION_MODEL_CONFIG = resolve(root, "models/fsl_unified/bilstm_v4/config.json");
+const PRODUCTION_LABELS = resolve(root, "models/fsl_unified/bilstm_v4/labels.json");
 const CAMPAIGNS_DIR = resolve(root, "datasets/real_world/campaigns");
-const TRAINING_SCRIPT = resolve(root, "scripts/train-unified-bilstm.mjs");
+const TRAINING_SCRIPT = resolve(root, "scripts/train-unified-bilstm-v2.mjs");
 
 // ── Helpers ─────────────────────────────────────────────────────
 function log(msg) {

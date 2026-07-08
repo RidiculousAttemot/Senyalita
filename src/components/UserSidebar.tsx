@@ -22,7 +22,7 @@ export const UserSidebar = ({ children }: { children: React.ReactNode }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  const isActive = (href: string) => pathname ? (pathname === href || pathname.startsWith(href + "/")) : false;
 
   return (
     <div className="sidebar-layout">

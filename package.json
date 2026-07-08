@@ -11,7 +11,10 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "standardize:fsl-alphabet": "node scripts/standardize-fsl-alphabet-dataset.mjs"
+    "standardize:fsl-alphabet": "node scripts/standardize-fsl-alphabet-dataset.mjs",
+    "build:unified-v4": "node scripts/build-unified-dataset-v4.mjs",
+    "train:unified": "node scripts/train-unified-bilstm-v2.mjs",
+    "export:unified-tfjs": "node scripts/export-unified-bilstm-tfjs.mjs"
   },
   "dependencies": {
     "@mediapipe/camera_utils": "0.3.1675466862",

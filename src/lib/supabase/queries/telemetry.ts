@@ -17,7 +17,7 @@ export const insertTelemetryEvent = async (input: {
 
 export const listTelemetryEvents = async (
   eventType?: TelemetryEvent["event_type"],
-  limit = 100
+  limit = 100,
 ): Promise<TelemetryEvent[]> => {
   const supabase = await createSupabaseServerClient();
   let query = supabase
@@ -32,7 +32,7 @@ export const listTelemetryEvents = async (
 };
 
 export const getTelemetrySummary = async (
-  daysBack = 30
+  daysBack = 30,
 ): Promise<{
   recognitionSuccess: number;
   recognitionFailure: number;
@@ -42,6 +42,14 @@ export const getTelemetrySummary = async (
   sessionAbandoned: number;
   topGestures: Array<{ gesture_label: string; count: number }>;
   topReplies: Array<{ gesture_label: string; count: number }>;
+  translationsStarted: number;
+  translationsCompleted: number;
+  translationsFailed: number;
+  modelLoaded: number;
+  modelPredictions: number;
+  adminLogins: number;
+  retrainingStarted: number;
+  retrainingCompleted: number;
 }> => {
   const supabase = await createSupabaseServerClient();
   const since = new Date(Date.now() - daysBack * 86400000).toISOString();
@@ -52,39 +60,71 @@ export const getTelemetrySummary = async (
     .gte("created_at", since);
 
   const list = events ?? [];
-  const recognitionSuccess = list.filter((e) => e.event_type === "recognition_success").length;
-  const recognitionFailure = list.filter((e) => e.event_type === "recognition_failure").length;
-  const lowConfidence = list.filter((e) => e.event_type === "low_confidence").length;
-  const aiReplyUsed = list.filter((e) => e.event_type === "ai_reply_used").length;
-  const conversationCompleted = list.filter((e) => e.event_type === "conversation_completed").length;
-  const sessionAbandoned = list.filter((e) => e.event_type === "session_abandoned").length;
+  const countByType = (type: string) =>
+    list.filter((e) => e.event_type === type).length;
+
+  const recognitionSuccess = countByType("recognition_success");
+  const recognitionFailure = countByType("recognition_failure");
+  const lowConfidence = countByType("low_confidence");
+  const aiReplyUsed = countByType("ai_reply_used");
+  const conversationCompleted = countByType("conversation_completed");
+  const sessionAbandoned = countByType("session_abandoned");
+  const translationsStarted = countByType("translation_started");
+  const translationsCompleted = countByType("translation_completed");
+  const translationsFailed = countByType("translation_failed");
+  const modelLoaded = countByType("model_loaded");
+  const modelPredictions = countByType("model_prediction");
+  const adminLogins = countByType("admin_login");
+  const retrainingStarted = countByType("retraining_started");
+  const retrainingCompleted = countByType("retraining_completed");
 
   const gestureCounts: Record<string, number> = {};
-  list.filter((e) => e.event_type === "gesture_used" && e.gesture_label).forEach((e) => {
-    const label = e.gesture_label!;
-    gestureCounts[label] = (gestureCounts[label] ?? 0) + 1;
-  });
+  list
+    .filter((e) => e.event_type === "gesture_used" && e.gesture_label)
+    .forEach((e) => {
+      const label = e.gesture_label!;
+      gestureCounts[label] = (gestureCounts[label] ?? 0) + 1;
+    });
   const topGestures = Object.entries(gestureCounts)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 10)
     .map(([gesture_label, count]) => ({ gesture_label, count }));
 
   const replyCounts: Record<string, number> = {};
-  list.filter((e) => e.event_type === "reply_used" && e.gesture_label).forEach((e) => {
-    const label = e.gesture_label!;
-    replyCounts[label] = (replyCounts[label] ?? 0) + 1;
-  });
+  list
+    .filter((e) => e.event_type === "reply_used" && e.gesture_label)
+    .forEach((e) => {
+      const label = e.gesture_label!;
+      replyCounts[label] = (replyCounts[label] ?? 0) + 1;
+    });
   const topReplies = Object.entries(replyCounts)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 10)
     .map(([gesture_label, count]) => ({ gesture_label, count }));
 
-  return { recognitionSuccess, recognitionFailure, lowConfidence, aiReplyUsed, conversationCompleted, sessionAbandoned, topGestures, topReplies };
+  return {
+    recognitionSuccess,
+    recognitionFailure,
+    lowConfidence,
+    aiReplyUsed,
+    conversationCompleted,
+    sessionAbandoned,
+    topGestures,
+    topReplies,
+    translationsStarted,
+    translationsCompleted,
+    translationsFailed,
+    modelLoaded,
+    modelPredictions,
+    adminLogins,
+    retrainingStarted,
+    retrainingCompleted,
+  };
 };
 
 export const listReviewQueue = async (
   status?: ReviewQueueItem["status"],
-  limit = 50
+  limit = 50,
 ): Promise<ReviewQueueItem[]> => {
   const supabase = await createSupabaseServerClient();
   let query = supabase
@@ -105,7 +145,7 @@ export const updateReviewQueueItem = async (
     corrected_label?: string | null;
     reviewed_by?: string;
     review_notes?: string | null;
-  }
+  },
 ): Promise<void> => {
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase
@@ -113,4 +153,23 @@ export const updateReviewQueueItem = async (
     .update({ ...updates, reviewed_at: new Date().toISOString() })
     .eq("id", id);
   if (error) throw new Error(`updateReviewQueueItem: ${error.message}`);
+};
+
+export const countTelemetryByType = async (
+  eventType: TelemetryEvent["event_type"],
+  daysBack = 30,
+): Promise<number> => {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const since = new Date(Date.now() - daysBack * 86400000).toISOString();
+    const { count, error } = await supabase
+      .from("telemetry_events")
+      .select("*", { count: "exact", head: true })
+      .eq("event_type", eventType)
+      .gte("created_at", since);
+    if (error) return 0;
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
 };

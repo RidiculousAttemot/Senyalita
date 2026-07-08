@@ -1,10 +1,8 @@
 import fs from "fs";
 import path from "path";
 
-const ALPHA_DIR = path.join(process.cwd(), "datasets", "processed", "fsl_alphabet_v2");
-const FSL_DIR = path.join(process.cwd(), "datasets", "processed", "fsl_105");
-const AUG_DIR = path.join(process.cwd(), "datasets", "processed", "fsl_unified_augmented");
-const OUTPUT_DIR = path.join(process.cwd(), "models", "fsl_unified", "bilstm_v2");
+const DATA_DIR = path.join(process.cwd(), "datasets", "processed", "fsl_unified_v4");
+const OUTPUT_DIR = path.join(process.cwd(), "models", "fsl_unified", "bilstm_v4");
 
 const SEQUENCE_LENGTH = 120;
 const FEATURE_DIMENSION = 126;
@@ -22,12 +20,43 @@ const BETA_1 = 0.9;
 const BETA_2 = 0.999;
 const EPSILON = 1e-8;
 const LABEL_SMOOTHING = Number.parseFloat(process.env.UNIFIED_LABEL_SMOOTHING ?? "0.1");
-const USE_AUGMENTED = process.env.UNIFIED_USE_AUGMENTED === "true";
 
 const readJson = (filePath) => JSON.parse(fs.readFileSync(filePath, "utf8"));
 const writeJson = (filePath, payload) => fs.writeFileSync(filePath, JSON.stringify(payload, null, 2));
 const ensureDir = (dirPath) => { if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true }); };
 const isValidNumber = (value) => typeof value === "number" && Number.isFinite(value);
+
+const loadNdjsonRaw = (splitPath) => {
+  if (!fs.existsSync(splitPath)) return null;
+  const samples = [];
+  let header = null;
+  const stream = fs.createReadStream(splitPath, { encoding: "utf8", highWaterMark: 1 << 20 });
+  let leftover = "";
+  return new Promise((resolve, reject) => {
+    stream.on("data", (chunk) => {
+      const text = leftover + chunk;
+      let newlineIdx;
+      let start = 0;
+      while ((newlineIdx = text.indexOf("\n", start)) !== -1) {
+        const line = text.slice(start, newlineIdx);
+        start = newlineIdx + 1;
+        if (!line) continue;
+        const obj = JSON.parse(line);
+        if (obj._header) { header = obj; continue; }
+        samples.push(obj);
+      }
+      leftover = text.slice(start);
+    });
+    stream.on("end", () => {
+      if (!header) return reject(new Error("NDJSON missing header"));
+      if (header.sequenceLength !== SEQUENCE_LENGTH) return reject(new Error("Sequence length mismatch."));
+      if (header.featureDimension !== FEATURE_DIMENSION) return reject(new Error("Feature dimension mismatch."));
+      if (samples.length === 0) return reject(new Error("No samples."));
+      resolve(samples);
+    });
+    stream.on("error", reject);
+  });
+};
 
 const sigmoid = (value) => { if (value >= 0) { const z = Math.exp(-value); return 1 / (1 + z); } const z = Math.exp(value); return z / (1 + z); };
 const clipGradient = (value) => { if (value > GRADIENT_CLIP_VALUE) return GRADIENT_CLIP_VALUE; if (value < -GRADIENT_CLIP_VALUE) return -GRADIENT_CLIP_VALUE; return value; };
@@ -65,6 +94,14 @@ const loadSplit = (samples, frameIndices) => {
     signerId: sample.signerId,
     frames: frameIndices.map((frameIndex) => buildSparseFrame(sample.sequence[frameIndex]))
   }));
+};
+
+const loadTotalSampleCount = (samples) => {
+  const counts = {};
+  for (const s of samples) {
+    counts[s.label] = (counts[s.label] || 0) + 1;
+  }
+  return counts;
 };
 
 const createLstmWeights = (rng, hiddenSize) => {
@@ -248,9 +285,7 @@ const updateModel = (model, gradients, lr) => {
 
 const trainSampleFull = (model, sample, rng, classWeights, smoothing, lr, curriculumWeight) => {
   const { fwdResult, bwdResult, classifierInput, dropoutMask, probabilities } = forward(model, sample, { training: true, rng });
-
   const loss = computeLoss(probabilities, sample.labelId, model.outputClasses, smoothing);
-
   const predictedClass = predictionFromProbabilities(probabilities);
 
   const deltaOutput = Float32Array.from(probabilities);
@@ -316,8 +351,8 @@ const saveOutputs = ({ labelsData, metadata, model, frameIndices, trainMetrics, 
   ensureDir(OUTPUT_DIR);
   const createdAt = new Date().toISOString();
   const config = {
-    modelType: "unified-bilstm-v2",
-    description: "Enhanced BiLSTM v2 with label smoothing, class weighting, cosine LR decay, curriculum learning.",
+    modelType: "unified-bilstm-v4",
+    description: "Unified BiLSTM v4 trained on fsl_unified_v4 dataset (18,303 samples, 131 classes). Includes augmented + hard_cases.",
     architecture: {
       recurrentLayers: [
         { type: "lstm", hiddenSize: HIDDEN_SIZE, direction: "forward", temporalSteps: TEMPORAL_STEPS, temporalFrameIndices: frameIndices, dropout: DROPOUT_RATE },
@@ -327,10 +362,10 @@ const saveOutputs = ({ labelsData, metadata, model, frameIndices, trainMetrics, 
       classifier: { type: "dense-softmax", outputClasses: labelsData.labels.length }
     },
     datasetInfo: {
-      totalSamples: (trainMetrics.sampleCount + valMetrics.sampleCount + testMetrics.sampleCount),
-      alphabetSamples: metadata.splits.train.alphabet + metadata.splits.validation.alphabet + metadata.splits.test.alphabet,
-      fslSamples: metadata.splits.train.fsl + metadata.splits.validation.fsl + metadata.splits.test.fsl,
-      splits: metadata.splits
+      totalSamples: metadata.totalSamples,
+      datasetVersion: "v4",
+      splits: metadata.splitCounts,
+      datasetOrigins: metadata.datasetOrigins
     },
     sequenceLength: SEQUENCE_LENGTH, featureDimension: FEATURE_DIMENSION,
     inputShape: [SEQUENCE_LENGTH, FEATURE_DIMENSION],
@@ -355,7 +390,7 @@ const saveOutputs = ({ labelsData, metadata, model, frameIndices, trainMetrics, 
   writeJson(path.join(OUTPUT_DIR, "training_history.json"), history);
   writeJson(path.join(OUTPUT_DIR, "confusion_matrix.json"), { labels: labelsData.labels, matrix: testMetrics.confusionMatrix });
   writeJson(path.join(OUTPUT_DIR, "model.json"), {
-    artifactType: "unified-bilstm-v2", createdAt,
+    artifactType: "unified-bilstm-v4", createdAt,
     labels: labelsData.labels,
     config, weights: {
       lstmFwd: { wx: roundedArray(model.lstmFwd.wx), wh: roundedArray(model.lstmFwd.wh), b: roundedArray(model.lstmFwd.b) },
@@ -367,72 +402,39 @@ const saveOutputs = ({ labelsData, metadata, model, frameIndices, trainMetrics, 
 
 const formatPercent = (value) => `${(value * 100).toFixed(2)}%`;
 
-const main = () => {
-  const alphabetLabels = readJson(path.join(ALPHA_DIR, "labels.json"));
-  const fslLabels = readJson(path.join(FSL_DIR, "labels.json"));
-  const metadata = readJson(path.join(process.cwd(), "datasets", "processed", "fsl_unified", "metadata.json"));
+const main = async () => {
+  console.log("=".repeat(60));
+  console.log("  Unified BiLSTM v4 Training");
+  console.log("  Dataset: fsl_unified_v4");
+  console.log("=".repeat(60));
 
-  const unifiedLabels = [...alphabetLabels.labels, ...fslLabels.labels];
-  const alphaCount = alphabetLabels.labels.length;
-  const labelsData = { labels: unifiedLabels };
-
-  const outputClasses = unifiedLabels.length;
+  const labelsData = readJson(path.join(DATA_DIR, "labels.json"));
+  const metadata = readJson(path.join(DATA_DIR, "metadata.json"));
+  const outputClasses = labelsData.labels.length;
   const frameIndices = temporalFrameIndices();
 
-  const alphaTrain = readJson(path.join(ALPHA_DIR, "train.json"));
-  const alphaTest = readJson(path.join(ALPHA_DIR, "test.json"));
-  const fslTrain = readJson(path.join(FSL_DIR, "train.json"));
-  const fslTest = readJson(path.join(FSL_DIR, "test.json"));
+  console.log(`\nArchitecture:`);
+  console.log(`  Temporal steps: ${TEMPORAL_STEPS}, Hidden: ${HIDDEN_SIZE}, Combined: ${COMBINED_SIZE}`);
+  console.log(`  Dropout: ${DROPOUT_RATE}, Label smoothing: ${LABEL_SMOOTHING}`);
+  console.log(`  Output classes: ${outputClasses}`);
+  console.log(`  Dataset: ${metadata.totalSamples} total samples`);
 
-  const remapFsl = (samples) => samples.map((s) => ({ ...s, labelId: s.labelId + alphaCount }));
-  const fslTrainRaw = remapFsl(fslTrain.samples);
-  const fslTestRaw = remapFsl(fslTest.samples);
+  const trainNdPath = path.join(DATA_DIR, "train.ndjson");
+  const valNdPath = path.join(DATA_DIR, "validation.ndjson");
+  const testNdPath = path.join(DATA_DIR, "test.ndjson");
 
-  let augmentedTrainRaw = [];
+  console.log(`\nLoading data...`);
+  const alphaTrainSamples = await loadNdjsonRaw(trainNdPath);
+  const valSamplesRaw = await loadNdjsonRaw(valNdPath);
+  const testSamplesRaw = await loadNdjsonRaw(testNdPath);
 
-  if (USE_AUGMENTED) {
-    try {
-      const augData = readJson(path.join(AUG_DIR, "train_augmented.json"));
-      const remapAugLabel = (s) => {
-        const labelId = alphabetLabels.labels.includes(s.label)
-          ? alphabetLabels.labels.indexOf(s.label)
-          : alphabetLabels.labels.length + (fslLabels.labels.indexOf(s.label));
-        return { ...s, labelId };
-      };
-      augmentedTrainRaw = augData.trainSamples.map(remapAugLabel);
-      console.log(`Loaded ${augmentedTrainRaw.length} augmented training samples from ${AUG_DIR}`);
-    } catch {
-      console.warn("Augmented data not found, falling back to original data only.");
-    }
-  }
+  console.log(`  Train: ${alphaTrainSamples.length}`);
+  console.log(`  Validation: ${valSamplesRaw.length}`);
+  console.log(`  Test: ${testSamplesRaw.length}`);
 
-  const allTrainRaw = [...alphaTrain.samples, ...fslTrainRaw, ...augmentedTrainRaw];
-  const allTestRaw = [...alphaTest.samples, ...fslTestRaw];
-
-  const rng = mulberry32(RANDOM_SEED + 1);
-  const order = shuffle(Array.from({ length: alphaTrain.samples.length + fslTrainRaw.length }, (_, index) => index), rng);
-  const valCount = Math.max(1, Math.floor((alphaTrain.samples.length + fslTrainRaw.length) * 0.15));
-  const valOrder = new Set(order.slice(0, valCount));
-  const trainBase = []; const valAll = [];
-  const baseSamples = [...alphaTrain.samples, ...fslTrainRaw];
-  for (let i = 0; i < baseSamples.length; i++) {
-    if (valOrder.has(i)) valAll.push(baseSamples[i]);
-    else trainBase.push(baseSamples[i]);
-  }
-
-  const trainAll = [...trainBase, ...augmentedTrainRaw];
-
-  console.log("Training Unified BiLSTM v2 (Enhanced)");
-  console.log(`Input shape: [${SEQUENCE_LENGTH}, ${FEATURE_DIMENSION}]`);
-  console.log(`Temporal steps: ${TEMPORAL_STEPS}, Hidden size: ${HIDDEN_SIZE}, Combined: ${COMBINED_SIZE}`);
-  console.log(`Classes: ${outputClasses}`);
-  console.log(`Label smoothing: ${LABEL_SMOOTHING}`);
-  console.log(`Using augmented data: ${USE_AUGMENTED} (${augmentedTrainRaw.length} additional samples)`);
-  console.log(`Split: train=${trainAll.length}, val=${valAll.length}, test=${allTestRaw.length}`);
-
-  const trainSamples = loadSplit(trainAll, frameIndices);
-  const valSamples = loadSplit(valAll, frameIndices);
-  const testSamples = loadSplit(allTestRaw, frameIndices);
+  const trainSamples = loadSplit(alphaTrainSamples, frameIndices);
+  const valSamples = loadSplit(valSamplesRaw, frameIndices);
+  const testSamples = loadSplit(testSamplesRaw, frameIndices);
 
   const classWeights = computeClassWeights(trainSamples, outputClasses);
   console.log(`Class weights range: ${classWeights.reduce((m, w) => Math.min(m, w), Infinity).toFixed(2)} - ${classWeights.reduce((m, w) => Math.max(m, w), 0).toFixed(2)}`);
@@ -455,7 +457,7 @@ const main = () => {
       const result = trainSampleFull(model, trainSamples[sampleIndex], trainRng, classWeights, LABEL_SMOOTHING, lr, curriculumWeight);
       trainLoss += result.loss; trainCorrect += result.correct;
     }
-    const valMetrics = evaluate(model, valSamples, unifiedLabels);
+    const valMetrics = evaluate(model, valSamples, labelsData.labels);
     const epochStats = {
       epoch, lr: Number(lr.toFixed(6)),
       trainLoss: trainLoss / trainSamples.length,
@@ -478,6 +480,16 @@ const main = () => {
         lstmBwd: { wx: new Float32Array(model.lstmBwd.wx), wh: new Float32Array(model.lstmBwd.wh), b: new Float32Array(model.lstmBwd.b) },
         wy: new Float32Array(model.wy), by: new Float32Array(model.by),
       };
+      // Save checkpoint on improvement (in-memory best is kept; periodically flush to disk)
+      const checkpoint = {
+        epoch, bestValF1, bestValLoss,
+        history, bestModelState: {
+          lstmFwd: { wx: Array.from(bestModelState.lstmFwd.wx), wh: Array.from(bestModelState.lstmFwd.wh), b: Array.from(bestModelState.lstmFwd.b) },
+          lstmBwd: { wx: Array.from(bestModelState.lstmBwd.wx), wh: Array.from(bestModelState.lstmBwd.wh), b: Array.from(bestModelState.lstmBwd.b) },
+          wy: Array.from(bestModelState.wy), by: Array.from(bestModelState.by),
+        }
+      };
+      writeJson(path.join(OUTPUT_DIR, "checkpoint.json"), checkpoint);
     } else {
       epochsWithoutImprovement += 1;
     }
@@ -502,13 +514,13 @@ const main = () => {
     console.log(`Restored best model from epoch with val F1=${formatPercent(bestValF1)}`);
   }
 
-  const trainMetrics = evaluate(model, trainSamples, unifiedLabels);
-  const valMetrics = evaluate(model, valSamples, unifiedLabels);
-  const testMetrics = evaluate(model, testSamples, unifiedLabels);
+  const trainMetrics = evaluate(model, trainSamples, labelsData.labels);
+  const valMetrics = evaluate(model, valSamples, labelsData.labels);
+  const testMetrics = evaluate(model, testSamples, labelsData.labels);
 
   saveOutputs({ labelsData, metadata, model, frameIndices, trainMetrics, valMetrics, testMetrics, history, bestValF1 });
 
-  console.log("\nUnified BiLSTM v2 training complete.");
+  console.log("\nUnified BiLSTM v4 training complete.");
   console.log(`Train accuracy: ${formatPercent(trainMetrics.accuracy)}`);
   console.log(`Val accuracy: ${formatPercent(valMetrics.accuracy)}`);
   console.log(`Test accuracy: ${formatPercent(testMetrics.accuracy)}`);
@@ -518,4 +530,4 @@ const main = () => {
   console.log(`Outputs saved to ${OUTPUT_DIR}`);
 };
 
-main();
+main().catch((err) => { console.error("Training failed:", err); process.exit(1); });

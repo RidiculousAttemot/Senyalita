@@ -1,344 +1,473 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { UserSidebar } from "@/components/UserSidebar";
-import { useRecognition, translateLabel, MODE_CONFIGS } from "@/features/recognition";
-import type { RecognitionMode } from "@/features/recognition";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useRecognition, translateLabel } from "@/features/recognition";
 import { getTts } from "@/lib/tts";
-import { lookupGesture, type GestureInfo } from "@/features/gestures";
+import { TextToSignInterface } from "@/features/text-to-sign/TextToSignInterface";
+import styles from "./Translate.module.css";
+
+const DEBUG = true;
 
 type Status = "waiting" | "active" | "no-hand" | "error";
 
+const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+const numbers = "0123456789".split("");
+
+const HAND_CONNECTIONS: Array<[number, number]> = [
+  [0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],
+  [0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],
+  [0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17],
+];
+
 export default function TranslatePage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const landmarkCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [status, setStatus] = useState<Status>("waiting");
   const [currentLabel, setCurrentLabel] = useState<string | null>(null);
   const [currentConfidence, setCurrentConfidence] = useState(0);
   const [translatedText, setTranslatedText] = useState("");
-  const [replies, setReplies] = useState<Array<{ text: string; videoUrl: string | null }>>([]);
-  const [gestureInfo, setGestureInfo] = useState<GestureInfo | null>(null);
-  const [replyVideo, setReplyVideo] = useState<string | null>(null);
-  const [showModePicker, setShowModePicker] = useState(false);
-  const handsRef = useRef<any>(null);
+  const handLandmarkerRef = useRef<any>(null);
+  const animationFrameRef = useRef<number | null>(null);
   const ttsRef = useRef<ReturnType<typeof getTts> | null>(null);
-  const [showCorrection, setShowCorrection] = useState(false);
-  const [correctionMessage, setCorrectionMessage] = useState("");
+  const lastLeftRef = useRef<any>(null);
+  const lastRightRef = useRef<any>(null);
+  const lastQueriedLabelRef = useRef<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"camera" | "text">("camera");
+
+  // Sign → Text state
+  const [outputText, setOutputText] = useState("");
+  const [speakOn, setSpeakOn] = useState(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      return window.localStorage.getItem("fsl_speak_on") !== "false";
+    } catch { return true; }
+  });
+  const outputTextRef = useRef(outputText);
+  outputTextRef.current = outputText;
+  const lastAppendedRef = useRef<string | null>(null);
+  const appendCooldownRef = useRef(0);
 
   const onPrediction = useCallback(async (result: any, inferenceTimeMs: number) => {
+    if (DEBUG) console.log(`[PIPELINE:onPrediction] label="${result?.label}" conf=${result?.confidence?.toFixed(3)}`);
     if (!result?.label) return;
     setCurrentLabel(result.label);
     setCurrentConfidence(result.confidence);
-
     setTranslatedText(translateLabel(result.label));
 
-    const gesture = await lookupGesture(result.label);
-    setGestureInfo(gesture);
-
-    if (gesture?.replies?.length) {
-      setReplies(gesture.replies.map((r: any) => ({
-        text: r.reply_text,
-        videoUrl: r.response_video_url ?? null,
-      })));
-    } else {
-      setReplies([]);
+    if (result.label !== lastQueriedLabelRef.current) {
+      lastQueriedLabelRef.current = result.label;
     }
   }, []);
 
   const recognition = useRecognition(onPrediction);
+  const recognitionRef = useRef(recognition);
+  recognitionRef.current = recognition;
 
-  const currentMode = recognition.mode ?? "auto";
-  const modeConfig = MODE_CONFIGS[currentMode];
+  // Auto-append when frozenPrediction changes (stable ~1s hold, confidence >= 0.6)
+  useEffect(() => {
+    const fp = recognition.frozenPrediction;
+    if (!fp) return;
+    const display = translateLabel(fp.label);
+    if (display.length !== 1) return;
+    if (display === lastAppendedRef.current) return;
+    const now = Date.now();
+    if (now - appendCooldownRef.current < 800) return;
+    if (DEBUG) console.log(`[PIPELINE:AutoAppend] frozen="${fp.label}" → "${display}"`);
+    lastAppendedRef.current = display;
+    appendCooldownRef.current = now;
+    setOutputText((prev) => prev + display);
+  }, [recognition.frozenPrediction]);
 
   useEffect(() => {
     ttsRef.current = getTts();
+    const appendFrame = recognitionRef.current.appendFrame;
     const startCamera = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { width: 640, height: 480, facingMode: "user" },
           audio: false,
         });
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-        }
+        if (!videoRef.current) return;
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
         setStatus("active");
 
-        const { Hands } = await import("@mediapipe/hands");
-        const hands = new Hands({
-          locateFile: (file: string) =>
-            `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
-        });
-        hands.setOptions({
-          maxNumHands: 2,
-          modelComplexity: 1,
-          minDetectionConfidence: 0.7,
-          minTrackingConfidence: 0.6,
-        });
-        hands.onResults((results: any) => {
-          if (results.multiHandLandmarks?.length > 0) {
-            const left = results.multiHandedness?.find((h: any) => h.label === "Left")
-              ? { landmarks: results.multiHandLandmarks[results.multiHandedness.findIndex((h: any) => h.label === "Left")] }
-              : null;
-            const right = results.multiHandedness?.find((h: any) => h.label === "Right")
-              ? { landmarks: results.multiHandLandmarks[results.multiHandedness.findIndex((h: any) => h.label === "Right")] }
-              : results.multiHandLandmarks?.length > 0
-                ? { landmarks: results.multiHandLandmarks[0] }
-                : null;
-            recognition.appendFrame(left, right);
-            setStatus("active");
-          } else {
-            setStatus("no-hand");
-          }
-        });
-        handsRef.current = hands;
+        const { HandLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
 
-        const processFrame = async () => {
-          if (videoRef.current && canvasRef.current && handsRef.current) {
-            const ctx = canvasRef.current.getContext("2d");
-            if (ctx) {
-              canvasRef.current.width = videoRef.current.videoWidth;
-              canvasRef.current.height = videoRef.current.videoHeight;
-              ctx.drawImage(videoRef.current, 0, 0);
-              await handsRef.current.send({ image: canvasRef.current });
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm"
+        );
+
+        const handLandmarker = await HandLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath:
+              "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task",
+            delegate: "GPU",
+          },
+          runningMode: "VIDEO",
+          numHands: 2,
+        });
+
+        handLandmarkerRef.current = handLandmarker;
+
+        const drawLandmarks = (landmarks: Array<{x: number; y: number; z: number}>, color: string) => {
+          const canvas = landmarkCanvasRef.current;
+          if (!canvas || !videoRef.current) return;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return;
+          const w = canvas.width;
+          const h = canvas.height;
+
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
+          for (const [i, j] of HAND_CONNECTIONS) {
+            const a = landmarks[i];
+            const b = landmarks[j];
+            if (a && b) {
+              ctx.beginPath();
+              ctx.moveTo(a.x * w, a.y * h);
+              ctx.lineTo(b.x * w, b.y * h);
+              ctx.stroke();
             }
           }
-          requestAnimationFrame(processFrame);
+
+          ctx.fillStyle = color;
+          for (const p of landmarks) {
+            ctx.beginPath();
+            ctx.arc(p.x * w, p.y * h, 4, 0, 2 * Math.PI);
+            ctx.fill();
+          }
+        };
+
+        const processFrame = () => {
+          try {
+            const video = videoRef.current;
+            const canvas = landmarkCanvasRef.current;
+            if (video && canvas) {
+              canvas.width = video.videoWidth || 640;
+              canvas.height = video.videoHeight || 480;
+            }
+            if (video && handLandmarkerRef.current) {
+              const timestamp = performance.now();
+              const results = handLandmarkerRef.current.detectForVideo(
+                video,
+                timestamp
+              );
+                if (DEBUG) console.log(`[PIPELINE:Camera] Frame - hands=${results.landmarks?.length ?? 0}`);
+
+                const ctx = canvas?.getContext("2d");
+                if (ctx) ctx.clearRect(0, 0, canvas!.width, canvas!.height);
+
+                if (results.landmarks && results.landmarks.length > 0) {
+                  const numHands = results.landmarks.length;
+                  const leftIdx = results.handedness?.findIndex(
+                    (h: any) => h[0]?.categoryName === "Left"
+                  );
+                  const rightIdx = results.handedness?.findIndex(
+                    (h: any) => h[0]?.categoryName === "Right"
+                  );
+
+                  const left = typeof leftIdx === "number" && leftIdx >= 0 && leftIdx < numHands
+                    ? { landmarks: results.landmarks[leftIdx] }
+                    : null;
+                  const right = typeof rightIdx === "number" && rightIdx >= 0 && rightIdx < numHands
+                    ? { landmarks: results.landmarks[rightIdx] }
+                    : null;
+
+                  if (DEBUG) {
+                    console.log(`[HANDS] leftIdx=${leftIdx} rightIdx=${rightIdx} numHands=${numHands}`);
+                    console.log(`[HANDS] left=${left ? "filled" : "null"} right=${right ? "filled" : "null"}`);
+                  }
+
+                  if (left && typeof leftIdx === "number" && leftIdx >= 0 && leftIdx < numHands) {
+                    drawLandmarks(results.landmarks[leftIdx], "#C0593A");
+                  }
+                  if (right && typeof rightIdx === "number" && rightIdx >= 0 && rightIdx < numHands) {
+                    drawLandmarks(results.landmarks[rightIdx], "#60A5FA");
+                  }
+
+                  lastLeftRef.current = left;
+                  lastRightRef.current = right;
+                  appendFrame(left, right);
+                  setStatus("active");
+              } else {
+                setStatus("no-hand");
+              }
+            }
+          } catch (err) {
+            console.warn("[PIPELINE:processFrame] Error in frame loop:", err);
+          }
+          animationFrameRef.current = requestAnimationFrame(processFrame);
         };
         processFrame();
-      } catch {
+      } catch (e) {
+        console.error("Camera initialization failed:", e);
         setStatus("error");
       }
     };
-    startCamera();
+    if (activeTab === "camera") {
+      startCamera();
+    }
     return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
       (videoRef.current?.srcObject as MediaStream)?.getTracks().forEach((t) => t.stop());
-      handsRef.current?.close();
+      try {
+        handLandmarkerRef.current?.close();
+      } catch {}
     };
-  }, [recognition]);
+  }, [activeTab]);
 
-  const speakReply = (text: string) => {
-    ttsRef.current?.speak(text);
-  };
+  const addSpace = () => setOutputText((prev) => prev + " ");
+  const backspace = () => setOutputText((prev) => prev.slice(0, -1));
+  const clearOutput = () => setOutputText("");
+  const lastSpokenRef = useRef("");
 
-  const currentTopK = recognition.state.stage === "predicting" ? recognition.state.result?.topK : undefined;
+  useEffect(() => {
+    if (!speakOn || !outputText.trim()) return;
+    if (outputText === lastSpokenRef.current) return;
+    lastSpokenRef.current = outputText;
+    ttsRef.current?.speak(outputText);
+  }, [outputText, speakOn]);
 
-  const correctionOptions = useMemo(() => {
-    if (currentTopK && currentTopK.length > 0) {
-      return currentTopK.map((t: any) => t.label);
-    }
-    return ["HELLO", "THANK YOU", "GOOD MORNING", "HOW ARE YOU", "YES", "NO", "PLEASE", "SORRY"];
-  }, [currentTopK]);
+  const speakNow = useCallback(() => {
+    if (!outputText.trim()) return;
+    ttsRef.current?.speak(outputText);
+  }, [outputText]);
 
-  const submitCorrection = async (correctedLabel: string) => {
-    try {
-      await fetch("/api/predictions/correct", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          predicted_label: currentLabel,
-          corrected_label: correctedLabel,
-          confidence: currentConfidence,
-          source: "unknown",
-        }),
-      });
-      setCorrectionMessage("Thanks for the feedback!");
-      setShowCorrection(false);
-      setTimeout(() => setCorrectionMessage(""), 3000);
-    } catch {
-      setCorrectionMessage("Failed to submit. Try again.");
-    }
+  const toggleSpeak = () => {
+    setSpeakOn((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem("fsl_speak_on", next ? "true" : "false");
+        } catch {}
+      }
+      return next;
+    });
   };
 
   return (
-    <UserSidebar>
-      <div className="translate">
-        {/* Mode Selector */}
-        <div className="translate-header">
-          <h1 className="translate-title">Translate</h1>
-          <div className="translate-mode-selector">
-            <button
-              className="translate-mode-button"
-              onClick={() => setShowModePicker(!showModePicker)}
-              title={modeConfig.description}
-            >
-              {modeConfig.label}
-            </button>
-            {showModePicker && (
-              <div className="translate-mode-dropdown">
-                {(Object.entries(MODE_CONFIGS) as [RecognitionMode, typeof modeConfig][]).map(
-                  ([modeKey, cfg]) => (
-                    <button
-                      key={modeKey}
-                      className={`translate-mode-option ${currentMode === modeKey ? "active" : ""} ${cfg.recommended ? "recommended" : ""}`}
-                      onClick={() => {
-                        recognition.setMode(modeKey);
-                        setShowModePicker(false);
-                      }}
-                    >
-                      <span className="translate-mode-option-label">{cfg.label}</span>
-                      <span className="translate-mode-option-desc">{cfg.description}</span>
-                      {cfg.recommended && <span className="translate-mode-badge">Recommended</span>}
-                    </button>
-                  )
+    <div className={styles.page}>
+      {/* Top Nav */}
+      <nav className={styles.topNav}>
+        <div className={styles.navLeft}>
+          <Link href="/" className={styles.backBtn}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+          </Link>
+          <Link href="/" className={styles.brand}>SIGNWITHUS</Link>
+        </div>
+
+        <div className={styles.navCenter}>
+          <button
+            className={`${styles.navTab} ${activeTab === "text" ? styles.navTabActive : ""}`}
+            onClick={() => setActiveTab("text")}
+          >
+            Type → Sign
+          </button>
+          <button
+            className={`${styles.navTab} ${activeTab === "camera" ? styles.navTabActive : ""}`}
+            onClick={() => setActiveTab("camera")}
+          >
+            Sign → Text
+          </button>
+        </div>
+
+        <div className={styles.navRight}>
+          {activeTab === "camera" && status === "active" && (
+            <button className={styles.stopCameraBtn}>Stop camera</button>
+          )}
+        </div>
+      </nav>
+
+      {/* Two-column layout */}
+      <div className={styles.layout}>
+        {/* Main panel */}
+        <div className={styles.main}>
+          {activeTab === "camera" ? (
+            <>
+              {/* Camera viewport */}
+              <div className={styles.cameraBox}>
+                <video
+                  ref={videoRef}
+                  className={styles.cameraVideo}
+                  playsInline
+                  muted
+                />
+                <canvas
+                  ref={landmarkCanvasRef}
+                  className={styles.landmarkCanvas}
+                />
+                {status === "waiting" && (
+                  <div className={styles.cameraPlaceholder}>
+                    <div className={styles.cameraPlaceholderIcon}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2v11z" />
+                        <circle cx="12" cy="13" r="4" />
+                      </svg>
+                    </div>
+                    <p className={styles.cameraPlaceholderText}>
+                      Start the camera, then sign{" "}
+                      <em>letters (A–Z)</em>
+                      {" "}— hold each sign steady.
+                    </p>
+                    <p className={styles.cameraPlaceholderSub}>
+                      Hand and face tracking run locally on your device.
+                    </p>
+                  </div>
+                )}
+                {status === "no-hand" && (
+                  <div className={styles.overlay}>No hands detected. Position your hands in frame.</div>
+                )}
+                {status === "error" && (
+                  <div className={styles.overlay}>Camera access denied. Please grant camera permission.</div>
                 )}
               </div>
-            )}
-          </div>
-        </div>
 
-        <div className="translate-layout">
-          {/* Left: Camera */}
-          <div className="translate-camera-wrap">
-            <div className="camera-shell" style={{ position: "relative" }}>
-              <video ref={videoRef} className="video video-flip" playsInline muted />
-              <canvas ref={canvasRef} style={{ display: "none" }} />
-              {status === "waiting" && (
-                <div className="overlay"><p>Starting camera...</p></div>
-              )}
-              {status === "no-hand" && (
-                <div className="overlay"><p>No hands detected. Position your hands in frame.</p></div>
-              )}
-              {status === "error" && (
-                <div className="overlay"><p>Camera access denied. Please grant camera permission.</p></div>
-              )}
-            </div>
-          </div>
-
-          {/* Center: Translation */}
-          <div className="translate-result">
-            {currentLabel ? (
-              <>
-                <div className="translate-detected">
-                  <p className="translate-detected-label">Detected Sign</p>
-                  <h2 className="translate-detected-sign">{currentLabel}</h2>
-                  <div className="translate-confidence-bar">
-                    <div
-                      className="translate-confidence-fill"
-                      style={{ width: `${currentConfidence * 100}%` }}
-                    />
-                  </div>
-                  <p className="translate-confidence-text">
-                    Confidence: {(currentConfidence * 100).toFixed(0)}%
-                  </p>
-                  <p className="translate-translated-text">
-                    &ldquo;{translatedText}&rdquo;
-                  </p>
-                </div>
-                <div style={{ marginTop: 8 }}>
-                  {!showCorrection ? (
-                    <button
-                      className="button button-secondary"
-                      style={{ fontSize: 11, padding: "2px 8px" }}
-                      onClick={() => setShowCorrection(true)}
-                    >
-                      Incorrect?
-                    </button>
-                  ) : (
-                    <div style={{ fontSize: 12 }}>
-                      <p style={{ color: "#888", marginBottom: 4 }}>What did you mean?</p>
-                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                        {correctionOptions.map((label) => (
-                          <button
-                            key={label}
-                            style={{
-                              padding: "3px 10px",
-                              borderRadius: 12,
-                              border: "1px solid #444",
-                              background: "transparent",
-                              color: "#fff",
-                              cursor: "pointer",
-                              fontSize: 12,
-                            }}
-                            onClick={() => submitCorrection(label)}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                        <button
-                          style={{
-                            padding: "3px 10px",
-                            borderRadius: 12,
-                            border: "1px solid #ef4444",
-                            background: "transparent",
-                            color: "#ef4444",
-                            cursor: "pointer",
-                            fontSize: 12,
-                          }}
-                          onClick={() => setShowCorrection(false)}
-                        >
-                          Cancel
-                        </button>
-                      </div>
+              {/* Detected sign info */}
+              {currentLabel && (
+                <div className={styles.sideCard}>
+                  <div style={{ textAlign: "center" }}>
+                    <p style={{ fontSize: "0.8rem", color: "#9C9189", margin: "0 0 4px" }}>Detected Sign</p>
+                    <h2 style={{ fontSize: "1.6rem", fontWeight: 700, color: "#1C1A17", margin: "0 0 8px" }}>
+                      {currentLabel}
+                    </h2>
+                    <div style={{ height: 6, background: "#E8E0D8", borderRadius: 3, marginBottom: 6, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${currentConfidence * 100}%`, background: "#C0593A", borderRadius: 3, transition: "width 0.3s" }} />
                     </div>
-                  )}
-                  {correctionMessage && (
-                    <p style={{ fontSize: 11, color: "#22c55e", marginTop: 4 }}>{correctionMessage}</p>
+                    <p style={{ fontSize: "0.8rem", color: "#9C9189", margin: "0 0 8px" }}>
+                      Confidence: {(currentConfidence * 100).toFixed(0)}%
+                    </p>
+                    <p style={{ fontSize: "1.1rem", color: "#C0593A", fontStyle: "italic", margin: 0 }}>
+                      &ldquo;{translatedText}&rdquo;
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Recognised Characters bar */}
+              <div className={styles.recogBar}>
+                <div className={styles.recogTop}>
+                  <span className={styles.recogLabel}>RECOGNISED CHARACTERS</span>
+                  <div className={styles.recogActions}>
+                    <button className={`${styles.actionBtn} ${styles.actionBtnPrimary}`} onClick={toggleSpeak}>
+                      {speakOn ? "🔊 Speak: on" : "🔇 Speak: off"}
+                    </button>
+                    <button className={styles.actionBtn} onClick={speakNow}>Speak now</button>
+                    <button className={`${styles.actionBtn} ${styles.actionBtnPrimary} ${styles.actionBtnBold}`} onClick={addSpace}>
+                      [Space]
+                    </button>
+                    <button className={styles.actionBtn} onClick={backspace}>Backspace</button>
+                    <button className={styles.actionBtn} onClick={clearOutput}>Clear</button>
+                  </div>
+                </div>
+                <div className={styles.outputArea}>
+                  {!outputText ? (
+                    <p className={styles.outputPlaceholder}>
+                      Sign letters (A–Z) to type words here… Use [Space] to separate.
+                    </p>
+                  ) : (
+                    <p className={styles.outputText}>{outputText}</p>
                   )}
                 </div>
-              </>
-            ) : (
-              <div className="translate-detected translate-detected-empty">
-                <p className="translate-detected-label">Waiting for gesture...</p>
-                <p className="translate-hint">Perform an FSL gesture to see translation</p>
               </div>
-            )}
-          </div>
-
-          {/* Right: Suggested Responses */}
-          <div className="translate-replies">
-            <h3 className="translate-replies-title">Suggested Responses</h3>
-            {replies.length > 0 ? (
-              <div className="translate-replies-list">
-                {replies.map((r, i) => (
-                  <div key={i} className="translate-reply-chip">
-                    <button
-                      className="translate-reply-button"
-                      onClick={() => speakReply(r.text)}
-                    >
-                      {r.text}
-                    </button>
-                    {r.videoUrl && (
-                      <button
-                        className="translate-reply-video-btn"
-                        onClick={() => setReplyVideo(r.videoUrl)}
-                        aria-label="Play response video"
-                      >
-                        ▶
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="translate-replies-empty">
-                {currentLabel ? "No responses available" : "Responses appear here"}
-              </p>
-            )}
-          </div>
+            </>
+          ) : (
+            <TextToSignInterface />
+          )}
         </div>
 
-        {/* Reply Video Modal */}
-        {replyVideo && (
-          <div
-            className="reply-video-overlay"
-            onClick={() => setReplyVideo(null)}
-            role="dialog"
-            aria-modal="true"
-          >
-            <div className="reply-video-modal" onClick={(e) => e.stopPropagation()}>
-              <video className="reply-video-player" src={replyVideo} controls autoPlay playsInline />
-              <button
-                type="button"
-                className="button button-secondary"
-                onClick={() => setReplyVideo(null)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Sidebar */}
+        <div className={styles.sidebar}>
+          {activeTab === "camera" ? (
+            <>
+              <div className={styles.sideCard}>
+                <h3>🧏 For Deaf signers</h3>
+                <p>
+                  Fingerspell words using letters A to Z.
+                  Hold each sign about 1.0 second. Use the [Space] button on the
+                  controls to insert spaces between words.
+                </p>
+              </div>
+
+              <div className={styles.sideCard}>
+                <h3>📝 Live transcript</h3>
+                <div className={styles.transcriptBox}>
+                  {!outputText ? (
+                    <p className={styles.transcriptPlaceholder}>
+                      Spelled characters and numbers will appear here…
+                    </p>
+                  ) : (
+                    <p className={styles.transcriptText}>{outputText}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className={styles.sideCard}>
+                <span className={styles.charLabel}>SUPPORTED CHARACTERS</span>
+                <div className={styles.charSection}>
+                  <h4>LETTERS</h4>
+                  <div className={styles.charGrid}>
+                    {letters.map((ch) => (
+                      <span key={ch} className={styles.charBadge}>{ch}</span>
+                    ))}
+                  </div>
+                </div>
+                <div className={styles.charSection}>
+                  <h4>NUMBERS</h4>
+                  <div className={styles.charGrid}>
+                    {numbers.map((ch) => (
+                      <span key={ch} className={styles.charBadge}>{ch}</span>
+                    ))}
+                  </div>
+                </div>
+                <p className={styles.sideNote}>
+                  Fingerspell in good lighting with hands centered in the camera frame.
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className={styles.sideCard}>
+                <h3>For hearing partners</h3>
+                <p>
+                  Type or speak what you want to say. Choose your avatar style
+                  and signed language below the animation. The pose engine is
+                  open-source — same pipeline as sign.mt.
+                </p>
+              </div>
+
+              <div className={styles.sideCard}>
+                <span className={styles.charLabel}>SUPPORTED CHARACTERS</span>
+                <div className={styles.charSection}>
+                  <h4>LETTERS</h4>
+                  <div className={styles.charGrid}>
+                    {letters.map((ch) => (
+                      <span key={ch} className={styles.charBadge}>{ch}</span>
+                    ))}
+                  </div>
+                </div>
+                <div className={styles.charSection}>
+                  <h4>NUMBERS</h4>
+                  <div className={styles.charGrid}>
+                    {numbers.map((ch) => (
+                      <span key={ch} className={styles.charBadge}>{ch}</span>
+                    ))}
+                  </div>
+                </div>
+                <p className={styles.sideNote}>
+                  The visual animator supports all standard characters and common expressions.
+                </p>
+              </div>
+            </>
+          )}
+        </div>
       </div>
-    </UserSidebar>
+
+    </div>
   );
 }

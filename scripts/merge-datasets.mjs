@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
 
-const ALPHA_DIR = "datasets/processed/fsl_alphabet_v2";
+const ALPHA_DIR = "datasets/processed/fsl_alphabet_kaggle_v2";
 const FSL_DIR = "datasets/processed/fsl_105";
 const OUT_DIR = "datasets/processed/fsl_unified";
 

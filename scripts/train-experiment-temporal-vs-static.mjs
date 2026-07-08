@@ -8,7 +8,7 @@ const ensureDir = (d) => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: t
 
 const readJson = (fp) => { try { return JSON.parse(fs.readFileSync(fp, "utf8")); } catch { return null; } };
 
-const ALPHA_V2 = "datasets/processed/fsl_alphabet_v2";
+const ALPHA_V2 = "datasets/processed/fsl_alphabet_kaggle_v2";
 const FSL_105 = "datasets/processed/fsl_105";
 
 const experiments = [
@@ -23,7 +23,7 @@ const experiments = [
   {
     name: "Model B — Alphabet Only (Static-derived)",
     id: "alphabet-only",
-    description: "fsl_alphabet_v2 only (28 alphabet classes, static frame sequences)",
+    description: "fsl_alphabet_kaggle_v2 only (28 alphabet classes, static frame sequences)",
     datasets: [ALPHA_V2],
     labelSource: ALPHA_V2,
     config: { epochs: 60, hiddenSize: 32, dropout: 0.2, lr: 0.002, temporalSteps: 30 },
@@ -31,7 +31,7 @@ const experiments = [
   {
     name: "Model C — Hybrid (Current Unified)",
     id: "hybrid",
-    description: "fsl_alphabet_v2 + fsl_105 combined (133 classes, current production approach)",
+    description: "fsl_alphabet_kaggle_v2 + fsl_105 combined (133 classes, current production approach)",
     datasets: [ALPHA_V2, FSL_105],
     labelSource: null,
     config: { epochs: 80, hiddenSize: 48, dropout: 0.25, lr: 0.002, temporalSteps: 35 },
@@ -124,12 +124,12 @@ Uses only FSL-105 phrase data (105 classes). Excludes all alphabet static-image-
 
 ### Model B — Alphabet Only
 
-Uses only fsl_alphabet_v2 (28 classes). Tests whether alphabet-level features are learned
+Uses only fsl_alphabet_kaggle_v2 (28 classes). Tests whether alphabet-level features are learned
 effectively from static-derived single-frame data.
 
 | Property | Value |
 |----------|-------|
-| Datasets | fsl_alphabet_v2 |
+| Datasets | fsl_alphabet_kaggle_v2 |
 | Classes | 28 |
 | Samples | ~3592 |
 | Temporal ratio | 100% (video-derived sequences) |
@@ -140,7 +140,7 @@ Uses both datasets combined (133 classes). This is the current production approa
 
 | Property | Value |
 |----------|-------|
-| Datasets | fsl_alphabet_v2 + fsl_105 |
+| Datasets | fsl_alphabet_kaggle_v2 + fsl_105 |
 | Classes | 133 |
 | Samples | ~5721 |
 | Temporal ratio | 100% |
@@ -180,7 +180,7 @@ node scripts/train-unified-bilstm-v2.mjs
 
 | Dataset | Samples | Classes | Temporal | Static | Used By |
 |---------|---------|---------|----------|--------|---------|
-| fsl_alphabet_v2 | ${(() => { const m = readJson(path.join(ROOT, ALPHA_V2, "metadata.json")); return m?.totalSamples ?? "?"; })()} | 28 | 100% | 0% | Models B, C |
+| fsl_alphabet_kaggle_v2 | ${(() => { const m = readJson(path.join(ROOT, ALPHA_V2, "metadata.json")); return m?.totalSamples ?? "?"; })()} | 28 | 100% | 0% | Models B, C |
 | fsl_105 | ${(() => { const m = readJson(path.join(ROOT, FSL_105, "metadata.json")); return m?.totalSamples ?? "?"; })()} | 105 | 100% | 0% | Models A, C |
 `;
 

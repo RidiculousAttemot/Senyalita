@@ -14,7 +14,7 @@ const { labels, matrix } = readJson(confusionPath);
 const metrics = readJson(metricsPath);
 const unifiedMeta = readJson(metaPath);
 
-const ALPHA_DIR = path.join(ROOT, "datasets", "processed", "fsl_alphabet_v2");
+const ALPHA_DIR = path.join(ROOT, "datasets", "processed", "fsl_alphabet_kaggle_v2");
 const FSL_DIR = path.join(ROOT, "datasets", "processed", "fsl_105");
 
 const alphaTrain = readJson(path.join(ALPHA_DIR, "train.json"));

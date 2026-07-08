@@ -59,7 +59,7 @@ export default function HeroSection() {
         </p>
 
         <div className={`${styles.buttons} ${stagger('delay4')}`}>
-          <Link href="/type-to-sign" className={styles.btnPrimary}>
+          <Link href="/translate" className={styles.btnPrimary}>
             <span>Start communicating</span>
             <svg className={styles.btnArrow} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="M5 12h14M13 5l7 7-7 7"/>

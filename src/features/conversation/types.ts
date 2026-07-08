@@ -10,7 +10,14 @@ export type ConversationIntent =
   | "Healthcare"
   | "Education"
   | "Transportation"
-  | "Unknown";
+  | "Unknown"
+  | "Confirmation"
+  | "Time"
+  | "Description"
+  | "Color"
+  | "Family"
+  | "Number"
+  | "Drink";
 
 export type IntentResult = {
   intent: ConversationIntent;

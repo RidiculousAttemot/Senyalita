@@ -36,7 +36,7 @@ export default function LandingNav() {
         </a>
       </div>
 
-      <Link href="/type-to-sign" className={styles.cta}>
+      <Link href="/translate" className={styles.cta}>
         <span>Open App</span>
         <svg className={styles.ctaArrow} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
           <path d="M5 12h14M13 5l7 7-7 7"/>

@@ -18,10 +18,11 @@ export default async function AdminResearchPage() {
 
   return (
     <div>
-      <h2>Research Dataset Builder</h2>
+      <h2>Research Dataset Builder v2</h2>
       <p className="panel-note">
         Generate anonymized research datasets for academic publications and thesis defense.
         All exports exclude personal identifiable information.
+        Supports CSV, JSON, Excel-compatible formats with recognition, translation, animation, and conversation statistics.
       </p>
 
       <h3 className="analytics-section-title">Dataset Summary (12 months)</h3>
@@ -86,12 +87,36 @@ export default async function AdminResearchPage() {
         </div>
       )}
 
-      <h3 className="analytics-section-title">One-Click Export</h3>
+      <h3 className="analytics-section-title">v2 Enhanced Exports</h3>
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        <div className="panel" style={{ padding: 16, flex: 1, minWidth: 280 }}>
+          <h4 style={{ marginBottom: 8 }}>Research Package v2 (CSV)</h4>
+          <p style={{ fontSize: 13, marginBottom: 12, color: "#888" }}>
+            Enhanced export with accessibility metrics, confusion matrices, dataset growth stats,
+            gesture distribution, and all conversation/feedback/correction data.
+          </p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <a
+              href="/api/admin/research/final-export?format=csv&days=365"
+              className="button"
+              style={{ display: "inline-block", fontSize: 13 }}
+            >
+              Download CSV v2
+            </a>
+            <a
+              href="/api/admin/research/final-export?format=json&days=365"
+              className="button"
+              style={{ display: "inline-block", fontSize: 13 }}
+            >
+              Download JSON v2
+            </a>
+          </div>
+        </div>
+
         <div className="panel" style={{ padding: 16, flex: 1, minWidth: 280 }}>
           <h4 style={{ marginBottom: 8 }}>Thesis Package (CSV)</h4>
           <p style={{ fontSize: 13, marginBottom: 12, color: "#888" }}>
-            Complete thesis export with conversations, evaluations, feedback, corrections,
+            Original thesis export with conversations, evaluations, feedback, corrections,
             training samples, recognitions, and achievements. Ready for SPSS / Excel.
           </p>
           <a
@@ -99,7 +124,7 @@ export default async function AdminResearchPage() {
             className="button"
             style={{ display: "inline-block" }}
           >
-            Download CSV Export
+            Download CSV Classic
           </a>
         </div>
 
@@ -114,7 +139,7 @@ export default async function AdminResearchPage() {
             className="button"
             style={{ display: "inline-block" }}
           >
-            Download JSON Export
+            Download JSON Classic
           </a>
         </div>
       </div>

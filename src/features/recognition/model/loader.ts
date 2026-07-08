@@ -1,26 +1,15 @@
 import * as tf from "@tensorflow/tfjs";
-import { InferenceResult, ModelLoadResult } from "./types";
+import { InferenceResult } from "./types";
+import { getCache, setCache, getCachedResult } from "./cache";
+export { getCachedResult };
 
 const MODEL_URL = "/models/fsl_unified/bilstm_tfjs/model.json";
 const LABELS_URL = "/models/fsl_unified/bilstm_tfjs/labels.json";
+const FEATURE_DIMENSION = 126;
 
-type Loadable = {
-  status: "loading" | "ready" | "error";
-  model: tf.LayersModel | null;
-  labels: string[];
-  error: string | null;
-};
+let loadPromise: Promise<boolean> | null = null;
 
-let cache: Loadable = {
-  status: "loading",
-  model: null,
-  labels: [],
-  error: null
-};
-
-let loadPromise: Promise<Loadable> | null = null;
-
-const loadModel = async (): Promise<Loadable> => {
+const loadModel = async (): Promise<boolean> => {
   if (loadPromise) {
     return loadPromise;
   }
@@ -29,12 +18,12 @@ const loadModel = async (): Promise<Loadable> => {
     try {
       const [modelResponse, labelsResponse] = await Promise.all([
         fetch(MODEL_URL),
-        fetch(LABELS_URL)
+        fetch(LABELS_URL),
       ]);
 
       if (!modelResponse.ok || !labelsResponse.ok) {
         throw new Error(
-          `Failed to fetch model files (${modelResponse.status}, ${labelsResponse.status})`
+          `Failed to fetch model files (${modelResponse.status}, ${labelsResponse.status})`,
         );
       }
 
@@ -61,44 +50,40 @@ const loadModel = async (): Promise<Loadable> => {
       const artifacts: tf.io.ModelArtifacts = {
         modelTopology,
         weightSpecs,
-        weightData
+        weightData,
       };
 
       const model = await tf.loadLayersModel(tf.io.fromMemory(artifacts));
 
-      const warmupInput = tf.zeros([1, 30, FEATURE_DIMENSION]);
+      const warmupInput = tf.zeros([1, 35, FEATURE_DIMENSION]);
       model.predict(warmupInput);
       tf.dispose(warmupInput);
 
-      cache = {
+      setCache({
         status: "ready",
         model,
         labels: labelsData.labels,
-        error: null
-      };
+        error: null,
+      });
 
-      return cache;
+      console.log(
+        `[ModelLoader] Ready | version: bilstm_v4 | path: ${MODEL_URL} | classes: ${labelsData.labels.length} | input: [1,35,${FEATURE_DIMENSION}]`
+      );
+
+      return true;
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unknown model load error";
-      cache = { status: "error", model: null, labels: [], error: message };
-      return cache;
+      setCache({ status: "error", error: message });
+      return false;
     }
   })();
 
   return loadPromise;
 };
 
-const getCachedResult = (): ModelLoadResult => {
-  return {
-    status: cache.status,
-    error: cache.error ?? undefined
-  };
-};
-
-const FEATURE_DIMENSION = 126;
-
 const infer = async (features: Float32Array): Promise<InferenceResult | null> => {
+  const cache = getCache();
   if (cache.status !== "ready" || !cache.model) {
     return null;
   }
@@ -106,7 +91,7 @@ const infer = async (features: Float32Array): Promise<InferenceResult | null> =>
   try {
     const timesteps = features.length / FEATURE_DIMENSION;
     const input = tf.tensor3d(features, [1, timesteps, FEATURE_DIMENSION]);
-    const output = cache.model.predict(input) as tf.Tensor;
+    const output = (cache.model as tf.LayersModel).predict(input) as tf.Tensor;
     const probabilities = await output.data();
 
     const probsArray = Array.from(probabilities);
@@ -120,14 +105,14 @@ const infer = async (features: Float32Array): Promise<InferenceResult | null> =>
     indexed.sort((a, b) => b.probability - a.probability);
     const topK = indexed.slice(0, 5).map((item) => ({
       label: cache.labels[item.index] ?? "?",
-      confidence: item.probability
+      confidence: item.probability,
     }));
 
     const result: InferenceResult = {
       label: cache.labels[labelId] ?? "?",
       labelId,
       confidence,
-      topK
+      topK,
     };
 
     tf.dispose([input, output]);
@@ -137,4 +122,4 @@ const infer = async (features: Float32Array): Promise<InferenceResult | null> =>
   }
 };
 
-export { loadModel, getCachedResult, infer };
+export { loadModel, infer };

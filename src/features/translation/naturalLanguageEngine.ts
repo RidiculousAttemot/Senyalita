@@ -23,7 +23,7 @@ const ENGLISH_GRAMMAR_RULES: GrammarRule[] = [
   { pattern: /\bDON'T UNDERSTAND\b/g, replacement: "I don't understand" },
   { pattern: /\bDON'T KNOW\b/g, replacement: "I don't know" },
   { pattern: /\bHARD OF HEARING\b/g, replacement: "hard of hearing" },
-  { pattern: /\bWEELCHAIR PERSON\b/g, replacement: "wheelchair person" },
+  { pattern: /\bWHEELCHAIR PERSON\b/g, replacement: "wheelchair person" },
   { pattern: /\bDEAF BLIND\b/g, replacement: "deaf-blind" },
   { pattern: /\bNO SUGAR\b/g, replacement: "no sugar" },
   { pattern: /\b(NO|YES|WRONG|CORRECT|SLOW|FAST|HOT|COLD|LIGHT|DARK)\b/g, replacement: (m: RegExpExecArray) => m[1].toLowerCase() },

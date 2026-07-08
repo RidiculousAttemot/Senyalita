@@ -148,7 +148,7 @@ const GESTURE_TO_CATEGORY: Record<string, ConversationIntent> = {
   WOMAN: "Introduction",
   DEAF: "Introduction",
   "HARD OF HEARING": "Introduction",
-  "WEELCHAIR PERSON": "Introduction",
+  "WHEELCHAIR PERSON": "Introduction",
   BLIND: "Introduction",
   "DEAF BLIND": "Introduction",
   MARRIED: "Introduction",
@@ -354,7 +354,7 @@ export class GestureRelationshipGraph {
       "DON'T UNDERSTAND": "Don't Understand",
       "DON'T KNOW": "Don't Know",
       "HARD OF HEARING": "Hard of Hearing",
-      "WEELCHAIR PERSON": "Wheelchair Person",
+      "WHEELCHAIR PERSON": "Wheelchair Person",
       "DEAF BLIND": "Deaf-Blind",
       "NO SUGAR": "No Sugar",
     };

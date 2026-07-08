@@ -20,6 +20,21 @@
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-smooth: cubic-bezier(0.65, 0, 0.35, 1);
+
+  --bg-page: #EDE8DF;
+  --bg-card: #FFFFFF;
+  --bg-input: #F7F4F0;
+  --bg-dark: #1A1510;
+  --primary: #B5674A;
+  --primary-hover: #9A5038;
+  --primary-light: #F2E8E3;
+  --text-dark: #1C1A17;
+  --text-sub: #5C5248;
+  --text-muted: #9C9189;
+  --border: #E8E0D8;
+  --warn-bg: #FFF8F0;
+  --warn-border: #F0D5B0;
+  --warn-text: #8B5E2A;
 }
 
 * {

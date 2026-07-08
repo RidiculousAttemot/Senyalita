@@ -1,2 +1,3 @@
 export type { RecognitionStatus, InferenceResult, ModelLoadResult } from "./types";
-export { loadModel, getCachedResult, infer } from "./loader";
+export { loadModel, infer } from "./loader";
+export { getCachedResult } from "./cache";

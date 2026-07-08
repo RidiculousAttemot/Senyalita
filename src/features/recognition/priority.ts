@@ -3,7 +3,7 @@ import type { MotionState, GesturePhase } from "./motionDetection";
 
 const ALPHABET_LABELS = new Set([
   "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
-  "n", "ñ", "ng", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
+  "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
 ]);
 
 const PHRASE_LABELS = new Set([
@@ -44,6 +44,8 @@ export type PriorityOverride = {
   reason: string;
 };
 
+const ALPHABET_BOOST_FACTOR = 1.20;
+
 export class RecognitionPriorityManager {
   private lastOverride: PriorityOverride | null = null;
 
@@ -53,6 +55,31 @@ export class RecognitionPriorityManager {
 
   getLastOverride(): PriorityOverride | null {
     return this.lastOverride;
+  }
+
+  applyBoost(
+    result: InferenceResult,
+    motionState: MotionState,
+    gesturePhase: GesturePhase,
+  ): InferenceResult {
+    const labelLower = result.label.toLowerCase();
+    const isAlphabet = ALPHABET_LABELS.has(labelLower);
+    const isGestureActive = motionState === "gesturing" || gesturePhase !== "none";
+
+    if (isAlphabet && isGestureActive) {
+      const boosted = Math.min(result.confidence * ALPHABET_BOOST_FACTOR, 1.0);
+      const boostedTopK = result.topK.map((k) => {
+        const kl = k.label.toLowerCase();
+        if (ALPHABET_LABELS.has(kl)) {
+          return { ...k, confidence: Math.min(k.confidence * ALPHABET_BOOST_FACTOR, 1.0) };
+        }
+        return k;
+      });
+      boostedTopK.sort((a, b) => b.confidence - a.confidence);
+      return { ...result, confidence: boosted, topK: boostedTopK };
+    }
+
+    return result;
   }
 
   applyPriority(
@@ -71,7 +98,7 @@ export class RecognitionPriorityManager {
 
     const isGestureActive = motionState === "gesturing" || gesturePhase !== "none";
     const hasEnoughFrames = frameCount >= 12;
-    const lowMargin = result.confidence < 0.75;
+    const lowMargin = result.confidence < 0.70;
 
     if (isAlphabet && isGestureActive && hasEnoughFrames) {
       const topPhrase = result.topK.find(

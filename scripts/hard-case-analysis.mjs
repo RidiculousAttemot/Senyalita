@@ -5,7 +5,7 @@ const ROOT = process.cwd();
 const MODEL_DIR = path.join(ROOT, "models", "fsl_unified", "bilstm");
 const HARD_DIR = path.join(ROOT, "datasets", "hard_cases");
 const DOCS_DIR = path.join(ROOT, "docs");
-const ALPHA_DIR = path.join(ROOT, "datasets", "processed", "fsl_alphabet_v2");
+const ALPHA_DIR = path.join(ROOT, "datasets", "processed", "fsl_alphabet_kaggle_v2");
 const FSL_DIR = path.join(ROOT, "datasets", "processed", "fsl_105");
 
 const readJson = (fp) => JSON.parse(fs.readFileSync(fp, "utf8"));

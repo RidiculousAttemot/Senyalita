@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 
 const EXISTING_DIRS = [
-  { dir: path.join(process.cwd(), "datasets", "processed", "fsl_alphabet_v2"), prefix: "alphabet_v2_", labelOffset: 0 },
+  { dir: path.join(process.cwd(), "datasets", "processed", "fsl_alphabet_kaggle_v2"), prefix: "alphabet_v2_", labelOffset: 0 },
   { dir: path.join(process.cwd(), "datasets", "processed", "fsl_105"), prefix: "fsl105_", labelOffset: 28 },
   { dir: path.join(process.cwd(), "datasets", "processed", "fsl_unified"), prefix: "unified_v1_", labelOffset: 0 },
 ];
@@ -25,7 +25,7 @@ const buildLabelMap = () => {
   const map = {};
   let nextId = 0;
 
-  const alphabetLabels = readJson(path.join(process.cwd(), "datasets", "processed", "fsl_alphabet_v2", "labels.json"));
+  const alphabetLabels = readJson(path.join(process.cwd(), "datasets", "processed", "fsl_alphabet_kaggle_v2", "labels.json"));
   if (alphabetLabels) {
     for (const l of alphabetLabels.labels) { if (!(l in map)) map[l] = nextId++; }
   }

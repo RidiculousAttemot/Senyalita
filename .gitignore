@@ -11,6 +11,9 @@ build/
 # Datasets
 datasets/raw/**/*.json
 datasets/processed/**/*.json
+datasets/raw/**/*.ndjson
+datasets/processed/**/*.ndjson
+datasets/archive/
 !datasets/raw/**/.gitkeep
 !datasets/processed/**/.gitkeep
 

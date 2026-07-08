@@ -3,7 +3,7 @@ import path from "path";
 import { randomBytes } from "crypto";
 
 const ROOT = process.cwd();
-const ALPHA_DIR = path.join(ROOT, "datasets", "processed", "fsl_alphabet_v2");
+const ALPHA_DIR = path.join(ROOT, "datasets", "processed", "fsl_alphabet_kaggle_v2");
 const FSL_DIR = path.join(ROOT, "datasets", "processed", "fsl_105");
 const OUTPUT_DIR = path.join(ROOT, "datasets", "processed", "fsl_unified_augmented");
 
@@ -13,6 +13,40 @@ const SEQUENCE_LEN = 120;
 const readJson = (fp) => JSON.parse(fs.readFileSync(fp, "utf8"));
 const writeJson = (fp, data) => fs.writeFileSync(fp, JSON.stringify(data));
 const ensureDir = (dir) => { if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true }); };
+
+const streamNdjson = (filePath) => {
+  return new Promise((resolve, reject) => {
+    if (!fs.existsSync(filePath)) resolve([]);
+    const samples = [];
+    const stream = fs.createReadStream(filePath, { encoding: "utf8", highWaterMark: 1 << 20 });
+    let leftover = "";
+    stream.on("data", (chunk) => {
+      const text = leftover + chunk;
+      let start = 0;
+      let newlineIdx;
+      while ((newlineIdx = text.indexOf("\n", start)) !== -1) {
+        const line = text.slice(start, newlineIdx);
+        start = newlineIdx + 1;
+        if (!line) continue;
+        const obj = JSON.parse(line);
+        if (obj._header) continue;
+        samples.push(obj);
+      }
+      leftover = text.slice(start);
+    });
+    stream.on("end", () => resolve(samples));
+    stream.on("error", reject);
+  });
+};
+
+const loadJsonSamples = (dir, split = "train") => {
+  // Try NDJSON first (streaming), fall back to JSON
+  const ndPath = path.join(dir, `${split}.ndjson`);
+  const jsonPath = path.join(dir, `${split}.json`);
+  if (fs.existsSync(ndPath)) return streamNdjson(ndPath);
+  const data = readJson(jsonPath);
+  return Promise.resolve(data ? data.samples || [] : []);
+};
 
 const mulberry = (seed) => {
   let t = seed >>> 0;
@@ -90,14 +124,38 @@ const augmentLandmarkDropout = (sequence, dropoutRate = 0.05) => {
   });
 };
 
-const augmentMirror = (sequence) => {
-  return sequence.map((frame) => {
-    const out = [...frame];
-    for (let i = 0; i < 66; i += 2) {
-      out[i] = -frame[i];
+const HAND_SIZE = 63; // 21 landmarks * 3 (x,y,z)
+const LANDMARK_STRIDE = 3;
+
+const mirrorAndSwapHand = (frame) => {
+  if (!Array.isArray(frame) || frame.length !== FEATURE_DIM) {
+    throw new Error(`mirrorAndSwapHand: expected frame of length ${FEATURE_DIM}, got ${frame?.length}`);
+  }
+
+  const slot0 = frame.slice(0, HAND_SIZE);
+  const slot1 = frame.slice(HAND_SIZE, FEATURE_DIM);
+  const out = new Array(FEATURE_DIM);
+
+  // Mirror slot1 (original right hand) into output slot 0 (left hand slot)
+  // Mirror slot0 (original left hand) into output slot 1 (right hand slot)
+  // Hand slots are swapped so the model learns to recognize signs from either hand
+  const mirrorSlot = (src, dst, dstOffset) => {
+    for (let i = 0; i < HAND_SIZE; i += LANDMARK_STRIDE) {
+      // negate x, preserve y and z
+      dst[dstOffset + i]     = -src[i];       // x
+      dst[dstOffset + i + 1] =  src[i + 1];   // y
+      dst[dstOffset + i + 2] =  src[i + 2];   // z
     }
-    return out;
-  });
+  };
+
+  mirrorSlot(slot1, out, 0);
+  mirrorSlot(slot0, out, HAND_SIZE);
+
+  return out;
+};
+
+const augmentMirror = (sequence) => {
+  return sequence.map((frame) => mirrorAndSwapHand(frame));
 };
 
 const augmentTimeReverse = (sequence) => {
@@ -145,13 +203,28 @@ const applyAugmentationPreset = (sample, presetName) => {
   };
 };
 
-const main = () => {
+const main = async () => {
   ensureDir(OUTPUT_DIR);
 
-  const alphaTrain = readJson(path.join(ALPHA_DIR, "train.json"));
-  const alphaTest = readJson(path.join(ALPHA_DIR, "test.json"));
-  const fslTrain = readJson(path.join(FSL_DIR, "train.json"));
-  const fslTest = readJson(path.join(FSL_DIR, "test.json"));
+  console.log("Loading alphabet training data...");
+  const alphaTrainSamples = await loadJsonSamples(ALPHA_DIR);
+  const alphaTrain = { samples: alphaTrainSamples };
+  console.log(`  Train samples: ${alphaTrainSamples.length}`);
+
+  console.log("Loading alphabet test data...");
+  const alphaTestSamples = await loadJsonSamples(ALPHA_DIR, "test");
+  const alphaTest = { samples: alphaTestSamples };
+  console.log(`  Test samples: ${alphaTestSamples.length}`);
+
+  console.log("Loading FSL-105 test data...");
+  const fslTestSamples = await loadJsonSamples(FSL_DIR, "test");
+  const fslTest = { samples: fslTestSamples };
+  console.log(`  Test samples: ${fslTestSamples.length}`);
+
+  console.log("Loading FSL-105 training data...");
+  const fslTrainSamples = await loadJsonSamples(FSL_DIR);
+  const fslTrain = { samples: fslTrainSamples };
+  console.log(`  Train samples: ${fslTrainSamples.length}`);
 
   const augmented = [];
   let originalCount = 0;
@@ -220,14 +293,26 @@ const main = () => {
     createdAt: new Date().toISOString(),
   };
 
-  const augResults = {
+  console.log(`\nWriting ${allAugmentedTrainSamples.length} augmented samples as NDJSON...`);
+  const outPath = path.join(OUTPUT_DIR, "train_augmented.ndjson");
+  const outFd = fs.openSync(outPath, "w");
+  const enc = (str) => Buffer.from(str, "utf8");
+
+  const header = JSON.stringify({
+    _header: true,
     sequenceLength: SEQUENCE_LEN,
     featureDimension: FEATURE_DIM,
     metadata,
-    trainSamples: allAugmentedTrainSamples,
-  };
+    totalSamples: allAugmentedTrainSamples.length
+  });
+  fs.writeSync(outFd, enc(header + "\n"));
 
-  writeJson(path.join(OUTPUT_DIR, "train_augmented.json"), augResults);
+  for (let i = 0; i < allAugmentedTrainSamples.length; i++) {
+    fs.writeSync(outFd, enc(JSON.stringify(allAugmentedTrainSamples[i]) + "\n"));
+    if ((i + 1) % 10000 === 0) console.log(`    ${i + 1}/${allAugmentedTrainSamples.length}`);
+  }
+  fs.closeSync(outFd);
+  console.log(`  Written to ${outPath}`);
 
   const testMerged = {
     sequenceLength: SEQUENCE_LEN,
@@ -245,4 +330,67 @@ const main = () => {
   console.log(`Output: ${OUTPUT_DIR}`);
 };
 
+const verifyMirrorLogic = () => {
+  console.log("=== Verifying mirror augmentation logic ===");
+
+  // Build a synthetic frame with distinguishable values in each hand slot
+  const frame = new Array(FEATURE_DIM).fill(0);
+  // Fill slot 0 (left hand) with pattern 0..62
+  for (let i = 0; i < HAND_SIZE; i++) frame[i] = i + 1;
+  // Fill slot 1 (right hand) with pattern 100..162
+  for (let i = 0; i < HAND_SIZE; i++) frame[HAND_SIZE + i] = 100 + i + 1;
+
+  const mirrored = mirrorAndSwapHand(frame);
+
+  // 1. Check output length
+  const lenOk = mirrored.length === FEATURE_DIM;
+  console.log(`  Length: ${mirrored.length} (expected ${FEATURE_DIM}) ${lenOk ? "✓" : "✗"}`);
+
+  // 2. Verify slot swap: original slot1 x values (negated) should appear in output slot0
+  let swapOk = true;
+  for (let i = 0; i < HAND_SIZE; i += LANDMARK_STRIDE) {
+    // original slot1 at index HAND_SIZE + i
+    const origSlot1X = frame[HAND_SIZE + i];
+    // mirrored output slot0 at index i
+    const outSlot0X = mirrored[i];
+    if (Math.abs(outSlot0X - (-origSlot1X)) > 1e-10) { swapOk = false; break; }
+  }
+  console.log(`  Slot swap (slot1→slot0, x negated): ${swapOk ? "✓" : "✗"}`);
+
+  // 3. Verify slot swap: original slot0 x values (negated) should appear in output slot1
+  let swapOk2 = true;
+  for (let i = 0; i < HAND_SIZE; i += LANDMARK_STRIDE) {
+    const origSlot0X = frame[i];
+    const outSlot1X = mirrored[HAND_SIZE + i];
+    if (Math.abs(outSlot1X - (-origSlot0X)) > 1e-10) { swapOk2 = false; break; }
+  }
+  console.log(`  Slot swap (slot0→slot1, x negated): ${swapOk2 ? "✓" : "✗"}`);
+
+  // 4. Verify y and z are preserved (just swapped)
+  let yzOk = true;
+  for (let i = 1; i < HAND_SIZE; i += LANDMARK_STRIDE) {
+    // y: original slot1 y at HAND_SIZE+i → output slot0 y at i
+    if (Math.abs(mirrored[i] - frame[HAND_SIZE + i]) > 1e-10) { yzOk = false; break; }
+    // y: original slot0 y at i → output slot1 y at HAND_SIZE+i
+    if (Math.abs(mirrored[HAND_SIZE + i] - frame[i]) > 1e-10) { yzOk = false; break; }
+    // z: same pattern at i+1
+    if (Math.abs(mirrored[i + 1] - frame[HAND_SIZE + i + 1]) > 1e-10) { yzOk = false; break; }
+    if (Math.abs(mirrored[HAND_SIZE + i + 1] - frame[i + 1]) > 1e-10) { yzOk = false; break; }
+  }
+  console.log(`  y/z values preserved after swap: ${yzOk ? "✓" : "✗"}`);
+
+  // 5. Verify double mirror returns original
+  const doubleMirrored = mirrorAndSwapHand(mirrored);
+  let doubleOk = true;
+  for (let i = 0; i < FEATURE_DIM; i++) {
+    if (Math.abs(doubleMirrored[i] - frame[i]) > 1e-10) { doubleOk = false; break; }
+  }
+  console.log(`  Double mirror (involution): ${doubleOk ? "✓" : "✗"}`);
+
+  const allOk = lenOk && swapOk && swapOk2 && yzOk && doubleOk;
+  console.log(`  Overall: ${allOk ? "ALL CHECKS PASSED ✓" : "FAILED ✗"}`);
+  if (!allOk) { console.error("Mirror verification failed. Aborting."); process.exit(1); }
+};
+
+verifyMirrorLogic();
 main();

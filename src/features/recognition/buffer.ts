@@ -1,8 +1,8 @@
 import { normalizeLandmarks } from "./normalize";
 
-const SEQUENCE_LENGTH = 30;
+const SEQUENCE_LENGTH = 45;
 const FEATURE_DIMENSION = 126;
-const TEMPORAL_STEPS = 30;
+const TEMPORAL_STEPS = 35;
 const MINIMUM_FRAMES = 5;
 const EARLY_MIN_FRAMES = 8;
 const EARLY_HIGH_CONFIDENCE = 0.85;

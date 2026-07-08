@@ -95,6 +95,30 @@ AI-powered conversation assistant layer. 8 new code modules: conversation/types.
 ### Phase 27 — Simplified Public Access (Admin-Only Authentication)
 Removed all end-user authentication. Public pages (/translate, /conversation, /learn, /history, /presentation) require no login. Removed /login, /register, /dashboard, /profile, /settings pages. New /admin/login page for admin auth. Removed 6 DB tables (profiles, user_learning_progress, practice_sessions, user_analytics, user_achievements, admin_ai_conversations). Refactored 9 tables for anonymous session support (session_token, nullable user_id). Added migration 0029. Refactored requireAdmin to use auth metadata. Removed 5 server actions (signUp, signOut, passwordReset, passwordUpdate, displayNameUpdate). Landing page CTA: "Start Translating". Footer: "Admin Login" link. 3 docs created. Lint/163 tests/build/tsc all pass.
 
+### Phase 43 — Complete Kaggle Dataset Integration & Retraining Pipeline
+Extracted 10,865 MediaPipe landmarks from 11,700 Kaggle FSL JPGs (92.9% success) via Puppeteer + browser MediaPipe. Merged with custom dataset into `fsl_alphabet_combined` (11,422 samples, 26 classes). Trained BiLSTM v2 (95.63% test accuracy). Benchmarked vs production (98.15%). Decision: not deployed — new model underperformed production due to static JPG landmarks vs real temporal data. Created 3 scripts, 4 docs, 2 datasets, 1 model. All validation passes.
+
+### Phase 43b — Multi-Word FSL Translation, Animation Sequencing & Pause Engine
+Replaced `glossTranslator.ts` to delegate to `fsl-translation` engine (35+ grammar rules, intent detection, language detection). Added `simplifyMorphology()` in `fallback.ts` for -ing/-s/-ed/-ly/-tion stripping before fingerspelling. Created `animationSequencer.ts` (merge compatible gestures, avoid intra-phrase pauses), `pauseEngine.ts` (punctuation-aware pauses: commas 0.35s, sentences 0.8s, ?/! 0.5–0.6s), `confidenceIndicator.ts` (per-word + overall confidence with color-coded UI). Extended `NonManualController` to 20 expression profiles (from 12) with 40+ gesture→expression mappings. Full CRUD dictionary manager at `/admin/translation`. Enhanced explainer with `generateReport()`, `ExplanationReport`, motion quality assessment. 4 docs, 1 evaluation script. Lint/TypeCheck/Build all pass.
+
+### Phase 44 — Active Learning Pipeline & Dataset Expansion
+Created 7 analytics modules: `ErrorAnalysisEngine` (confusion pairs, unstable gestures, environmental/signer trends, weekly reports), `DatasetExpansionEngine` (gesture recommendation ranking by F1/confidence/sample gap), `DatasetQualityInspector` (6-dimension 0-100 scoring: blur, hand presence, lighting, framing, motion blur, duplicates), `GestureClusteringEngine` (K-Means++, variation classification), `DriftDetector` (6-metric drift monitoring, warning/critical alerts), `RetrainingManager` (6-stage workflow: production→candidate→validation→benchmark→approval→deployment, rollback support). Two new admin pages: `/admin/active-learning` (5-tab dashboard) and `/admin/research-insights` (5-tab dashboard with CSV/JSON export). Admin layout nav updated. 5 docs, 3 evaluation scripts. Lint/Build all pass.
+
+### Phase 45 — Full Kaggle Dataset Integration & Retraining
+Merged Kaggle FSL landmarks (10,625 extracted samples) with `fsl_alphabet_v2` (3,592 custom temporal samples) into `datasets/processed/fsl_alphabet_kaggle_v2` (14,217 samples, 26 classes, 7 signers including KAGGLE). Created `scripts/merge-kaggle-into-v2.mjs` to produce stratified train/validation/test splits. Updated ALL 23 training/audit/analysis scripts to use `fsl_alphabet_kaggle_v2` instead of `fsl_alphabet_v2`. Retrained `bilstm_v2` model on Kaggle-enriched dataset and exported to TF.js at `public/models/fsl_unified/bilstm_tfjs/`.
+
+**Model comparison (bilstm_v2, 131 classes, 35 temporal steps, 48 hidden units):**
+| Metric | Before (no Kaggle) | After (+Kaggle) | Δ |
+|--------|:---:|:---:|:---:|
+| Test Accuracy | 93.24% | **94.86%** | **+1.62pp** |
+| Test Macro F1 | 88.68% | **91.85%** | **+3.17pp** |
+| Test Weighted F1 | 92.99% | **94.82%** | **+1.83pp** |
+| Validation Accuracy | 91.75% | **95.09%** | **+3.34pp** |
+| Alphabet training samples | 3,592 | **14,217** | **3.96×** |
+| Memory size | 319KB | 319KB | same |
+
+The Kaggle-enriched model shows significantly improved per-class performance (+3.17pp macro F1) and better generalization (narrower train/val gap). The model was exported to TF.js and deployed at `/models/fsl_unified/bilstm_tfjs/`. Key scripts: `scripts/merge-kaggle-into-v2.mjs`, `scripts/train-unified-bilstm-v2.mjs`, `scripts/export-unified-bilstm-tfjs.mjs`.
+
 ## Current Status
 - **55+ deliverables docs** generated
 - **25+ routes** served by Next.js 14 (App Router) — no user auth pages
@@ -102,9 +126,9 @@ Removed all end-user authentication. Public pages (/translate, /conversation, /l
 - **8 test files** with 163 passing tests
 - **133+ model classes** (28 alphabet + 105+ phrases)
 - **1 user role** (admin only) with RLS enforcement
-- **17 admin tools** (analytics, gestures, replies, import, conversations, dataset, model health, review, models, research, monitoring, KB, learning, users, system, login, evaluation)
+- **19 admin tools** (analytics, gestures, replies, import, conversations, dataset, model health, review, models, research, monitoring, KB, learning, users, system, login, evaluation, active-learning, research-insights)
 - **Public access**: No login required — translate, converse, learn immediately
 - **Privacy-first**: No accounts, no personal data, on-device recognition only
 - **Production-deployed** on Vercel + Supabase
-- **19 phase 21-23 scripts**: dataset pipeline, model training, TFJS export, KB expansion
+- **23 phase 21-44 scripts**: dataset pipeline, model training, TFJS export, KB expansion, Kaggle integration, FSL translation, active learning, drift detection, dataset quality
 - **Hybrid recognition**: 2 models (240KB LLC + 475KB BiLSTM), motion-aware routing, 165ms avg latency, 91.5% alphabet accuracy, 92.3% phrase accuracy

@@ -13,6 +13,13 @@ const TRANSITION_PROBABILITIES: Record<string, Record<string, number>> = {
   Education: { Response: 0.35, Question: 0.3, Request: 0.2, Greeting: 0.1, Farewell: 0.05 },
   Transportation: { Response: 0.35, Question: 0.3, Request: 0.2, Greeting: 0.1, Food: 0.05 },
   Farewell: { Greeting: 0.5, Unknown: 0.3, Response: 0.2 },
+  Confirmation: { Response: 0.4, Question: 0.25, Farewell: 0.2, Greeting: 0.15 },
+  Time: { Question: 0.35, Response: 0.3, Farewell: 0.15, Greeting: 0.1, Food: 0.1 },
+  Description: { Response: 0.35, Question: 0.3, Food: 0.15, Color: 0.1, Family: 0.1 },
+  Color: { Description: 0.35, Question: 0.3, Response: 0.2, Food: 0.15 },
+  Family: { Response: 0.3, Introduction: 0.25, Greeting: 0.2, Question: 0.15, Food: 0.1 },
+  Number: { Response: 0.35, Question: 0.3, Food: 0.15, Time: 0.1, Description: 0.1 },
+  Drink: { Food: 0.4, Response: 0.3, Question: 0.2, Request: 0.1 },
   Unknown: { Greeting: 0.3, Question: 0.25, Response: 0.2, Request: 0.15, Farewell: 0.1 },
 };
 
@@ -28,6 +35,13 @@ const GESTURES_BY_INTENT: Record<ConversationIntent, string[]> = {
   Healthcare: ["Doctor", "Nurse", "Hospital", "Medicine", "Sick", "Pain", "Fever", "Cold", "Health"],
   Education: ["School", "Teacher", "Student", "Class", "Lesson", "Study", "Learn", "Book", "Read", "Write"],
   Transportation: ["Car", "Bus", "Jeepney", "Taxi", "Train", "Airport", "Station", "Ticket", "Go", "Come", "Travel"],
+  Confirmation: ["Yes", "No", "Correct", "Wrong", "Understand", "Don't Understand"],
+  Time: ["Today", "Tomorrow", "Yesterday", "Now", "Later", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+  Description: ["Hot", "Cold", "Slow", "Fast", "Light", "Dark", "Big", "Small", "Good", "Bad"],
+  Color: ["Red", "Blue", "Green", "Yellow", "Orange", "Brown", "Black", "White", "Gray", "Pink", "Violet"],
+  Family: ["Father", "Mother", "Son", "Daughter", "Grandfather", "Grandmother", "Uncle", "Auntie", "Cousin", "Parents"],
+  Number: ["One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"],
+  Drink: ["Water", "Juice", "Milk", "Coffee", "Tea", "Beer", "Wine"],
   Unknown: [],
 };
 

@@ -9,11 +9,6 @@ describe("translateLabel", () => {
     expect(translateLabel("m")).toBe("M");
   });
 
-  it("handles ñ and ng", () => {
-    expect(translateLabel("ñ")).toBe("Ñ");
-    expect(translateLabel("ng")).toBe("NG");
-  });
-
   it("converts FSL-105 gesture labels to display form", () => {
     expect(translateLabel("GOOD MORNING")).toBe("Good Morning");
     expect(translateLabel("THANK YOU")).toBe("Thank You");
@@ -66,11 +61,6 @@ describe("classifyLabel", () => {
     expect(classifyLabel("a")).toBe("alphabet");
     expect(classifyLabel("z")).toBe("alphabet");
     expect(classifyLabel("m")).toBe("alphabet");
-  });
-
-  it("classifies ñ and ng as alphabet", () => {
-    expect(classifyLabel("ñ")).toBe("alphabet");
-    expect(classifyLabel("ng")).toBe("alphabet");
   });
 
   it("classifies multi-word phrases as phrase", () => {

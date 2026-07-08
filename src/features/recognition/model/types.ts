@@ -13,4 +13,7 @@ export type InferenceResult = {
 export type ModelLoadResult = {
   status: RecognitionStatus;
   error?: string;
+  modelVersion?: string;
+  modelType?: string;
+  classes?: number;
 };

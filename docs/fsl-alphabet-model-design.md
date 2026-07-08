@@ -357,7 +357,25 @@ Stage 5 integrated the Kaggle FSL dataset (11,700 images) with the existing cust
 - Standardized to 26 classes (A–Z) in Phase 5.1; ñ and ng removed from the entire pipeline
 - Kaggle landmark extraction (P5-15) is still deferred; current combined dataset contains placeholder zero sequences for the Kaggle portion
 
+## Unified BiLSTM v4 (Current Live Model)
+
+The current live model deployed at `public/models/fsl_unified/bilstm_tfjs/` is a **unified BiLSTM v4** trained on the combined `fsl_unified_v4` dataset (51,192 samples, 131 classes).
+
+| Property | Value |
+|----------|-------|
+| Architecture | Bidirectional LSTM (48 hidden per direction) → Dropout 0.25 → Dense 131 + softmax |
+| Input shape | `[null, 35, 126]` |
+| Dataset version | `fsl_unified_v4` (51,192 samples, 131 classes) |
+| Test accuracy | 93.99% |
+| Test macro F1 | **94.10%** |
+| Sources | fsl_alphabet_kaggle_v2 (14,217), fsl_105 (2,129), augmented (34,189), hard_cases (657) |
+| Left/right robustness | ✅ Verified — corrected mirror augmentation + hand-slot fix |
+| Export | TF.js via `scripts/export-unified-bilstm-tfjs.mjs` |
+
+See [docs/model-evaluation-v4.md](model-evaluation-v4.md) for full evaluation metrics.
+
 ## Do Not Do Yet
 - Do not integrate a new model into the camera page without validation (test against v2 first)
 - Do not train word gestures yet
 - Do not add backend/auth/admin
+- Do not add CNN-LSTM or new architecture — current BiLSTM v4 is sufficient for alphabet + FSL-105 phrase recognition

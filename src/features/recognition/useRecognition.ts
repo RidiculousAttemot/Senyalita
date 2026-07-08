@@ -7,8 +7,11 @@ import { SequenceBuffer, HandData } from "./buffer";
 import { PredictionSmoother } from "./smoothing";
 import { MotionDetector, MotionState } from "./motionDetection";
 import { translateResult, getRecognitionCategory } from "./translation";
-import { loadModel, infer } from "./model";
+import { loadModel, infer, getCachedResult } from "./model";
 import { ModeManager, type RecognitionMode } from "./recognitionModes";
+import { RecognitionPriorityManager } from "./priority";
+
+const DEBUG = true;
 
 const INFERENCE_INTERVAL_MS = 100;
 const FAST_INFERENCE_INTERVAL_MS = 50;
@@ -51,6 +54,7 @@ export const useRecognition = (
   const smootherRef = useRef<PredictionSmoother | null>(null);
   const motionDetectorRef = useRef<MotionDetector | null>(null);
   const modeManagerRef = useRef<ModeManager | null>(null);
+  const priorityManagerRef = useRef<RecognitionPriorityManager | null>(null);
   const modelReadyRef = useRef(false);
   const inferenceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onPredictionRef = useRef(onPrediction);
@@ -81,13 +85,14 @@ export const useRecognition = (
       smootherRef.current = new PredictionSmoother();
       motionDetectorRef.current = new MotionDetector();
       modeManagerRef.current = new ModeManager();
+      priorityManagerRef.current = new RecognitionPriorityManager();
       modelReadyRef.current = false;
 
-      const result = await loadModel();
+      await loadModel();
 
       if (!mounted) return;
 
-      if (result.status === "ready") {
+      if (getCachedResult().status === "ready") {
         modelReadyRef.current = true;
 
         setState({ stage: "predicting", result: null });
@@ -104,7 +109,9 @@ export const useRecognition = (
           const { sample, usedEarly, frameCount } = bufferRef.current.adaptiveSample(EARLY_CONFIDENCE_THRESHOLD);
           if (!sample) return;
 
-            const inferStart = performance.now();
+          if (DEBUG) console.log(`[PIPELINE:Infer] ${frameCount} frames (early=${usedEarly})`);
+
+          const inferStart = performance.now();
 
           try {
             const temporalResult = await infer(sample);
@@ -117,14 +124,27 @@ export const useRecognition = (
               lastUiUpdateRef.current = performance.now();
             }
 
+            if (DEBUG) {
+              console.log(`[INFER] label="${temporalResult.label}" conf=${temporalResult.confidence.toFixed(4)} top3=[${temporalResult.topK.slice(0,3).map(k => `${k.label}:${k.confidence.toFixed(3)}`).join(', ')}]`);
+            }
+
             const translated = translateResult(temporalResult);
             const smoothed = smootherRef.current?.smooth(translated) ?? translated;
 
+            const motionState = motionDetectorRef.current?.getState() ?? "idle";
+            const gesturePhase = motionDetectorRef.current?.getPhase() ?? "none";
+            const priorityApplied = priorityManagerRef.current?.applyPriority(
+              smoothed, motionState, gesturePhase, frameCount
+            ) ?? smoothed;
+            const prioritized = priorityManagerRef.current?.applyBoost(
+              priorityApplied, motionState, gesturePhase
+            ) ?? priorityApplied;
+
             const result: RealPredictionResult = {
-              label: smoothed.label,
-              confidence: smoothed.confidence,
-              topK: smoothed.topK,
-              category: getRecognitionCategory(smoothed),
+              label: prioritized.label,
+              confidence: prioritized.confidence,
+              topK: prioritized.topK,
+              category: getRecognitionCategory(prioritized),
               recognitionSource: "temporal",
             };
 
@@ -170,7 +190,7 @@ export const useRecognition = (
       } else {
         setState({
           stage: "error",
-          message: result.error ?? "Failed to load recognition model"
+          message: getCachedResult().error ?? "Failed to load recognition model"
         });
       }
     };
@@ -191,7 +211,12 @@ export const useRecognition = (
       const now = performance.now();
       if (bufferRef.current) {
         bufferRef.current.append(left, right);
-        // Debounce buffer length updates to reduce re-renders
+        if (DEBUG) {
+          const len = bufferRef.current.length;
+          if (len === 1 || len === 5 || len % 10 === 0) {
+            console.log(`[PIPELINE:Buffer] ${len} frames | left=${left ? "filled" : "null"} right=${right ? "filled" : "null"}`);
+          }
+        }
         if (now - lastUiUpdateRef.current > UI_UPDATE_INTERVAL_MS) {
           setBufferLength(bufferRef.current.length);
         }

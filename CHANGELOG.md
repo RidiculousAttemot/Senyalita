@@ -1,5 +1,68 @@
 # Changelog
 
+## [v2.3.0] — 2026-07-03
+
+### Fixed — Mirror Augmentation Bug
+- **Critical bug in `scripts/augment-unified-data.mjs`**: `augmentMirror` had wrong stride (`i+=2` instead of `i+=3`), wrong range (`i<66` instead of `i<126`), and missing hand-slot swap. Replaced with `mirrorAndSwapHand` that correctly negates x at stride 3, covers all 126 features, and swaps left/right hand slots.
+- **Build dedup key**: Added `augmentationPreset` to dedup key so augmented samples aren't discarded.
+- **Streaming NDJSON output**: Augment script now writes NDJSON instead of single JSON to avoid Node string size limit.
+- **Retrained v4 model** with corrected mirror augmentation (80 epochs, 48 hidden BiLSTM, 35 temporal steps).
+
+### Results
+- Test accuracy: 93.99% (vs 94.81% old) — slight drop from 2.8× larger dataset
+- Macro F1: **94.10%** (vs 89.51% old) — **+4.6pp improvement** in per-class balance
+- Dataset: 51,192 samples (up from 18,303), 131 classes
+- Mirror augmentation now correctly teaches hand-dominance invariance
+
+## [v2.2.0] — 2026-06-28
+
+### Added (Phase 44 — Active Learning & Dataset Expansion)
+- **Error Analysis Engine**: `src/features/analytics/errorAnalysis.ts` — confusion pair detection, unstable gesture ranking, environmental/signer trends, weekly auto-reports
+- **Dataset Expansion Engine**: `src/features/analytics/datasetExpansion.ts` — gesture recommendation by F1 score, confidence, sample gap, correction rate
+- **Dataset Quality Inspector**: `src/features/analytics/datasetQuality.ts` — 6-dimension quality scoring (0-100) for uploaded samples with configurable threshold
+- **Gesture Clustering Engine**: `src/features/analytics/gestureClustering.ts` — K-Means++ clustering, variation classification (natural/signer/regional/camera)
+- **Drift Detector**: `src/features/analytics/driftDetection.ts` — 6-metric drift monitoring with warning (10%) and critical (20%) thresholds, daily snapshots
+- **Retraining Manager**: `src/features/analytics/retrainingManager.ts` — 6-stage safe retraining workflow with rollback support
+- **Active Learning Dashboard**: `/admin/active-learning` — 5 tabs (Overview, Dataset Recommendations, Quality Inspector, Gesture Clusters, Drift Detection)
+- **Research Insights Dashboard**: `/admin/research-insights` — 5 tabs (Dataset Growth, Confidence Trends, Gesture Popularity, Translation Trends, Export)
+- **5 docs**: `docs/active-learning-system.md`, `docs/dataset-quality-engine.md`, `docs/drift-detection.md`, `docs/retraining-workflow.md`, `docs/research-dashboard.md`, `docs/phase44-results.md`
+- **3 evaluation scripts**: `scripts/evaluate-active-learning.mjs`, `scripts/evaluate-drift.mjs`, `scripts/evaluate-dataset-quality.mjs`
+- **Admin nav**: Links to `/admin/active-learning` and `/admin/research-insights`
+
+## [v2.1.0] — 2026-06-28
+
+### Added (Phase 43 — Complete Kaggle Dataset Integration)
+- **Kaggle FSL landmark extraction**: Extracted 10,865 MediaPipe landmarks from 11,700 Kaggle JPGs via Puppeteer + browser MediaPipe (92.9% success rate)
+- **Kaggle landmark audit**: `scripts/audit-kaggle-landmarks.mjs` validates sample count, NaN values, duplicates, class imbalance
+- **Combined dataset**: `datasets/processed/fsl_alphabet_combined/` — 11,422 samples (557 custom + 10,865 Kaggle), 26 classes, 1.36x imbalance
+- **Retrained alphabet model**: BiLSTM v2 trained on combined dataset — 95.63% test accuracy, saved at `models/fsl_alphabet_v2/`
+- **Infrastructure**: MediaPipe `hand_landmarker.task` downloaded, Kaggle cache linked via junctions, `selfsigned` dependency installed
+- **4 docs**: `docs/kaggle-landmark-audit.md`, `docs/final-training-dataset.md`, `docs/alphabet-model-comparison.md`, `docs/phase43-results.md`
+
+### Added (Phase 43b — Multi-Word FSL Translation & Animation Enhancement)
+- **Gloss translator rewrite**: `src/features/text-to-sign/glossTranslator.ts` now delegates to `fsl-translation` engine (35+ grammar rules, intent detection, language detection)
+- **Morphology simplification**: `src/features/text-to-sign/fallback.ts` — `simplifyMorphology()` strips -ing, -s, -ed, -ly, -tion suffixes before fingerspelling
+- **Animation sequencer**: `src/features/text-to-sign/animationSequencer.ts` — merges compatible adjacent gestures, avoids inter-gloss pauses within phrases
+- **Pause engine**: `src/features/text-to-sign/pauseEngine.ts` — punctuation-aware pauses (commas 0.35s, sentences 0.8s, ?/! 0.5–0.6s)
+- **Confidence indicator**: `src/features/text-to-sign/confidenceIndicator.ts` — per-word + overall confidence with color-coded UI
+- **Expression system expansion**: `src/features/sign-animation/engine/nonManualFeatures.ts` — 20 expression profiles (from 12), 40+ gesture→expression mappings
+- **Translation dictionary CRUD**: `/admin/translation` — add/delete/edit entries, category filter, sort, JSON import/export
+- **Enhanced explainer**: `src/features/recognition/explainer.ts` — `generateReport()`, `assessMotionQuality()`, `ExplanationReport` type
+- **4 docs**: `docs/fsl-sentence-translation.md`, `docs/gloss-generation.md`, `docs/avatar-expression-system.md`, `docs/translation-confidence.md`
+- **1 evaluation script**: `scripts/evaluate-fsl-translation.mjs`
+- **Phase 43 results**: `docs/phase43-results.md`
+
+### Decision
+- **Kaggle FSL landmark extraction**: Extracted 10,865 MediaPipe landmarks from 11,700 Kaggle JPGs via Puppeteer + browser MediaPipe (92.9% success rate)
+- **Kaggle landmark audit**: `scripts/audit-kaggle-landmarks.mjs` validates sample count, NaN values, duplicates, class imbalance
+- **Combined dataset**: `datasets/processed/fsl_alphabet_combined/` — 11,422 samples (557 custom + 10,865 Kaggle), 26 classes, 1.36x imbalance
+- **Retrained alphabet model**: BiLSTM v2 trained on combined dataset — 95.63% test accuracy, saved at `models/fsl_alphabet_v2/`
+- **Infrastructure**: MediaPipe `hand_landmarker.task` downloaded, Kaggle cache linked via junctions, `selfsigned` dependency installed
+- **4 docs**: `docs/kaggle-landmark-audit.md`, `docs/final-training-dataset.md`, `docs/alphabet-model-comparison.md`, `docs/phase43-results.md`
+
+### Decision
+- **Not deployed** to production — new model (95.63%) underperforms current production (98.15%) on test accuracy
+
 ## [v2.0.0] — 2026-06-09
 
 ### Added (Phase 19 — Role-Based UX Refactor)

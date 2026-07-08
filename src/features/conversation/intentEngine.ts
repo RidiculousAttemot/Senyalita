@@ -12,6 +12,13 @@ const INTENT_KEYWORDS: Record<ConversationIntent, string[]> = {
   Healthcare: ["doctor", "nurse", "hospital", "clinic", "medicine", "sick", "pain", "fever", "cold", "flu", "checkup", "health", "dentist", "pharmacy"],
   Education: ["school", "teacher", "student", "class", "lesson", "study", "learn", "exam", "test", "homework", "book", "read", "write", "university", "college"],
   Transportation: ["car", "bus", "jeepney", "tricycle", "taxi", "train", "airport", "station", "ticket", "fare", "destination", "go", "come", "travel", "ride"],
+  Confirmation: ["yes", "no", "correct", "wrong", "understand", "don't understand", "agree", "confirm"],
+  Time: ["today", "tomorrow", "yesterday", "now", "later", "soon", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "time", "schedule"],
+  Description: ["hot", "cold", "slow", "fast", "light", "dark", "big", "small", "good", "bad", "beautiful", "ugly", "old", "new"],
+  Color: ["red", "blue", "green", "yellow", "orange", "brown", "black", "white", "gray", "pink", "violet", "color"],
+  Family: ["father", "mother", "son", "daughter", "grandfather", "grandmother", "uncle", "auntie", "cousin", "parents", "family", "sibling"],
+  Number: ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "number", "count"],
+  Drink: ["water", "juice", "milk", "coffee", "tea", "beer", "wine", "drink", "beverage"],
   Unknown: [],
 };
 

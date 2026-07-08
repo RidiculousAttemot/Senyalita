@@ -17,6 +17,16 @@ export type PredictionExplanationInput = {
   smoothedLabel: string | null;
 };
 
+export interface ExplanationReport {
+  input: PredictionExplanationInput;
+  result: ExplanationResult;
+  competitorAnalysis: Array<{ label: string; confidence: number; gap: number }>;
+  motionQuality: { score: number; description: string };
+  landmarkCompleteness: number;
+  recognitionTimeline: Array<{ time: number; label: string; confidence: number }>;
+  timestamp: string;
+}
+
 const HIGH_CONFIDENCE_THRESHOLD = 0.8;
 const LOW_CONFIDENCE_THRESHOLD = 0.5;
 const MOTION_ACTIVITY_THRESHOLD = 0.02;
@@ -141,5 +151,50 @@ export class PredictionExplainer {
     }
 
     return null;
+  }
+
+  generateReport(input: PredictionExplanationInput): ExplanationReport {
+    const result = this.explain(input);
+
+    const competitorAnalysis = input.topK.slice(0, 5).map((item) => ({
+      label: item.label,
+      confidence: item.confidence,
+      gap: input.confidence - item.confidence,
+    }));
+
+    const motionQuality = this.assessMotionQuality(input);
+
+    const landmarkCompleteness = input.bufferLength > 30 ? 1
+      : input.bufferLength > 20 ? 0.8
+      : input.bufferLength > 10 ? 0.5
+      : 0.3;
+
+    const recognitionTimeline: Array<{ time: number; label: string; confidence: number }> = [
+      { time: 0, label: input.label, confidence: input.confidence },
+    ];
+    if (input.smoothedLabel && input.smoothedLabel !== input.label) {
+      recognitionTimeline.push({ time: 1, label: input.smoothedLabel, confidence: input.confidence * 0.9 });
+    }
+
+    return {
+      input,
+      result,
+      competitorAnalysis,
+      motionQuality,
+      landmarkCompleteness,
+      recognitionTimeline,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  private assessMotionQuality(input: PredictionExplanationInput): { score: number; description: string } {
+    if (input.motionScore > 0.05) return { score: 0.9, description: "Good motion quality — clear gesture movement detected" };
+    if (input.motionScore > 0.02) return { score: 0.6, description: "Moderate motion — some movement detected" };
+    if (input.motionScore > 0.01) return { score: 0.4, description: "Low motion — minimal hand movement detected" };
+    return { score: 0.2, description: "Very low motion — gesture may be still or incomplete" };
+  }
+
+  exportReportJson(input: PredictionExplanationInput): string {
+    return JSON.stringify(this.generateReport(input), null, 2);
   }
 }

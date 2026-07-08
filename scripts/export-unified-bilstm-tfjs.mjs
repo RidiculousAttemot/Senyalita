@@ -2,9 +2,8 @@ import fs from "fs";
 import path from "path";
 import * as tf from "@tensorflow/tfjs";
 
-const INPUT_DIR = path.join(process.cwd(), "models", "fsl_unified", "bilstm");
+const INPUT_DIR = path.join(process.cwd(), "models", "fsl_unified", "bilstm_v4");
 const OUTPUT_DIR = path.join(process.cwd(), "public", "models", "fsl_unified", "bilstm_tfjs");
-const TEMPORAL_STEPS = 30;
 const FEATURE_DIMENSION = 126;
 
 const readJson = (filePath) => JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -19,6 +18,7 @@ const main = async () => {
   const w = bilstmModel.weights;
 
   const HIDDEN_SIZE = config.architecture.recurrentLayers[0].hiddenSize;
+  const TEMPORAL_STEPS = config.architecture.recurrentLayers[0].temporalSteps;
   const COMBINED_SIZE = config.architecture.combinedSize;
   const OUTPUT_CLASSES = config.architecture.classifier.outputClasses;
 
@@ -33,7 +33,8 @@ const main = async () => {
     mergeMode: "concat"
   }));
 
-  model.add(tf.layers.dropout({ rate: 0.2 }));
+  const DROPOUT_RATE = config.architecture.recurrentLayers[0].dropout ?? 0.25;
+  model.add(tf.layers.dropout({ rate: DROPOUT_RATE }));
 
   model.add(tf.layers.dense({
     units: OUTPUT_CLASSES,
