@@ -29,7 +29,7 @@ export const UserSidebar = ({ children }: { children: React.ReactNode }) => {
       <aside className={`sidebar ${collapsed ? "sidebar-collapsed" : ""} ${mobileOpen ? "sidebar-mobile-open" : ""}`}>
         <div className="sidebar-header">
           <Link href="/translate" className="sidebar-brand">
-            {collapsed ? "SLV" : "SignLangVisual"}
+            {collapsed ? "SNY" : "Senyalita"}
           </Link>
           <button
             className="sidebar-toggle"

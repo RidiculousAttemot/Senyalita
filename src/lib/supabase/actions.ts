@@ -3,7 +3,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "./server";
 import {
   appendLog,
@@ -23,8 +22,16 @@ export const signInWithPassword = async (formData: FormData) => {
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: error.message };
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user?.app_metadata?.role !== "admin") {
+    await supabase.auth.signOut();
+    return { error: "Access denied. This account does not have admin privileges." };
+  }
+
   revalidatePath("/", "layout");
-  redirect(next && next.startsWith("/") && !next.startsWith("//") ? next : "/admin");
+  const redirectTo = next && next.startsWith("/") && !next.startsWith("//") ? next : "/admin";
+  return { success: true as const, redirectTo };
 };
 
 export interface RecordPredictionActionInput {

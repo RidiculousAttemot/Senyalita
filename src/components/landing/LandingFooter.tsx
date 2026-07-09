@@ -8,7 +8,7 @@ export default function LandingFooter() {
 
   return (
     <footer className={`${styles.footer} ${inView ? styles.visible : ''}`} ref={ref}>
-      <p>SIGNWITHUS — Thesis Project</p>
+      <p>Senyalita — thesis project</p>
       <p className={styles.sub}>Built with open-source pose estimation · Hand tracking runs locally</p>
     </footer>
   );

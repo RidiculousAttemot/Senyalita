@@ -1,9 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { signInWithPassword } from "@/lib/supabase/actions";
 
-type FormState = { error?: string } | null;
+type FormState = { error?: string; success?: boolean; redirectTo?: string } | null;
 
 const initialState: FormState = null;
 
@@ -19,16 +20,19 @@ const SubmitButton = () => {
 export default function AdminLoginForm() {
   const [state, formAction] = useFormState<FormState, FormData>(
     async (_prev: FormState, formData: FormData) => {
-      formData.set("next", "/admin");
-      return (await signInWithPassword(formData)) ?? null;
+      return await signInWithPassword(formData);
     },
     initialState
   );
 
+  useEffect(() => {
+    if (state?.success && state.redirectTo) {
+      window.location.href = state.redirectTo;
+    }
+  }, [state]);
+
   return (
     <form className="auth-form" action={formAction}>
-      <h1>Admin Login</h1>
-
       {state?.error && <p className="auth-error">{state.error}</p>}
 
       <label className="auth-field">

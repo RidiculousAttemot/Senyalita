@@ -8,7 +8,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 40px;
-  background: rgba(237, 232, 223, 0);
+  background: rgba(246, 251, 252, 0);
   backdrop-filter: blur(0px);
   transition:
     background 0.4s var(--ease-smooth),
@@ -18,10 +18,10 @@
 }
 
 .scrolled {
-  background: rgba(237, 232, 223, 0.85);
+  background: rgba(246, 251, 252, 0.9);
   backdrop-filter: blur(14px);
   padding: 12px 40px;
-  box-shadow: 0 1px 24px rgba(28, 26, 23, 0.06);
+  box-shadow: 0 1px 24px rgba(15, 23, 42, 0.06);
 }
 
 .brand {
@@ -43,7 +43,7 @@
 .iconBox {
   width: 36px;
   height: 36px;
-  background: #1C1A17;
+  background: var(--lp-primary);
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -54,7 +54,7 @@
 
 .brand:hover .iconBox {
   border-radius: 12px;
-  background: var(--lp-primary);
+  background: var(--lp-primary-lt);
 }
 
 .iconBox svg {
@@ -121,13 +121,13 @@
     background 0.3s var(--ease-smooth),
     transform 0.3s var(--ease-spring),
     box-shadow 0.3s var(--ease-smooth);
-  box-shadow: 0 2px 8px rgba(139, 58, 31, 0.2);
+  box-shadow: 0 2px 8px rgba(23, 110, 117, 0.2);
 }
 
 .cta:hover {
   background: var(--lp-primary-lt);
   transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 6px 20px rgba(139, 58, 31, 0.3);
+  box-shadow: 0 6px 20px rgba(23, 110, 117, 0.24);
 }
 
 .cta:active {

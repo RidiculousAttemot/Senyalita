@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "SignLangVisual",
-  description: "Web-based FSL recognition system"
+  title: "Senyalita",
+  description: "Filipino Sign Language recognition and learning assistant"
 };
 
 export default function RootLayout({

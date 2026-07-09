@@ -259,7 +259,7 @@ export default function TranslatePage() {
               <path d="M19 12H5M12 19l-7-7 7-7"/>
             </svg>
           </Link>
-          <Link href="/" className={styles.brand}>SIGNWITHUS</Link>
+          <Link href="/" className={styles.brand}>Senyalita</Link>
         </div>
 
         <div className={styles.navCenter}>

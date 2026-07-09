@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { cookies, headers } from "next/headers";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -42,71 +41,35 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get("admin_session")?.value;
-  const expectedToken = process.env.ADMIN_PASSWORD
-    ? hashToken(process.env.ADMIN_PASSWORD)
-    : null;
-
-  // Login route must stay public to avoid redirect loops.
-  const headersList = await headers();
-  const currentPath = headersList.get("x-pathname") || "";
-  const isLoginPage =
-    currentPath === "/admin/login" || currentPath.startsWith("/admin/login/");
-
-  const isAuthenticated = !!(
-    sessionToken &&
-    expectedToken &&
-    sessionToken === expectedToken
-  );
-
-  if (!isAuthenticated && !isLoginPage) {
-    if (process.env.NODE_ENV === "development") {
-      const adminPasswordSet = !!process.env.ADMIN_PASSWORD;
-      if (!adminPasswordSet) {
-        redirect("/admin/login?setup=1");
-      }
-    }
-    redirect("/admin/login");
-  }
-
-  const isLocalDev = process.env.NODE_ENV === "development";
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const isAuthenticated = user?.app_metadata?.role === "admin";
 
   return (
-    <main className="page">
-      <div
-        style={{
-          background: "#f59e0b",
-          color: "#1e293b",
-          padding: "8px 16px",
-          textAlign: "center",
-          fontSize: 13,
-          fontWeight: 600,
-        }}
-      >
-        Local developer admin only. No production authentication/backend yet.
-      </div>
-      <div className="admin-header">
-        <h1>Admin</h1>
-        <nav className="admin-nav">
-          {NAV_ITEMS.map((item) => (
-            <Link key={item.href} className="admin-nav-link" href={item.href}>
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-      </div>
-      {children}
-    </main>
-  );
-}
+    <div className="admin-root-shell">
+      <header className="admin-root-header">
+        <div>
+          <p className="admin-kicker">Senyalita admin</p>
+          <h1>Compact admin workspace</h1>
+          <p className="panel-note">
+            {isAuthenticated
+              ? `Signed in as ${user?.email ?? "admin"} with Supabase role metadata.`
+              : "Supabase admin sign-in is required to open the dashboard."}
+          </p>
+        </div>
+        <div className="admin-root-actions">
+          <span className={`status ${isAuthenticated ? "status-hand-1" : "status-no-hand"}`}>
+            {isAuthenticated ? "Authenticated" : "Locked"}
+          </span>
+          <Link className="button button-secondary admin-compact-button" href="/admin/logout">
+            Logout
+          </Link>
+        </div>
+      </header>
 
-function hashToken(value: string): string {
-  let hash = 0;
-  for (let i = 0; i < value.length; i++) {
-    const char = value.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0;
-  }
-  return "admin_" + Math.abs(hash).toString(36);
+      {children}
+    </div>
+  );
 }

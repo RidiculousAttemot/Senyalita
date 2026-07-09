@@ -1,10 +1,10 @@
 // Middleware helper: keep the Supabase session cookie fresh on every request.
 // Called from src/middleware.ts (Next.js middleware) for protected routes.
 //
-// Admin routes are NOT listed here — the admin layout (`src/app/admin/layout.tsx`)
-// handles auth via the `admin_session` cookie / ADMIN_PASSWORD, which is a
-// different auth mechanism from Supabase.  Including `/admin` here would cause
-// a redirect loop because the middleware would redirect `/admin/login` to itself.
+// Admin routes are handled directly in `src/middleware.ts` (not here), using
+// the same Supabase session with an `app_metadata.role === "admin"` check.
+// They are not listed in PROTECTED_PREFIXES because the admin middleware logic
+// lives in the main middleware file to avoid a redirect loop on `/admin/login`.
 
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";

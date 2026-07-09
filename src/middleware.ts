@@ -1,27 +1,40 @@
-// Next.js middleware: refreshes the Supabase session on every request and
-// gates protected routes that require a Supabase session.
-//
-// Admin routes are NOT gated here — the admin layout
-// (`src/app/admin/layout.tsx`) handles auth via the `admin_session` cookie /
-// ADMIN_PASSWORD, using a different auth mechanism.
-//
-// Auth gate: an unauthenticated visitor hitting a protected path is sent
-// to /login?next=<original>.
-
 import { NextResponse, type NextRequest } from "next/server";
 import { isProtectedPath, updateSupabaseSession } from "@/lib/supabase/middleware";
+
+const isPublicAdminPath = (pathname: string) =>
+  pathname === "/admin/login" ||
+  pathname === "/admin/logout";
+
+const isAdminPath = (pathname: string) => pathname === "/admin" || pathname.startsWith("/admin/");
+
+const isProtectedAdminPath = (pathname: string) => isAdminPath(pathname) && !isPublicAdminPath(pathname);
 
 export const middleware = async (request: NextRequest) => {
   const { response, user } = await updateSupabaseSession(request);
   const { pathname, search } = request.nextUrl;
 
-  // Expose the current pathname to layouts (e.g. admin layout) via a custom
-  // header so they can conditionally skip their own auth checks.
-  response.headers.set("x-pathname", pathname);
+  if (isAdminPath(pathname)) {
+    const isAuthenticated = user?.app_metadata?.role === "admin";
+
+    if (pathname === "/admin/login" && isAuthenticated) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+
+    if (isProtectedAdminPath(pathname) && !isAuthenticated) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin/login";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+  }
 
   if (!user && isProtectedPath(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/admin/login";
+    url.search = "";
     return NextResponse.redirect(url);
   }
 
