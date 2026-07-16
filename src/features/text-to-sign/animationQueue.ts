@@ -3,7 +3,36 @@ import { createAnimationClip } from "@/features/gesture-mapping";
 import { mapWordToGesture } from "@/features/gesture-mapping";
 import type { GlossResult } from "./glossTranslator";
 import type { SequencedItem } from "./animationSequencer";
-import { fingerSpellAnimation, getUnknownPlaceholder } from "./fallback";
+import { fingerSpellAnimation } from "./fallback";
+
+function getUnknownPlaceholder(): any {
+  return {
+    version: 1,
+    gesture: "UNKNOWN",
+    duration: 1.0,
+    fps: 30,
+    keyframes: [{
+      time: 0,
+      pose: {
+        joints: {
+          head: { x: 0, y: -1.6, z: 0 },
+          neck: { x: 0, y: -1.2, z: 0 },
+          torso: { x: 0, y: -0.4, z: 0 },
+          leftShoulder: { x: -0.35, y: -0.5, z: 0 },
+          rightShoulder: { x: 0.35, y: -0.5, z: 0 },
+          leftElbow: { x: -0.55, y: -0.9, z: 0 },
+          rightElbow: { x: 0.55, y: -0.9, z: 0 },
+          leftWrist: { x: -0.55, y: -1.3, z: 0 },
+          rightWrist: { x: 0.55, y: -1.3, z: 0 },
+          leftHand: { x: -0.55, y: -1.4, z: 0 },
+          rightHand: { x: 0.55, y: -1.4, z: 0 },
+          leftHip: { x: -0.15, y: 0.2, z: 0 },
+          rightHip: { x: 0.15, y: 0.2, z: 0 },
+        },
+      },
+    }],
+  };
+}
 
 export interface AnimationQueueItem {
   gesture: string;
@@ -42,23 +71,11 @@ export function buildAnimationQueue(
 
     const mapping = mapWordToGesture(item.gesture.toLowerCase());
 
-    if (mapping.hasAnimation && mapping.animation) {
-      const clip = createAnimationClip(mapping.gloss, mapping.animation, i);
-      queue.push({
-        gesture: mapping.gloss,
-        original: item.original,
-        clip,
-        priority: item.priority,
-        confidence: item.confidence,
-        strategy: item.strategy,
-        isPause: false,
-        pauseDuration: 0,
-      });
-    } else if (item.strategy === "fingerspelling" || mapping.isFingerSpelling) {
+    if (item.strategy === "fingerspelling" || mapping.isFingerSpelling) {
       const letter = item.original.toLowerCase();
       const spellAnim = fingerSpellAnimation(letter);
       if (spellAnim) {
-        const clip = createAnimationClip(mapping.gloss, spellAnim, i);
+        const clip = createAnimationClip(mapping.gloss, i);
         queue.push({
           gesture: mapping.gloss,
           original: item.original,
@@ -70,26 +87,13 @@ export function buildAnimationQueue(
           pauseDuration: 0,
         });
       }
-    } else if (mapping.animation) {
-      const clip = createAnimationClip(mapping.gloss, mapping.animation, i);
+    } else {
+      const clip = createAnimationClip(mapping.gloss, i);
       queue.push({
         gesture: mapping.gloss,
         original: item.original,
         clip,
-        priority: 1,
-        confidence: item.confidence,
-        strategy: item.strategy,
-        isPause: false,
-        pauseDuration: 0,
-      });
-    } else {
-      const fallbackAnim = getUnknownPlaceholder();
-      const clip = createAnimationClip("UNKNOWN", fallbackAnim, i);
-      queue.push({
-        gesture: "UNKNOWN",
-        original: item.original,
-        clip,
-        priority: 3,
+        priority: item.priority,
         confidence: item.confidence,
         strategy: item.strategy,
         isPause: false,

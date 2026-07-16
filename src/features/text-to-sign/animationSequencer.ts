@@ -1,14 +1,10 @@
 import type { GlossTranslation } from "./glossTranslator";
 import { mapWordToGesture } from "@/features/gesture-mapping";
-import { createAnimationClip } from "@/features/gesture-mapping";
 import { fingerSpellAnimation, simplifyMorphology } from "./fallback";
-import { GESTURE_ANIMATIONS, getAnimation } from "@/features/animation/gestureAnimations";
-import type { GestureAnimation } from "@/features/animation/types";
 
 export interface SequencedItem {
   gesture: string;
   original: string;
-  animation: GestureAnimation | null;
   priority: number;
   confidence: number;
   strategy: string;
@@ -49,28 +45,13 @@ export function buildSequence(
     const g = glossSequence[i];
     const mapping = mapWordToGesture(g.gloss.toLowerCase());
 
-    let anim: GestureAnimation | null = null;
     let isPause = false;
     let pauseDuration = 0;
-    let priority = 1;
-
-    if (mapping.hasAnimation && mapping.animation) {
-      anim = mapping.animation;
-      priority = 0;
-    } else if (g.strategy === "fingerspelling" || mapping.isFingerSpelling) {
-      const letter = g.gloss.toLowerCase();
-      const spellAnim = fingerSpellAnimation(letter);
-      if (spellAnim) {
-        anim = spellAnim;
-        priority = 2;
-      }
-    }
 
     items.push({
       gesture: mapping.gloss,
       original: g.original,
-      animation: anim,
-      priority,
+      priority: g.strategy === "fingerspelling" || mapping.isFingerSpelling ? 2 : 0,
       confidence: g.confidence,
       strategy: g.strategy,
       isPause: false,
@@ -85,7 +66,6 @@ export function buildSequence(
         items.push({
           gesture: "PAUSE",
           original: "",
-          animation: null,
           priority: -1,
           confidence: 1,
           strategy: "pause",

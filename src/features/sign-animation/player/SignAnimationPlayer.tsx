@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState, useCallback, memo } from "react";
+import React, { useEffect, useRef, useState, useCallback, memo, forwardRef, useImperativeHandle } from "react";
 import { PlaybackEngine } from "./PlaybackEngine";
 import { AdvancedCanvasRenderer } from "../renderer/AdvancedCanvasRenderer";
 import type { AdvancedRendererOptions } from "../renderer/AdvancedCanvasRenderer";
@@ -11,6 +11,14 @@ import { NonManualController } from "../engine/nonManualFeatures";
 import { PerformanceOptimizer } from "./performanceOptimizer";
 import type { AnimationClip, PlaybackState, AvatarTheme, GestureAnimationAsset } from "../types";
 import { AVATAR_THEMES } from "../types";
+
+export interface SignAnimationPlayerHandle {
+  play: () => void;
+  pause: () => void;
+  replay: () => void;
+  stop: () => void;
+  getPlayState: () => PlaybackState;
+}
 
 interface SignAnimationPlayerProps {
   clips: AnimationClip[];
@@ -23,11 +31,12 @@ interface SignAnimationPlayerProps {
   showNonManual?: boolean;
   showLabels?: boolean;
   highContrast?: boolean;
+  backgroundColor?: string;
   onComplete?: () => void;
   onGestureChange?: (gesture: string, current: number, total: number) => void;
 }
 
-const SignAnimationPlayer = memo(function SignAnimationPlayer({
+const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnimationPlayerProps>(function SignAnimationPlayer({
   clips,
   width = 320,
   height = 400,
@@ -38,9 +47,10 @@ const SignAnimationPlayer = memo(function SignAnimationPlayer({
   showNonManual = false,
   showLabels = false,
   highContrast = false,
+  backgroundColor,
   onComplete,
   onGestureChange,
-}: SignAnimationPlayerProps) {
+}: SignAnimationPlayerProps, ref) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<PlaybackEngine | null>(null);
   const rendererRef = useRef<AdvancedCanvasRenderer | null>(null);
@@ -55,11 +65,13 @@ const SignAnimationPlayer = memo(function SignAnimationPlayer({
     isPlaying: false, isPaused: false, currentTime: 0, duration: 0,
     currentGesture: null, currentIndex: 0, queueLength: 0, speed: 1, loop: false,
   });
+  const playStateRef = useRef(playState);
+  playStateRef.current = playState;
   const [fps, setFps] = useState(0);
 
   useEffect(() => {
     if (!canvasRef.current) return;
-    const bgColor = highContrast ? "#000000" : "#0f172a";
+    const bgColor = backgroundColor ?? (highContrast ? "#000000" : "#0f172a");
     const renderer = new AdvancedCanvasRenderer(canvasRef.current, {
       width, height, theme, showLabels, showNonManual,
       backgroundColor: bgColor,
@@ -84,6 +96,7 @@ const SignAnimationPlayer = memo(function SignAnimationPlayer({
     engine.setCallbacks({
       onFrame: (frame, time, clip) => {
         perf.recordFrame(performance.now());
+        setPlayState((prev) => ({ ...prev, currentTime: time }));
 
         const gestureLabel = clip?.gesture ?? currentGestureRef.current;
         const coarticulated = coarticulation.processFrame(frame, gestureLabel, 1 / 30);
@@ -124,7 +137,7 @@ const SignAnimationPlayer = memo(function SignAnimationPlayer({
       engineRef.current = null;
       rendererRef.current = null;
     };
-  }, [onComplete, onGestureChange, width, height, theme, showLabels, showNonManual, highContrast]);
+  }, [onComplete, onGestureChange, width, height, theme, showLabels, showNonManual, highContrast, backgroundColor, speed]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -176,6 +189,27 @@ const SignAnimationPlayer = memo(function SignAnimationPlayer({
     }));
   }, []);
 
+  useImperativeHandle(ref, () => ({
+    play: () => {
+      const s = playStateRef.current;
+      if (s.isPaused) {
+        engineRef.current?.resume();
+        setPlayState((prev) => ({ ...prev, isPaused: false }));
+      } else if (!s.isPlaying) {
+        engineRef.current?.replay();
+        nonManualRef.current?.reset();
+        setPlayState((prev) => ({ ...prev, isPaused: false, isPlaying: true }));
+      }
+    },
+    pause: () => {
+      engineRef.current?.pause();
+      setPlayState((prev) => ({ ...prev, isPaused: true }));
+    },
+    replay: handleReplay,
+    stop: handleStop,
+    getPlayState: () => playStateRef.current,
+  }), [handleReplay, handleStop]);
+
   const progress = playState.duration > 0
     ? Math.min(100, (playState.currentTime / playState.duration) * 100) : 0;
   const clipCount = clips.length;
@@ -211,7 +245,7 @@ const SignAnimationPlayer = memo(function SignAnimationPlayer({
       )}
     </div>
   );
-});
+}));
 
 export { SignAnimationPlayer };
 export type { SignAnimationPlayerProps };

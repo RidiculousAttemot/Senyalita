@@ -150,29 +150,23 @@ async function main() {
       .select("*", { count: "exact", head: true })
       .eq("status", "pending");
 
-    // 7. Fetch animation manifest
+    // 7. Fetch published animation assets from the Animation Library
     let animationAssets = 0;
-    let animationTotal = 0;
+    let missingAnimations = [];
     try {
-      const manifestPath = join(__dirname, "..", "public", "animations", "manifest.json");
-      if (existsSync(manifestPath)) {
-        const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
-        animationAssets = manifest.generated ?? 0;
-        animationTotal = manifest.totalGestures ?? 0;
-      }
-    } catch {}
-
-    // 8. Animation coverage check
-    const missingAnimations = gestureList
-      .filter((g) => {
-        try {
-          const assetPath = join(__dirname, "..", "public", "animations", `${g.label}.json`);
-          return !existsSync(assetPath);
-        } catch {
-          return true;
-        }
-      })
-      .map((g) => g.label);
+      const { data: publishedVersions } = await supabase
+        .from("animation_asset_versions")
+        .select("asset_id, status")
+        .eq("status", "published");
+      const publishedAssetIds = new Set((publishedVersions ?? []).map((v) => v.asset_id));
+      const { data: allAssets } = await supabase
+        .from("animation_assets")
+        .select("id, gloss");
+      animationAssets = publishedAssetIds.size;
+      missingAnimations = (allAssets ?? [])
+        .filter((a) => !publishedAssetIds.has(a.id))
+        .map((a) => a.gloss);
+    } catch {};
 
     // 9. Compute difficulty data
     const { data: difficultyRaw } = await supabase

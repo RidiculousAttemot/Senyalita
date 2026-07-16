@@ -1,13 +1,11 @@
 import { WORD_TO_GLOSS, GLOSS_SYNONYM_NORMALIZATION, GESTURE_CATEGORIES } from "./glossDictionary";
-import { GESTURE_ANIMATIONS } from "@/features/animation/gestureAnimations";
-import { hasAnimation } from "@/features/animation/gestureAnimations";
-import type { GestureAnimation, AnimationClip } from "@/features/animation/types";
+import type { AnimationClip } from "@/features/animation/types";
 
 export interface GestureMappingResult {
   gloss: string;
   category: string;
-  animation: GestureAnimation | null;
-  hasAnimation: boolean;
+  animation: null;
+  hasAnimation: false;
   isFingerSpelling: boolean;
   label: string;
 }
@@ -55,29 +53,27 @@ export function mapWordToGesture(word: string): GestureMappingResult {
   }
 
   const normalizedGloss = GLOSS_SYNONYM_NORMALIZATION[gloss] ?? gloss;
-  const animation = GESTURE_ANIMATIONS[normalizedGloss] ?? null;
   const category = GESTURE_CATEGORIES[normalizedGloss] ?? "general";
   const isLetter = isAlphabet(normalizedGloss);
 
   return {
     gloss: normalizedGloss,
     category,
-    animation,
-    hasAnimation: animation !== null,
-    isFingerSpelling: isLetter && animation === null,
+    animation: null,
+    hasAnimation: false,
+    isFingerSpelling: isLetter,
     label: normalizedGloss,
   };
 }
 
 export function createAnimationClip(
   gestureLabel: string,
-  animation: GestureAnimation,
   index: number,
 ): AnimationClip {
   return {
     id: `anim-${gestureLabel}-${index}-${Date.now()}`,
     gesture: gestureLabel,
-    animation,
+    animation: null as any,
     metadata: {
       label: gestureLabel,
       category: isAlphabet(gestureLabel) ? "alphabet" : "phrase",
@@ -85,10 +81,6 @@ export function createAnimationClip(
       meaning: gestureLabel,
     },
   };
-}
-
-export function getAvailableGestures(): string[] {
-  return Object.keys(GESTURE_ANIMATIONS);
 }
 
 export function getAllGestureLabels(): string[] {

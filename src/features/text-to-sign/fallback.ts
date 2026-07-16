@@ -98,16 +98,4 @@ export function fingerSpellAnimation(letter: string): GestureAnimation | null {
   return FINGER_SPELL_ANIMATIONS[key] ?? null;
 }
 
-export function getUnknownPlaceholder(): GestureAnimation {
-  return {
-    version: 1,
-    gesture: "???",
-    duration: 0.8,
-    fps: 30,
-    keyframes: [
-      { time: 0, pose: { joints: { head: { x: 0, y: -1.6, z: -0.1 }, neck: { x: 0, y: -1.2, z: 0 }, torso: { x: 0, y: -0.4, z: 0 }, leftShoulder: { x: -0.35, y: -0.5, z: 0 }, rightShoulder: { x: 0.35, y: -0.5, z: 0 }, leftElbow: { x: -0.55, y: -0.9, z: 0 }, rightElbow: { x: 0.55, y: -0.9, z: 0 }, leftWrist: { x: -0.55, y: -1.3, z: 0 }, rightWrist: { x: 0.55, y: -1.3, z: 0 }, leftHand: { x: -0.55, y: -1.4, z: 0 }, rightHand: { x: 0.55, y: -1.4, z: 0 }, leftHip: { x: -0.15, y: 0.2, z: 0 }, rightHip: { x: 0.15, y: 0.2, z: 0 } } } },
-      { time: 0.4, pose: { joints: { head: { x: 0.05, y: -1.6, z: 0 }, neck: { x: 0, y: -1.2, z: 0 }, torso: { x: 0, y: -0.4, z: 0 }, leftShoulder: { x: -0.35, y: -0.5, z: 0 }, rightShoulder: { x: 0.4, y: -0.5, z: 0 }, leftElbow: { x: -0.55, y: -0.9, z: 0 }, rightElbow: { x: 0.6, y: -0.7, z: 0 }, leftWrist: { x: -0.55, y: -1.3, z: 0 }, rightWrist: { x: 0.45, y: -1.0, z: 0 }, leftHand: { x: -0.55, y: -1.4, z: 0 }, rightHand: { x: 0.4, y: -1.1, z: 0 }, leftHip: { x: -0.15, y: 0.2, z: 0 }, rightHip: { x: 0.15, y: 0.2, z: 0 } } } },
-      { time: 0.8, pose: { joints: { head: { x: 0, y: -1.6, z: -0.1 }, neck: { x: 0, y: -1.2, z: 0 }, torso: { x: 0, y: -0.4, z: 0 }, leftShoulder: { x: -0.35, y: -0.5, z: 0 }, rightShoulder: { x: 0.35, y: -0.5, z: 0 }, leftElbow: { x: -0.55, y: -0.9, z: 0 }, rightElbow: { x: 0.55, y: -0.9, z: 0 }, leftWrist: { x: -0.55, y: -1.3, z: 0 }, rightWrist: { x: 0.55, y: -1.3, z: 0 }, leftHand: { x: -0.55, y: -1.4, z: 0 }, rightHand: { x: 0.55, y: -1.4, z: 0 }, leftHip: { x: -0.15, y: 0.2, z: 0 }, rightHip: { x: 0.15, y: 0.2, z: 0 } } } },
-    ],
-  };
-}
+

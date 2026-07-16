@@ -1,4 +1,4 @@
-export { runPipeline, preloadAnimations } from "./pipeline";
+export { runPipeline } from "./pipeline";
 export type { PipelineResult, PipelineOptions } from "./pipeline";
 export { normalizeInput } from "./normalizer";
 export type { NormalizedInput } from "./normalizer";
@@ -6,7 +6,7 @@ export { translateToGloss, getGlossConfidence } from "./glossTranslator";
 export type { GlossResult, GlossTranslation } from "./glossTranslator";
 export { buildAnimationQueue, getQueueText, getQueueDisplay } from "./animationQueue";
 export type { AnimationQueueItem } from "./animationQueue";
-export { fingerSpellAnimation, getUnknownPlaceholder, simplifyMorphology } from "./fallback";
+export { fingerSpellAnimation, simplifyMorphology } from "./fallback";
 export { buildSequence, mergeCompatibleItems } from "./animationSequencer";
 export type { SequencedItem, SequenceOptions } from "./animationSequencer";
 export { PauseEngine, globalPauseEngine } from "./pauseEngine";

@@ -1,26 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Camera, Circle, Clock3, Save, Trash2, Video } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type CaptureState = "idle" | "countdown" | "recording" | "saved" | "error";
 
 export default function AdminDatasetCapturePage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [captureState, setCaptureState] = useState<CaptureState>("idle");
   const [gestureLabel, setGestureLabel] = useState("");
   const [countdown, setCountdown] = useState(3);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [chunks, setChunks] = useState<Blob[]>([]);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [recentCaptures, setRecentCaptures] = useState<Array<{ label: string; video_url: string }>>([]);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Load recent captures
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     supabase
@@ -33,12 +32,13 @@ export default function AdminDatasetCapturePage() {
       });
   }, []);
 
-  const startCamera = async () => {
+  const startCamera = useCallback(async () => {
     try {
       const s = await navigator.mediaDevices.getUserMedia({
         video: { width: 640, height: 480 },
         audio: false,
       });
+      streamRef.current = s;
       setStream(s);
       if (videoRef.current) {
         videoRef.current.srcObject = s;
@@ -47,14 +47,15 @@ export default function AdminDatasetCapturePage() {
     } catch {
       setStatusMessage("Camera access denied.");
     }
-  };
+  }, []);
 
   useEffect(() => {
-    startCamera();
+    void startCamera();
     return () => {
-      stream?.getTracks().forEach((t) => t.stop());
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      streamRef.current?.getTracks().forEach((track) => track.stop());
     };
-  }, []);
+  }, [startCamera]);
 
   const startRecording = () => {
     if (!stream || !gestureLabel.trim()) return;
@@ -62,7 +63,6 @@ export default function AdminDatasetCapturePage() {
     setCountdown(3);
     setRecordedBlob(null);
     setPreviewUrl(null);
-    setChunks([]);
 
     countdownRef.current = setInterval(() => {
       setCountdown((c) => {
@@ -157,79 +157,63 @@ export default function AdminDatasetCapturePage() {
   };
 
   return (
-    <div>
-      <h2>Dataset Capture (Admin Only)</h2>
-      <p className="panel-note">
-        Record gesture samples for future model improvement. Each recording is 4 seconds.
-        Submissions require admin review before being added to the training dataset.
-      </p>
+    <div className="admin-capture-workspace">
+      <header className="admin-dashboard-header">
+        <div>
+          <p className="admin-overline">Recognition data</p>
+          <h1>Dataset capture</h1>
+          <p className="admin-dashboard-subtitle">
+            Record labelled gesture samples for model improvement. Every submission enters review before it can join the training dataset.
+          </p>
+        </div>
+      </header>
 
-      <div style={{ display: "flex", gap: 16, marginTop: 16 }}>
-        <div style={{ flex: 1 }}>
-          <div className="video-wrap" style={{ height: 360 }}>
-            <video ref={videoRef} className="video" playsInline muted />
+      <section className="admin-capture-facts" aria-label="Capture workflow facts">
+        <div><Clock3 size={16} aria-hidden="true" /><span><strong>4 seconds</strong><small>Recording window</small></span></div>
+        <div><Circle size={16} aria-hidden="true" /><span><strong>Review required</strong><small>Samples remain pending until approved</small></span></div>
+        <div><Video size={16} aria-hidden="true" /><span><strong>WebM output</strong><small>Stored in the gesture video library</small></span></div>
+      </section>
+
+      <div className="admin-capture-grid">
+        <section className="admin-panel admin-capture-camera-panel">
+          <div className="admin-panel-heading">
+            <div>
+              <p className="admin-overline">Live camera</p>
+              <h2>Record a labelled sample</h2>
+            </div>
+            <span className={`admin-status ${stream ? "admin-status-healthy" : "admin-status-unknown"}`}>
+              <span className="admin-status-dot" aria-hidden="true" />
+              {stream ? "Camera ready" : "Waiting for camera"}
+            </span>
+          </div>
+
+          <div className="admin-capture-video-wrap">
+            <video ref={videoRef} className="admin-capture-video" playsInline muted />
             {captureState === "countdown" && (
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: "rgba(0,0,0,0.6)",
-                  fontSize: 72,
-                  fontWeight: 700,
-                  color: "#22c55e",
-                }}
-              >
-                {countdown}
-              </div>
+              <div className="admin-capture-countdown" aria-live="polite">{countdown}</div>
             )}
             {captureState === "recording" && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: 12,
-                  right: 12,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  background: "rgba(239,68,68,0.8)",
-                  padding: "4px 12px",
-                  borderRadius: 8,
-                  color: "#fff",
-                  fontSize: 14,
-                }}
-              >
-                <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#fff" }} />
-                REC
-              </div>
+              <span className="admin-capture-recording"><span aria-hidden="true" />REC</span>
             )}
           </div>
 
           {previewUrl && (
-            <div className="panel" style={{ marginTop: 8, padding: 8 }}>
-              <video src={previewUrl} controls style={{ width: "100%", borderRadius: 8 }} />
+            <div className="admin-capture-preview">
+              <video src={previewUrl} controls />
             </div>
           )}
 
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-            <input
-              type="text"
-              value={gestureLabel}
-              onChange={(e) => setGestureLabel(e.target.value.toUpperCase())}
-              placeholder="Gesture label (e.g. HELLO)"
-              style={{
-                flex: 1,
-                padding: "8px 12px",
-                borderRadius: 8,
-                border: "1px solid #444",
-                background: "#1a1a2e",
-                color: "#fff",
-                fontSize: 14,
-              }}
-              list="gesture-suggestions"
-            />
+          <div className="admin-capture-controls">
+            <label className="admin-capture-label" htmlFor="gesture-label">Gesture label</label>
+            <div className="admin-capture-input-row">
+              <input
+                id="gesture-label"
+                type="text"
+                value={gestureLabel}
+                onChange={(event) => setGestureLabel(event.target.value.toUpperCase())}
+                placeholder="Gesture label (e.g. HELLO)"
+                list="gesture-suggestions"
+              />
             <datalist id="gesture-suggestions">
               {["HELLO", "THANK YOU", "GOOD MORNING", "HOW ARE YOU", "YES", "NO", "HELP", "GOODBYE", "PLEASE", "SORRY"].map(
                 (g) => (
@@ -239,49 +223,58 @@ export default function AdminDatasetCapturePage() {
             </datalist>
 
             {captureState === "idle" && (
-              <button className="button" disabled={!gestureLabel.trim() || !stream} onClick={startRecording}>
-                Record
+              <button className="admin-capture-button admin-capture-button-primary" disabled={!gestureLabel.trim() || !stream} onClick={startRecording}>
+                <Camera size={16} aria-hidden="true" />Record
               </button>
             )}
             {captureState === "recording" && (
-              <button className="button button-secondary" onClick={stopRecording}>
-                Stop
+              <button className="admin-capture-button" onClick={stopRecording}>
+                <Circle size={16} aria-hidden="true" />Stop
               </button>
             )}
             {captureState === "saved" && (
-              <button className="button" disabled={isSubmitting} onClick={saveRecording}>
-                {isSubmitting ? "Saving..." : "Save"}
+              <button className="admin-capture-button admin-capture-button-primary" disabled={isSubmitting} onClick={saveRecording}>
+                <Save size={16} aria-hidden="true" />{isSubmitting ? "Saving..." : "Save"}
               </button>
             )}
             {captureState === "saved" && (
-              <button className="button button-secondary" onClick={() => { setCaptureState("idle"); setRecordedBlob(null); setPreviewUrl(null); }}>
-                Discard
+              <button className="admin-capture-button" onClick={() => { setCaptureState("idle"); setRecordedBlob(null); setPreviewUrl(null); }}>
+                <Trash2 size={16} aria-hidden="true" />Discard
               </button>
             )}
+            </div>
           </div>
 
           {statusMessage && (
-            <p className="panel-note" style={{ marginTop: 8, color: statusMessage.startsWith("Error") ? "#ef4444" : "#22c55e" }}>
+            <p className={`admin-capture-status ${statusMessage.startsWith("Error") ? "is-error" : "is-success"}`} role="status">
               {statusMessage}
             </p>
           )}
-        </div>
+        </section>
 
-        <div className="panel panel-secondary" style={{ flex: 1, maxHeight: "80vh", overflowY: "auto" }}>
-          <h3>Recent Captures</h3>
+        <aside className="admin-panel admin-capture-recent-panel">
+          <div className="admin-panel-heading">
+            <div>
+              <p className="admin-overline">Queue</p>
+              <h2>Recent captures</h2>
+            </div>
+            <span className="admin-period-tag">Latest 10</span>
+          </div>
           {recentCaptures.length === 0 ? (
-            <p className="panel-note">No captures yet.</p>
+            <p className="admin-empty-state">No captures yet.</p>
           ) : (
-            recentCaptures.map((c, i) => (
-              <div key={i} style={{ marginBottom: 8, padding: 8, border: "1px solid #333", borderRadius: 8 }}>
-                <p style={{ fontSize: 12, fontWeight: 600 }}>{c.label}</p>
-                {c.video_url && (
-                  <video src={c.video_url} controls style={{ width: "100%", borderRadius: 4, marginTop: 4 }} />
+            <div className="admin-capture-recent-list">
+            {recentCaptures.map((capture, index) => (
+              <article key={`${capture.label}-${index}`}>
+                <p>{capture.label}</p>
+                {capture.video_url && (
+                  <video src={capture.video_url} controls />
                 )}
-              </div>
-            ))
+              </article>
+            ))}
+            </div>
           )}
-        </div>
+        </aside>
       </div>
     </div>
   );

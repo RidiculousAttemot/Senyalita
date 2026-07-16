@@ -7,8 +7,6 @@ import type { SequencedItem } from "./animationSequencer";
 import { PauseEngine } from "./pauseEngine";
 import { buildAnimationQueue } from "./animationQueue";
 import type { AnimationQueueItem } from "./animationQueue";
-import { GESTURE_ANIMATIONS, getAnimation } from "@/features/animation/gestureAnimations";
-import type { GestureAnimation } from "@/features/animation/types";
 import { globalEngine } from "@/features/fsl-translation";
 
 export interface PipelineResult {
@@ -57,8 +55,7 @@ export function runPipeline(
   const totalDuration = sequence.reduce(
     (sum, item) => {
       if (item.isPause) return sum + item.pauseDuration;
-      if (item.animation) return sum + item.animation.duration;
-      return sum + 1.0;
+      return sum + 1.5;
     },
     0,
   );
@@ -80,10 +77,4 @@ function computeOverallConfidence(glossSequence: GlossTranslation[]): number {
   if (glossSequence.length === 0) return 0;
   const sum = glossSequence.reduce((acc, g) => acc + g.confidence, 0);
   return Math.round((sum / glossSequence.length) * 100) / 100;
-}
-
-export function preloadAnimations(glossResult: GlossResult): void {
-  for (const item of glossResult.glossSequence) {
-    getAnimation(item.gloss);
-  }
 }

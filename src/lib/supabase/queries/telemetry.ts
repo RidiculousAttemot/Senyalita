@@ -18,6 +18,7 @@ export const insertTelemetryEvent = async (input: {
 export const listTelemetryEvents = async (
   eventType?: TelemetryEvent["event_type"],
   limit = 100,
+  daysBack?: number,
 ): Promise<TelemetryEvent[]> => {
   const supabase = await createSupabaseServerClient();
   let query = supabase
@@ -26,6 +27,9 @@ export const listTelemetryEvents = async (
     .order("created_at", { ascending: false })
     .limit(limit);
   if (eventType) query = query.eq("event_type", eventType);
+  if (daysBack !== undefined) {
+    query = query.gte("created_at", new Date(Date.now() - daysBack * 86400000).toISOString());
+  }
   const { data, error } = await query;
   if (error) throw new Error(`listTelemetryEvents: ${error.message}`);
   return data ?? [];

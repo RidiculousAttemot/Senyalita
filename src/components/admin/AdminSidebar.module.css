@@ -1,0 +1,31 @@
+.sidebar { position: sticky; top: 0; display: flex; width: 248px; height: 100dvh; flex-direction: column; border-right: 1px solid #e8e4dd; background: #fffdf9; color: #15233a; transition: width 180ms ease, transform 180ms ease; z-index: 50; }
+.sidebarCollapsed { width: 72px; }
+.branding { position: relative; min-height: 76px; padding: 16px; border-bottom: 1px solid #eeeae3; }
+.brandLink { display: flex; align-items: center; gap: 10px; color: #15233a; font-size: 1rem; font-weight: 750; text-decoration: none; }
+.brandIcon { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 8px; background: #c96745; color: #fff; }
+.brandText { overflow: hidden; white-space: nowrap; }
+.brandSubtext { display: block; margin: 7px 0 0 42px; color: #847d75; font-size: 0.67rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.collapseButton, .mobileClose { display: grid; width: 40px; height: 40px; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #706963; cursor: pointer; }
+.collapseButton { position: absolute; right: 10px; top: 18px; }
+.collapseButton:hover, .mobileClose:hover { background: #f7f2ed; color: #a94f32; }
+.mobileClose { display: none; }
+.navGroups { flex: 1; overflow-y: auto; padding: 12px 10px; }
+.navGroup + .navGroup { margin-top: 16px; }
+.groupLabel { margin: 0 0 6px; padding: 0 10px; color: #9a928a; font-size: 0.66rem; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
+.groupItems { display: grid; gap: 2px; }
+.navItem { display: flex; width: 100%; min-height: 40px; align-items: center; gap: 10px; border: 0; border-radius: 8px; background: transparent; color: #5e656f; cursor: pointer; font: inherit; font-size: 0.84rem; font-weight: 600; padding: 9px 10px; text-align: left; text-decoration: none; transition: background-color 140ms ease, color 140ms ease; }
+.navItem:hover { background: #f7f2ed; color: #223249; }
+.navItem:focus-visible, .collapseButton:focus-visible, .mobileClose:focus-visible, .logoutButton:focus-visible { outline: 2px solid #c96745; outline-offset: 2px; }
+.navItemActive { background: #fff0ea; color: #a34d32; }
+.itemLabel { overflow: hidden; white-space: nowrap; }
+.navItemDisabled { color: #aaa39b; cursor: not-allowed; }
+.comingSoonBadge { margin-left: auto; border: 1px solid #ece5dd; border-radius: 999px; color: #978d84; font-size: 0.61rem; font-weight: 750; letter-spacing: 0.04em; padding: 2px 6px; text-transform: uppercase; }
+.sidebarCollapsed .branding { padding: 16px 20px; }
+.sidebarCollapsed .brandLink, .sidebarCollapsed .navItem, .sidebarCollapsed .logoutButton { justify-content: center; }
+.sidebarCollapsed .collapseButton { position: static; margin: 8px auto -8px; }
+.sidebarCollapsed .navGroups { padding: 12px 8px; }
+.sidebarCollapsed .navGroup + .navGroup { margin-top: 10px; }
+.sidebarFooter { padding: 10px; border-top: 1px solid #eeeae3; }
+.logoutButton { display: flex; min-height: 40px; align-items: center; gap: 10px; border-radius: 8px; color: #6e625c; font-size: 0.84rem; font-weight: 650; padding: 9px 10px; text-decoration: none; }
+.logoutButton:hover { background: #fff0ea; color: #a34d32; }
+@media (max-width: 900px) { .sidebar { box-shadow: 14px 0 32px rgba(40, 34, 29, 0.12); position: fixed; transform: translateX(-105%); } .mobileOpen { transform: translateX(0); } .collapseButton { display: none; } .mobileClose { display: grid; position: absolute; right: 10px; top: 14px; } }

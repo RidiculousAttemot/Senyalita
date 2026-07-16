@@ -1,7 +1,10 @@
-import { redirect } from "next/navigation";
+import dynamic from "next/dynamic";
 
-export default function TypeToSignRoute() {
-  redirect("/TypeToSign");
+const TypeToSignExperience = dynamic(
+  () => import("@/features/type-to-sign/TypeToSignExperience"),
+  { ssr: false },
+);
+
+export default function TypeToSignPage() {
+  return <TypeToSignExperience />;
 }
-
-

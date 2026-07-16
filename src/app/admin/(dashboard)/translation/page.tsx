@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useMemo } from "react";
+import { BookOpen, Languages, RotateCcw, Timer, Video } from "lucide-react";
 import { globalEngine } from "@/features/fsl-translation";
 import { globalDictionary } from "@/features/fsl-translation";
 import type { FslTranslationResult, DictionaryEntry } from "@/features/fsl-translation";
@@ -192,8 +193,15 @@ export default function AdminTranslationPage() {
   }, [importText, showNotification]);
 
   return (
-    <div style={{ padding: 24, maxWidth: 1400, margin: "0 auto" }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Translation Dashboard</h1>
+    <div className="admin-translation-manager">
+      <header className="admin-dashboard-header">
+        <div>
+          <p className="admin-overline">Type-to-Sign dictionary</p>
+          <h1>Translation manager</h1>
+          <p className="admin-dashboard-subtitle">Test FSL translation output, manage dictionary definitions, and monitor animation coverage from one operational workspace.</p>
+        </div>
+        <button onClick={handleClearContext} className="admin-action-button" type="button"><RotateCcw size={16} aria-hidden="true" />Reset translation context</button>
+      </header>
 
       {notification && (
         <div style={{
@@ -207,41 +215,16 @@ export default function AdminTranslationPage() {
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
-        <div style={{ padding: "12px 16px", borderRadius: 8, background: "#1e293b" }}>
-          <span style={{ fontSize: 12, color: "#94a3b8" }}>Dictionary Entries</span>
-          <p style={{ fontSize: 20, fontWeight: 700, color: "#e2e8f0", margin: "4px 0 0" }}>
-            {coverageStats.total}
-          </p>
+      <section className="admin-translation-coverage" aria-label="Dictionary coverage">
+        <h2>Dictionary coverage</h2>
+        <div>
+          <article><span><BookOpen size={16} aria-hidden="true" /></span><p>Dictionary entries</p><strong>{coverageStats.total}</strong></article>
+          <article className="is-positive"><span><Video size={16} aria-hidden="true" /></span><p>With animation</p><strong>{coverageStats.withAnimation}</strong></article>
+          <article className="is-attention"><span><Languages size={16} aria-hidden="true" /></span><p>Without animation</p><strong>{coverageStats.withoutAnimation}</strong></article>
+          <article><span><Timer size={16} aria-hidden="true" /></span><p>Average processing</p><strong>{stats.avgTime.toFixed(1)}ms</strong></article>
+          <article><span><Languages size={16} aria-hidden="true" /></span><p>Translations</p><strong>{stats.totalTranslations}</strong></article>
         </div>
-        <div style={{ padding: "12px 16px", borderRadius: 8, background: "#14532d" }}>
-          <span style={{ fontSize: 12, color: "#94a3b8" }}>With Animation</span>
-          <p style={{ fontSize: 20, fontWeight: 700, color: "#bbf7d0", margin: "4px 0 0" }}>
-            {coverageStats.withAnimation}
-          </p>
-        </div>
-        <div style={{ padding: "12px 16px", borderRadius: 8, background: "#451a1a" }}>
-          <span style={{ fontSize: 12, color: "#94a3b8" }}>Without Animation</span>
-          <p style={{ fontSize: 20, fontWeight: 700, color: "#fca5a5", margin: "4px 0 0" }}>
-            {coverageStats.withoutAnimation}
-          </p>
-        </div>
-        <div style={{ padding: "12px 16px", borderRadius: 8, background: "#1e293b" }}>
-          <span style={{ fontSize: 12, color: "#94a3b8" }}>Avg Time</span>
-          <p style={{ fontSize: 20, fontWeight: 700, color: "#e2e8f0", margin: "4px 0 0" }}>
-            {stats.avgTime.toFixed(1)}ms
-          </p>
-        </div>
-        <div style={{ padding: "12px 16px", borderRadius: 8, background: "#1e293b" }}>
-          <span style={{ fontSize: 12, color: "#94a3b8" }}>Translations</span>
-          <p style={{ fontSize: 20, fontWeight: 700, color: "#e2e8f0", margin: "4px 0 0" }}>
-            {stats.totalTranslations}
-          </p>
-        </div>
-        <button onClick={handleClearContext} className="button button-secondary" style={{ alignSelf: "center", padding: "8px 16px" }}>
-          Reset Context
-        </button>
-      </div>
+      </section>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
         <div>

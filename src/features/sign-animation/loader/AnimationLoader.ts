@@ -10,11 +10,6 @@ export class AnimationLoader {
   private cache: Map<string, GestureAnimationAsset> = new Map();
   private pending: Map<string, Promise<GestureAnimationAsset | null>> = new Map();
   private stats: LoaderStats = { cached: 0, loaded: 0, missed: 0 };
-  private baseUrl: string;
-
-  constructor(baseUrl = "/animations") {
-    this.baseUrl = baseUrl;
-  }
 
   async load(gestureLabel: string): Promise<GestureAnimationAsset | null> {
     const key = gestureLabel.toUpperCase().replace(/\s+/g, "_");
@@ -31,12 +26,13 @@ export class AnimationLoader {
       return pending;
     }
 
-    const promise = this.fetchAsset(key, gestureLabel);
+    const promise = this.fetchAsset(key);
     this.pending.set(key, promise);
     const asset = await promise;
     this.pending.delete(key);
 
     if (asset) {
+      this.normalizeDuration(asset, key);
       this.cache.set(key, asset);
       this.stats.loaded++;
     } else {
@@ -45,18 +41,28 @@ export class AnimationLoader {
     return asset;
   }
 
+  private normalizeDuration(asset: GestureAnimationAsset, key: string): void {
+    if (asset.fps > 0 && asset.totalFrames > 0) {
+      const expectedMs = (asset.totalFrames / asset.fps) * 1000;
+      const ratio = asset.duration / expectedMs;
+      if (ratio > 0.001 && ratio < 0.01) {
+        asset.duration = Math.round(asset.duration * 1000);
+        console.warn(`[AnimationLoader] Normalized duration for ${key}: converted from seconds to ms (${asset.duration}ms)`);
+      }
+    }
+  }
+
   private async fetchAsset(
     key: string,
-    originalLabel: string,
   ): Promise<GestureAnimationAsset | null> {
     try {
-      const response = await fetch(`${this.baseUrl}/${key}.json`);
-      if (!response.ok) return null;
-      const asset: GestureAnimationAsset = await response.json();
-      return asset;
+      const publishedResponse = await fetch(`/api/animations/${encodeURIComponent(key)}`);
+      if (publishedResponse.ok) {
+        return await publishedResponse.json() as GestureAnimationAsset;
+      }
     } catch {
-      return null;
     }
+    return null;
   }
 
   preload(gestureLabels: string[]): void {

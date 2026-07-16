@@ -2,8 +2,9 @@
 
 import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { SignAnimationPlayer } from "@/features/sign-animation/player/SignAnimationPlayer";
+import type { SignAnimationPlayerHandle } from "@/features/sign-animation/player/SignAnimationPlayer";
 import { AnimationLoader } from "@/features/sign-animation/loader";
-import type { AnimationClip } from "@/features/sign-animation/types";
+import type { AnimationClip, AvatarTheme } from "@/features/sign-animation/types";
 import { runPipeline } from "./pipeline";
 import type { PipelineResult } from "./pipeline";
 import { getTts } from "@/lib/tts";
@@ -15,6 +16,7 @@ import type { FslTranslationResult } from "@/features/fsl-translation";
 import { mapWordToGesture } from "@/features/gesture-mapping";
 import { computeTranslationConfidence } from "./confidenceIndicator";
 import type { TranslationConfidence } from "./confidenceIndicator";
+
 
 const AUTO_SPEAK_KEY = "fsl_auto_speak";
 
@@ -41,6 +43,20 @@ function saveAutoSpeakPref(val: boolean): void {
   }
 }
 
+const supportedChars = [
+  'A','B','C','D','E','F','G','H','I','J','K','L','M',
+  'N','Ñ','NG','O','P','Q','R','S','T','U','V','W','X','Y','Z',
+];
+
+const quickPhrases = ['ABC', 'FSL', 'Ñ', 'NG'];
+
+const avatarStyleOptions: { name: string; gradient: string; theme: AvatarTheme }[] = [
+  { name: 'Warm',     gradient: 'linear-gradient(135deg,#C4855A,#E8B89A)', theme: 'minimal' },
+  { name: 'Midnight', gradient: 'linear-gradient(135deg,#2A2035,#4A3560)', theme: 'skeleton' },
+  { name: 'Ocean',    gradient: 'linear-gradient(135deg,#7EC8E3,#C8EAF5)', theme: 'flat' },
+  { name: 'Ember',    gradient: 'linear-gradient(135deg,#E8A878,#F5D5B8)', theme: 'avatar2d' },
+];
+
 export function TextToSignInterface({ onGestureChange }: TextToSignInterfaceProps) {
   const [inputText, setInputText] = useState("");
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>("idle");
@@ -50,7 +66,6 @@ export function TextToSignInterface({ onGestureChange }: TextToSignInterfaceProp
   const [clips, setClips] = useState<AnimationClip[]>([]);
   const [loadingClips, setLoadingClips] = useState(false);
   const [currentGesture, setCurrentGesture] = useState<string | null>(null);
-  const [language, setLanguage] = useState<"en" | "tl">("en");
   const [error, setError] = useState<string | null>(null);
   const [animationKey, setAnimationKey] = useState(0);
   const [autoSpeak, setAutoSpeak] = useState(loadAutoSpeakPref);
@@ -63,11 +78,18 @@ export function TextToSignInterface({ onGestureChange }: TextToSignInterfaceProp
   const autoSpeakRef = useRef(autoSpeak);
   const [fslResult, setFslResult] = useState<FslTranslationResult | null>(null);
   const [confidence, setConfidence] = useState<TranslationConfidence | null>(null);
-  const [showGlossToggle, setShowGlossToggle] = useState(true);
-  const [showGestureLabels, setShowGestureLabels] = useState(true);
-  const [showQueuePanel, setShowQueuePanel] = useState(true);
-  const [showConfidence, setShowConfidence] = useState(true);
+  const [previewSize, setPreviewSize] = useState({ width: 320, height: 340 });
+  const animationPanelRef = useRef<HTMLDivElement | null>(null);
+  const playerRef = useRef<SignAnimationPlayerHandle | null>(null);
   autoSpeakRef.current = autoSpeak;
+
+  const [selectedAvatar, setSelectedAvatar] = useState('Warm');
+  const [avatarMode, setAvatarMode] = useState('human');
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [currentGestureIndex, setCurrentGestureIndex] = useState(0);
+  const [totalClips, setTotalClips] = useState(0);
+  const totalClipsRef = useRef(0);
 
   const ttsRef = useRef<Tts | null>(null);
 
@@ -81,6 +103,17 @@ export function TextToSignInterface({ onGestureChange }: TextToSignInterfaceProp
       setVoices(tts.getVoices());
     });
     return unsub;
+  }, []);
+
+  useEffect(() => {
+    const el = animationPanelRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      setPreviewSize({ width: Math.floor(width), height: Math.floor(height) });
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
   const handleVoiceChange = useCallback((uri: string) => {
@@ -110,6 +143,10 @@ export function TextToSignInterface({ onGestureChange }: TextToSignInterfaceProp
     setCurrentQueueIndex(-1);
     setQueueTotal(0);
     translatedRef.current = false;
+    setIsPlaying(false);
+    setIsPaused(false);
+    setCurrentGestureIndex(0);
+    setTotalClips(0);
 
     try {
       const startTime = performance.now();
@@ -124,7 +161,6 @@ export function TextToSignInterface({ onGestureChange }: TextToSignInterfaceProp
 
       const glossArr = result.gloss.glossSequence.map((g) => g.gloss);
 
-      // Run FSL translation engine for enhanced result
       const fsl = globalEngine.translate(trimmed, {
         useGrammar: true,
         useContext: false,
@@ -150,6 +186,7 @@ export function TextToSignInterface({ onGestureChange }: TextToSignInterfaceProp
 
       const loader = new AnimationLoader();
       const loadedClips: AnimationClip[] = [];
+      const unavailableGlosses: string[] = [];
       for (let i = 0; i < glossArr.length; i++) {
         const asset = await loader.load(glossArr[i]);
         if (asset) {
@@ -158,15 +195,24 @@ export function TextToSignInterface({ onGestureChange }: TextToSignInterfaceProp
             gesture: glossArr[i],
             asset,
           });
+        } else {
+          unavailableGlosses.push(glossArr[i]);
         }
       }
       setClips(loadedClips);
+      if (unavailableGlosses.length > 0) {
+        setError(`Animation unavailable: ${[...new Set(unavailableGlosses)].join(", ")}.`);
+      }
       setAnimationKey((prev) => prev + 1);
       setCurrentGesture(loadedClips[0]?.gesture ?? null);
       setCurrentQueueIndex(0);
       setQueueTotal(loadedClips.length);
+      setTotalClips(loadedClips.length);
+      totalClipsRef.current = loadedClips.length;
+      setCurrentGestureIndex(0);
       setLoadingClips(false);
       setState("animating");
+      setIsPlaying(true);
 
       if (autoSpeakRef.current && glossArr.length > 0) {
         const tts = ttsRef.current;
@@ -189,7 +235,7 @@ export function TextToSignInterface({ onGestureChange }: TextToSignInterfaceProp
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         handleTranslate();
       }
@@ -202,6 +248,11 @@ export function TextToSignInterface({ onGestureChange }: TextToSignInterfaceProp
       setCurrentGesture(gesture);
       setCurrentQueueIndex(current);
       setQueueTotal(total);
+      setIsPlaying(true);
+      setIsPaused(false);
+      setCurrentGestureIndex(current);
+      setTotalClips(total);
+      totalClipsRef.current = total;
       onGestureChange?.(gesture, current, total);
     },
     [onGestureChange],
@@ -211,6 +262,9 @@ export function TextToSignInterface({ onGestureChange }: TextToSignInterfaceProp
     setCurrentGesture(null);
     setCurrentQueueIndex(-1);
     setState("completed");
+    setIsPlaying(false);
+    setIsPaused(false);
+    setCurrentGestureIndex(totalClipsRef.current);
   }, []);
 
   const handleClear = useCallback(() => {
@@ -226,6 +280,10 @@ export function TextToSignInterface({ onGestureChange }: TextToSignInterfaceProp
     setFslResult(null);
     setCurrentQueueIndex(-1);
     setQueueTotal(0);
+    setIsPlaying(false);
+    setIsPaused(false);
+    setCurrentGestureIndex(0);
+    setTotalClips(0);
     translatedRef.current = false;
   }, []);
 
@@ -248,6 +306,33 @@ export function TextToSignInterface({ onGestureChange }: TextToSignInterfaceProp
     }
   }, [translationResult.translatedText, inputText, speechRate]);
 
+  const handleReplay = useCallback(() => {
+    playerRef.current?.replay();
+    setIsPaused(false);
+    setIsPlaying(true);
+  }, []);
+
+  const handlePausePlay = useCallback(() => {
+    if (isPaused) {
+      playerRef.current?.play();
+      setIsPaused(false);
+    } else {
+      playerRef.current?.pause();
+      setIsPaused(true);
+    }
+  }, [isPaused]);
+
+  const handleStop = useCallback(() => {
+    playerRef.current?.stop();
+    setIsPlaying(false);
+    setIsPaused(false);
+    setCurrentGestureIndex(0);
+  }, []);
+
+  const handleChipClick = useCallback((phrase: string) => {
+    setInputText(phrase);
+  }, []);
+
   const glossDisplay = useMemo(() => {
     if (!pipelineResult) return [];
     return pipelineResult.gloss.glossSequence.map((g) => {
@@ -260,161 +345,47 @@ export function TextToSignInterface({ onGestureChange }: TextToSignInterfaceProp
     });
   }, [pipelineResult]);
 
-  const queueItems = useMemo(() => {
-    if (!pipelineResult) return [];
-    return pipelineResult.animations.map((item, i) => ({
-      index: i,
-      gesture: item.gesture,
-      original: item.original,
-      isActive: i === currentQueueIndex,
-      isPast: i < currentQueueIndex,
-      isFuture: i > currentQueueIndex,
-    }));
-  }, [pipelineResult, currentQueueIndex]);
-
   const canTranslate = useMemo(
     () => inputText.trim().length > 0 && pipelineStatus !== "running",
     [inputText, pipelineStatus],
   );
 
-  const inputPlaceholder = useMemo(() => {
-    if (language === "tl") {
-      return "Mag-type ng pangungusap upang isalin sa sign language...";
-    }
-    return "Type a sentence to translate to sign language...";
-  }, [language]);
+  const progressPercent = totalClips > 0
+    ? Math.min(100, (currentGestureIndex / totalClips) * 100)
+    : 0;
+
+  const selectedTheme = avatarStyleOptions.find((a) => a.name === selectedAvatar)?.theme ?? 'minimal';
+
+  const translating = state === "translating" || state === "generating-sign-sequence";
+  const animating = state === "animating";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, width: "100%", maxWidth: 640 }}>
-      {/* Translation progress indicator */}
-      {state !== "idle" && state !== "completed" && state !== "error" && (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, width: "100%" }}>
+
+      {/* Progress indicator */}
+      {(translating || animating) && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
           padding: "6px 12px", borderRadius: 6, fontSize: 12,
-          background: (state === "translating" || state === "generating-sign-sequence")
-            ? "#1e3a5f" : "#1e293b",
+          background: translating ? "#1e3a5f" : "#1e293b",
           color: "#93c5fd",
         }}>
           <div style={{
             width: 12, height: 12, borderRadius: "50%",
             border: "2px solid #60a5fa",
             borderTopColor: "transparent",
-            animation: (state === "translating" || state === "generating-sign-sequence")
-              ? "spin 0.6s linear infinite" : "none",
+            animation: translating ? "sp_cta 0.6s linear infinite" : "none",
           }} />
           <span>
             {state === "translating" && "Translating..."}
             {state === "generating-sign-sequence" && "Generating sign sequence..."}
-            {state === "animating" && "Playing sign animation..."}
+            {state === "animating" && "Animating..."}
           </span>
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          <style>{`@keyframes sp_cta { to { transform: rotate(360deg); } }`}</style>
         </div>
       )}
 
-      {/* Input row */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <select
-          value={language}
-          onChange={(e) => {
-            setLanguage(e.target.value as "en" | "tl");
-            setError(null);
-          }}
-          className="input"
-          style={{ width: 100, padding: "6px 8px", fontSize: 13 }}
-          aria-label="Language"
-          disabled={pipelineStatus === "running"}
-        >
-          <option value="en">English</option>
-          <option value="tl">Tagalog</option>
-        </select>
-        <div style={{ position: "relative", flex: 1 }}>
-          <input
-            type="text"
-            value={inputText}
-            onChange={(e) => {
-              setInputText(e.target.value);
-              if (state === "error") setState("typing");
-              else if (state === "idle" && e.target.value.trim()) setState("typing");
-              else if (state === "typing" && !e.target.value.trim()) setState("idle");
-            }}
-            onKeyDown={handleKeyDown}
-            placeholder={inputPlaceholder}
-            className="input"
-            style={{ width: "100%", padding: "8px 12px", fontSize: 14 }}
-            disabled={pipelineStatus === "running"}
-          />
-        </div>
-        <button
-          onClick={handleTranslate}
-          className="button button-primary"
-          style={{ padding: "8px 16px", fontSize: 13, whiteSpace: "nowrap" }}
-          disabled={!canTranslate}
-        >
-          {pipelineStatus === "running" ? "..." : "Translate"}
-        </button>
-        {inputText && (
-          <button
-            onClick={handleClear}
-            className="button button-secondary"
-            style={{ padding: "8px 12px", fontSize: 13 }}
-            title="Clear"
-          >
-            ×
-          </button>
-        )}
-      </div>
-
-      {/* Speech controls */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#94a3b8", cursor: "pointer" }}>
-          <input
-            type="checkbox"
-            checked={autoSpeak}
-            onChange={handleAutoSpeakToggle}
-            style={{ accentColor: "#3b82f6" }}
-          />
-          Auto Speak
-        </label>
-        {voices.length > 0 && (
-          <select
-            value={selectedVoice ?? ""}
-            onChange={(e) => handleVoiceChange(e.target.value || "")}
-            style={{ padding: "4px 6px", fontSize: 11, maxWidth: 160 }}
-            className="input"
-            aria-label="Voice"
-          >
-            <option value="">Default voice</option>
-            {voices.map((v) => (
-              <option key={v.voiceURI} value={v.voiceURI}>
-                {v.name} ({v.lang})
-              </option>
-            ))}
-          </select>
-        )}
-        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#94a3b8" }}>
-          Speed:
-          <input
-            type="range"
-            min={0.25}
-            max={2.0}
-            step={0.25}
-            value={speechRate}
-            onChange={(e) => handleRateChange(parseFloat(e.target.value))}
-            style={{ width: 80 }}
-          />
-          <span style={{ minWidth: 32 }}>{speechRate.toFixed(2)}×</span>
-        </label>
-        <button
-          onClick={handleSpeakNow}
-          className="button button-secondary"
-          style={{ padding: "4px 10px", fontSize: 11 }}
-          disabled={!inputText.trim() && !translationResult.translatedText}
-        >
-          Speak
-        </button>
-      </div>
-
-      {/* Error state */}
+      {/* Error banner */}
       {error && (
         <div style={{
           padding: "10px 14px", background: "#451a1a", border: "1px solid #ef4444",
@@ -434,215 +405,367 @@ export function TextToSignInterface({ onGestureChange }: TextToSignInterfaceProp
         </div>
       )}
 
-      {/* Empty state */}
-      {state === "idle" && !error && (
-        <div style={{ padding: "32px 24px", textAlign: "center", color: "#64748b" }}>
-          <p style={{ fontSize: 14 }}>Enter text above and click Translate to see sign language animation</p>
-          <p style={{ fontSize: 12, marginTop: 8, color: "#475569" }}>
-            Example: I need help please → I NEED HELP PLEASE
-          </p>
+      {/* Input card */}
+      <div style={{ background: "#1e293b", borderRadius: 12, padding: 20 }}>
+        <p style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0", margin: 0, marginBottom: 8 }}>
+          Your message
+        </p>
+        <textarea
+          value={inputText}
+          onChange={(e) => {
+            setInputText(e.target.value);
+            if (state === "error") setState("typing");
+            else if (state === "idle" && e.target.value.trim()) setState("typing");
+            else if (state === "typing" && !e.target.value.trim()) setState("idle");
+          }}
+          onKeyDown={handleKeyDown}
+          placeholder="Type letters or text to sign in FSL..."
+          className="input"
+          rows={3}
+          style={{
+            width: "100%", padding: "10px 12px", fontSize: 14,
+            resize: "vertical", fontFamily: "inherit", lineHeight: 1.5,
+            background: "#0f172a", border: "1px solid #334155",
+            borderRadius: 8, color: "#e2e8f0",
+          }}
+          disabled={pipelineStatus === "running"}
+        />
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
+          <button
+            onClick={handleTranslate}
+            style={{
+              padding: "8px 16px", fontSize: 13, whiteSpace: "nowrap",
+              background: "#3b82f6", color: "#fff", border: "none",
+              borderRadius: 6, fontWeight: 600, cursor: canTranslate ? "pointer" : "not-allowed",
+              opacity: canTranslate ? 1 : 0.5,
+            }}
+            disabled={!canTranslate}
+          >
+            {pipelineStatus === "running" ? "Translating\u2026" : "Translate to Sign"}
+          </button>
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 4,
+            padding: "4px 10px", borderRadius: 6, fontSize: 12,
+            background: "#1e3a5f", color: "#93c5fd", fontWeight: 500,
+          }}>
+            FSL — Filipino Sign Language
+          </span>
+          <button
+            onClick={handleSpeakNow}
+            style={{
+              padding: "4px 10px", fontSize: 11, whiteSpace: "nowrap",
+              background: "transparent", color: "#94a3b8", border: "1px solid #475569",
+              borderRadius: 6, cursor: "pointer",
+            }}
+            disabled={!inputText.trim() && !translationResult.translatedText}
+          >
+            🎤 Speak
+          </button>
+          <span style={{ fontSize: 11, color: "#64748b", marginLeft: "auto" }}>
+            Ctrl+Enter to submit
+          </span>
+        </div>
+      </div>
+
+      {/* Chips */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {quickPhrases.map((phrase) => (
+          <button
+            key={phrase}
+            onClick={() => handleChipClick(phrase)}
+            style={{
+              padding: "6px 14px", fontSize: 12, fontWeight: 500,
+              background: "#1e293b", color: "#94a3b8", border: "1px solid #334155",
+              borderRadius: 999, cursor: "pointer",
+            }}
+          >
+            {phrase}
+          </button>
+        ))}
+      </div>
+
+      {/* Preview area */}
+      <div
+        ref={animationPanelRef}
+        style={{
+          width: "100%", minHeight: 420, height: "auto",
+          background: "#f5f0eb", borderRadius: 12,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          position: "relative", overflow: "hidden",
+        }}
+      >
+        {loadingClips ? (
+          <div style={{
+            width: "100%", height: 420, display: "flex",
+            alignItems: "center", justifyContent: "center",
+            background: "#f5f0eb", borderRadius: 12,
+          }}>
+            <p style={{ color: "#9C9189", fontSize: 14 }}>Loading animations...</p>
+          </div>
+        ) : clips.length > 0 ? (
+          <div style={{ width: "100%", height: 420 }}>
+            <SignAnimationPlayer
+              ref={playerRef}
+              key={animationKey}
+              clips={clips}
+              width={previewSize.width}
+              height={420}
+              speed={1}
+              backgroundColor="#f5f0eb"
+              theme={selectedTheme}
+              onGestureChange={handleGestureChange}
+              onComplete={handleComplete}
+            />
+          </div>
+        ) : (
+          <div style={{
+            textAlign: "center", color: "#9C9189", padding: 40,
+          }}>
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" style={{ margin: "0 auto 12px", display: "block", opacity: 0.4 }}>
+              <path d="M15.5 3.5A2.5 2.5 0 0 1 13 6h-2a2.5 2.5 0 0 1-2.5-2.5v0A2.5 2.5 0 0 1 11 1h2a2.5 2.5 0 0 1 2.5 2.5v0Z" />
+              <path d="M12 21v-6" />
+              <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+              <path d="M6 21h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2Z" />
+            </svg>
+            <p style={{ fontSize: 16, fontWeight: 600, margin: "0 0 4px" }}>Sign preview</p>
+            <p style={{ fontSize: 13, margin: 0 }}>Type a message and press Translate</p>
+          </div>
+        )}
+      </div>
+
+      {/* Playback controls */}
+      {clips.length > 0 && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "8px 12px", background: "#1e293b", borderRadius: 8,
+        }}>
+          <button onClick={handleReplay} style={{ background: "none", border: "none", color: "#94a3b8", fontSize: 18, cursor: "pointer", padding: "4px 8px" }} title="Replay">
+            ↺
+          </button>
+          <button onClick={handlePausePlay} style={{ background: "none", border: "none", color: "#94a3b8", fontSize: 18, cursor: "pointer", padding: "4px 8px" }} title={isPaused ? "Play" : "Pause"}>
+            {isPaused ? "▶" : "⏸"}
+          </button>
+          <button onClick={handleStop} style={{ background: "none", border: "none", color: "#94a3b8", fontSize: 18, cursor: "pointer", padding: "4px 8px" }} title="Stop">
+            ⏹
+          </button>
+          <div style={{ flex: 1, height: 6, background: "#0f172a", borderRadius: 3, margin: "0 8px", overflow: "hidden" }}>
+            <div style={{ width: `${progressPercent}%`, height: "100%", background: "#3b82f6", borderRadius: 3, transition: "width 0.3s" }} />
+          </div>
+          <span style={{ fontSize: 12, color: "#64748b", minWidth: 50, textAlign: "right" }}>
+            {currentGestureIndex}/{totalClips}
+          </span>
         </div>
       )}
 
-      {/* Display toggles */}
-      {(state === "animating" || state === "completed") && pipelineResult && (
+      {/* Avatar Mode */}
+      <div>
+        <p style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          Avatar Mode
+        </p>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => setAvatarMode('human')}
+            style={{
+              padding: "6px 14px", fontSize: 12, fontWeight: 500,
+              background: avatarMode === 'human' ? '#3b82f6' : '#1e293b',
+              color: avatarMode === 'human' ? '#fff' : '#94a3b8',
+              border: `1px solid ${avatarMode === 'human' ? '#3b82f6' : '#334155'}`,
+              borderRadius: 6, cursor: "pointer",
+            }}
+          >
+            Human
+          </button>
+          <button
+            disabled
+            style={{
+              padding: "6px 14px", fontSize: 12, fontWeight: 500,
+              background: '#1e293b', color: '#475569',
+              border: "1px solid #1e293b", borderRadius: 6, cursor: "not-allowed", opacity: 0.5,
+            }}
+          >
+            Skeleton
+          </button>
+        </div>
+      </div>
+
+      {/* Debug Panel — Admin Only */}
+      <DebugPanel
+        pipelineResult={pipelineResult}
+        clips={clips}
+        fslResult={fslResult}
+        confidence={confidence}
+        currentGestureIndex={currentGestureIndex}
+        totalClips={totalClips}
+        animating={animating}
+        loadingClips={loadingClips}
+      />
+
+      {/* Avatar Style */}
+      <div>
+        <p style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          Avatar Style
+        </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#94a3b8", cursor: "pointer" }}>
-            <input type="checkbox" checked={showGlossToggle} onChange={() => setShowGlossToggle((p) => !p)} style={{ accentColor: "#3b82f6" }} />
-            Show Gloss
-          </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#94a3b8", cursor: "pointer" }}>
-            <input type="checkbox" checked={showGestureLabels} onChange={() => setShowGestureLabels((p) => !p)} style={{ accentColor: "#3b82f6" }} />
-            Show Gesture Labels
-          </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#94a3b8", cursor: "pointer" }}>
-            <input type="checkbox" checked={showQueuePanel} onChange={() => setShowQueuePanel((p) => !p)} style={{ accentColor: "#3b82f6" }} />
-            Show Queue
-          </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#94a3b8", cursor: "pointer" }}>
-            <input type="checkbox" checked={showConfidence} onChange={() => setShowConfidence((p) => !p)} style={{ accentColor: "#3b82f6" }} />
-            Show Confidence
-          </label>
+          {avatarStyleOptions.map((style) => (
+            <button
+              key={style.name}
+              onClick={() => setSelectedAvatar(style.name)}
+              style={{
+                padding: "6px 14px", fontSize: 12, fontWeight: 500,
+                background: selectedAvatar === style.name ? style.gradient : '#1e293b',
+                color: selectedAvatar === style.name ? '#fff' : '#94a3b8',
+                border: selectedAvatar === style.name ? 'none' : '1px solid #334155',
+                borderRadius: 6, cursor: "pointer",
+              }}
+            >
+              {style.name}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
-      {/* Main content — shown when we have a result */}
-      {(state === "translating" || state === "generating-sign-sequence" || state === "animating" || state === "completed") && pipelineResult && (
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-          {/* Animation panel */}
-          <div style={{ flex: "0 0 auto" }}>
-            {loadingClips ? (
-              <div style={{ width: 320, height: 400, display: "flex", alignItems: "center", justifyContent: "center", background: "#0f172a", borderRadius: 8 }}>
-                <p style={{ color: "#64748b", fontSize: 13 }}>Loading animations...</p>
+    </div>
+  );
+}
+
+function DebugPanel({
+  pipelineResult,
+  clips,
+  fslResult,
+  confidence,
+  currentGestureIndex,
+  totalClips,
+  animating,
+  loadingClips,
+}: {
+  pipelineResult: PipelineResult | null;
+  clips: AnimationClip[];
+  fslResult: FslTranslationResult | null;
+  confidence: TranslationConfidence | null;
+  currentGestureIndex: number;
+  totalClips: number;
+  animating: boolean;
+  loadingClips: boolean;
+}) {
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/animation-analytics")
+      .then((r) => { if (r.ok) setIsAdmin(true); })
+      .catch(() => {});
+  }, []);
+
+  if (!isAdmin) return null;
+
+  const steps = [
+    { label: "Input Text", done: !!pipelineResult, active: false },
+    { label: "Normalized Text", done: !!pipelineResult, active: false },
+    { label: "Gloss Sequence", done: !!pipelineResult?.gloss, active: false },
+    { label: "Matched Animation", done: clips.length > 0, active: loadingClips },
+    { label: "Playing", done: animating && !loadingClips, active: animating && !loadingClips },
+    { label: "Completed", done: !animating && clips.length > 0, active: false },
+  ];
+
+  const glossSteps = pipelineResult?.gloss.glossSequence ?? [];
+  const totalDuration = pipelineResult?.totalDuration ?? 0;
+
+  return (
+    <div style={{
+      background: "#0c1929", border: "1px solid #1e3a5f", borderRadius: 10,
+      overflow: "hidden", fontSize: 12, fontFamily: "monospace",
+    }}>
+      <button
+        onClick={() => setExpanded((e) => !e)}
+        style={{
+          width: "100%", padding: "10px 14px", background: "none", border: "none",
+          color: "#60a5fa", cursor: "pointer", fontSize: 12, fontWeight: 600,
+          display: "flex", alignItems: "center", gap: 8, textAlign: "left",
+        }}
+      >
+        <span style={{ opacity: 0.5 }}>⎔</span>
+        Translation Debug Panel (Admin)
+        <span style={{ marginLeft: "auto", opacity: 0.5 }}>{expanded ? "▼" : "▶"}</span>
+      </button>
+
+      {expanded && (
+        <div style={{ padding: "0 14px 14px", display: "grid", gap: 12 }}>
+          {/* Pipeline steps */}
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {steps.map((step, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: 4,
+                padding: "3px 8px", borderRadius: 4, fontSize: 10,
+                background: step.done ? "#14532d" : step.active ? "#1e3a5f" : "#1e293b",
+                color: step.done ? "#86efac" : step.active ? "#93c5fd" : "#475569",
+              }}>
+                <span>{step.done ? "✓" : step.active ? "○" : "·"}</span>
+                {step.label}
               </div>
-            ) : (
-              <SignAnimationPlayer
-                key={animationKey}
-                clips={clips}
-                width={320}
-                height={400}
-                speed={1}
-                onGestureChange={handleGestureChange}
-                onComplete={handleComplete}
-              />
-            )}
+            ))}
           </div>
 
-          {/* Info panel */}
-          <div style={{ flex: 1, minWidth: 200, display: "flex", flexDirection: "column", gap: 8 }}>
-            {/* Original text */}
-            <div style={{ padding: "12px", background: "#1e293b", borderRadius: 8 }}>
-              <p style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>Original</p>
-              <p style={{ fontSize: 14, color: "#e2e8f0" }}>{`\u201C${pipelineResult.input}\u201D`}</p>
-            </div>
-
-            {/* Detected language (from FSL engine) */}
-            {fslResult && (
-              <div style={{ padding: "12px", background: "#1e293b", borderRadius: 8 }}>
-                <p style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>Detected Language</p>
-                <p style={{ fontSize: 14, color: "#fbbf24", fontWeight: 600 }}>
-                  {fslResult.detectedLanguage.language.toUpperCase()}
-                  <span style={{ color: "#94a3b8", marginLeft: 8, fontSize: 12 }}>
-                    ({(fslResult.detectedLanguage.confidence * 100).toFixed(0)}% confidence)
-                  </span>
-                </p>
-              </div>
-            )}
-
-            {/* Gloss translation */}
-            {showGlossToggle && (
-              <div style={{ padding: "12px", background: "#1e293b", borderRadius: 8 }}>
-                <p style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>FSL Gloss</p>
-                <p style={{ fontSize: 16, color: "#60a5fa", fontWeight: 600 }}>
-                  {translationResult.translatedText}
-                </p>
-              </div>
-            )}
-
-            {/* Animation queue */}
-            {showQueuePanel && (
-              <div style={{ padding: "12px", background: "#1e293b", borderRadius: 8 }}>
-                <p style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>
-                  Animation Queue
-                  {queueTotal > 0 && (
-                    <span style={{ marginLeft: 8, color: "#64748b" }}>
-                      ({currentQueueIndex + 1}/{queueTotal})
+          {/* Gloss sequence */}
+          {glossSteps.length > 0 && (
+            <div>
+              <div style={{ color: "#64748b", marginBottom: 4 }}>Gloss Sequence</div>
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {glossSteps.map((g, i) => (
+                  <span key={i} style={{
+                    padding: "2px 8px", background: "#1e293b", borderRadius: 4,
+                    color: "#94a3b8", fontSize: 11,
+                  }}>
+                    {g.gloss}
+                    <span style={{ color: "#475569", marginLeft: 4 }}>
+                      ({g.confidence.toFixed(2)})
                     </span>
-                  )}
-                </p>
-                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                  {glossDisplay.map((item, i) => {
-                    const fslWord = fslResult?.glossSequence[i];
-                    const strategy = fslWord?.resolution.strategy ?? "direct";
-                    const colorMap: Record<string, string> = {
-                      direct: "#3b82f6",
-                      synonym: "#f59e0b",
-                      related: "#ef4444",
-                      fingerspelling: "#8b5cf6",
-                    };
-                    return (
-                      <span
-                        key={i}
-                        style={{
-                          padding: "3px 8px",
-                          borderRadius: 12,
-                          fontSize: 12,
-                          background: i === currentQueueIndex
-                            ? "#3b82f6"
-                            : i < currentQueueIndex
-                              ? "#1e3a5f"
-                              : strategy === "direct"
-                                ? "#1e3a5f"
-                                : strategy === "synonym"
-                                  ? "#422006"
-                                  : strategy === "related"
-                                    ? "#451a1a"
-                                    : "#1e1b4b",
-                          color: i === currentQueueIndex
-                            ? "#fff"
-                            : i < currentQueueIndex
-                              ? "#6b8cbe"
-                              : colorMap[strategy] ?? "#9ca3af",
-                          transition: "all 0.3s",
-                          opacity: i < currentQueueIndex ? 0.6 : 1,
-                          cursor: showGestureLabels ? "default" : undefined,
-                        }}
-                        title={showGestureLabels ? `${item.gloss} (${strategy})` : undefined}
-                      >
-                        {showGestureLabels ? item.gloss : item.gloss.length > 3 ? item.gloss.slice(0, 3) + "..." : item.gloss}
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Confidence indicator */}
-            {showConfidence && confidence && (
-              <div style={{ padding: "12px", background: "#1e293b", borderRadius: 8 }}>
-                <p style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>Translation Confidence</p>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                  <div style={{
-                    flex: 1, height: 8, borderRadius: 4,
-                    background: "#0f172a",
-                    position: "relative",
-                    overflow: "hidden",
-                  }}>
-                    <div style={{
-                      width: `${confidence.overall * 100}%`,
-                      height: "100%",
-                      borderRadius: 4,
-                      background: confidence.overall >= 0.9 ? "#22c55e"
-                        : confidence.overall >= 0.7 ? "#eab308"
-                        : confidence.overall >= 0.5 ? "#f97316" : "#ef4444",
-                      transition: "width 0.5s",
-                    }} />
-                  </div>
-                  <span style={{
-                    fontSize: 13, fontWeight: 600, minWidth: 40,
-                    color: confidence.overall >= 0.9 ? "#bbf7d0"
-                      : confidence.overall >= 0.7 ? "#fde68a"
-                      : confidence.overall >= 0.5 ? "#fed7aa" : "#fca5a5",
-                  }}>
-                    {(confidence.overall * 100).toFixed(0)}%
                   </span>
-                </div>
-                <div style={{ display: "flex", gap: 8, fontSize: 11, flexWrap: "wrap" }}>
-                  {confidence.lowConfidenceCount > 0 && (
-                    <span style={{ color: "#f97316" }}>Low: {confidence.lowConfidenceCount}</span>
-                  )}
-                  {confidence.fingerspelledCount > 0 && (
-                    <span style={{ color: "#8b5cf6" }}>Fingerspelled: {confidence.fingerspelledCount}</span>
-                  )}
-                  {confidence.unresolvedCount > 0 && (
-                    <span style={{ color: "#ef4444" }}>Unresolved: {confidence.unresolvedCount}</span>
-                  )}
-                  {confidence.lowConfidenceCount === 0 && confidence.unresolvedCount === 0 && (
-                    <span style={{ color: "#22c55e" }}>All words recognized</span>
-                  )}
-                </div>
+                ))}
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Current gesture */}
-            {showGestureLabels && (
-              <div style={{ padding: "12px", background: "#1e293b", borderRadius: 8 }}>
-                <p style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>Current Gesture</p>
-                <p style={{ fontSize: 18, color: "#fbbf24", fontWeight: 700 }}>
-                  {currentGesture || "—"}
-                </p>
+          {/* Stats */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8 }}>
+            {[
+              { label: "Total Duration", value: `${totalDuration.toFixed(1)}s` },
+              { label: "Animation Clips", value: `${clips.length}` },
+              { label: "Current Index", value: `${currentGestureIndex}/${totalClips}` },
+              { label: "Playing", value: animating ? "Yes" : "No" },
+              { label: "Loading", value: loadingClips ? "Yes" : "No" },
+              { label: "Confidence", value: confidence ? `${(confidence.overall * 100).toFixed(0)}%` : "—" },
+              { label: "FSL Strategy", value: "—" },
+              { label: "Language", value: pipelineResult?.normalized.language ?? "—" },
+            ].map((stat, i) => (
+              <div key={i} style={{ background: "#1e293b", borderRadius: 6, padding: "6px 10px" }}>
+                <div style={{ color: "#64748b", fontSize: 9, textTransform: "uppercase" }}>{stat.label}</div>
+                <div style={{ color: "#e2e8f0", fontWeight: 600, fontSize: 13 }}>{stat.value}</div>
               </div>
-            )}
+            ))}
+          </div>
 
-            {/* Success state */}
-            {state === "completed" && (
-              <div style={{
-                padding: "10px 14px", background: "#14532d", border: "1px solid #22c55e",
-                borderRadius: 8, color: "#bbf7d0", fontSize: 12, textAlign: "center",
-              }}>
-                Translation complete
+          {/* Missing animations */}
+          {pipelineResult && (
+            <div>
+              <div style={{ color: "#64748b", marginBottom: 4 }}>Animation Resolution</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {pipelineResult.animations.map((a, i) => (
+                  <span key={i} style={{
+                    padding: "2px 8px", borderRadius: 4, fontSize: 10,
+                    background: a.clip ? "#1e293b" : "#2d1a1a",
+                    color: a.clip ? "#94a3b8" : "#f87171",
+                  }}>
+                    {a.gesture}
+                    <span style={{ color: "#475569", marginLeft: 4 }}>({a.strategy})</span>
+                  </span>
+                ))}
               </div>
-            )}
+            </div>
+          )}
+
+          {/* Loader stats */}
+          <div style={{ fontSize: 10, color: "#475569", borderTop: "1px solid #1e293b", paddingTop: 8 }}>
+            Load from: Published API → Legacy /animations/*.json
           </div>
         </div>
       )}

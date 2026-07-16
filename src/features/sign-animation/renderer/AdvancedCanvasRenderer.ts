@@ -5,7 +5,7 @@ import type {
   AvatarTheme,
   LandmarkPoint,
 } from "../types";
-import { HAND_CONNECTIONS, BODY_CONNECTIONS, LANDMARK_COLORS } from "../types";
+import { HAND_CONNECTIONS, BODY_CONNECTIONS, LANDMARK_COLORS, MEDIAPIPE_POSE_CONNECTIONS } from "../types";
 import { estimateBodyPose, estimateNonManual, getDefaultNonManual } from "./bodyPoseEstimator";
 
 export interface AdvancedRendererOptions {
@@ -108,14 +108,22 @@ export class AdvancedCanvasRenderer {
       this.renderNonManualIndicators(ctx, w, nonManual);
     }
 
-    this.renderBody(ctx, w, h, bodyPose, theme);
+    if (frame.poseLandmarks && frame.poseLandmarks.length > 0) {
+      this.renderExtractedPose(ctx, w, h, frame.poseLandmarks);
+    } else {
+      this.renderBody(ctx, w, h, bodyPose, theme);
+    }
+
+    if (frame.faceLandmarks && frame.faceLandmarks.length > 0) {
+      this.renderExtractedFace(ctx, w, h, frame.faceLandmarks);
+    }
 
     if (this.options.theme === "avatar2d") {
       this.renderFace(ctx, w, h, bodyPose, nonManual);
     }
 
-    const leftHand = frame.landmarks[0]?.landmarks ?? [];
-    const rightHand = frame.landmarks[1]?.landmarks ?? [];
+    const leftHand = frame.landmarks.find((hand) => hand.side === "left")?.landmarks ?? frame.landmarks[0]?.landmarks ?? [];
+    const rightHand = frame.landmarks.find((hand) => hand.side === "right")?.landmarks ?? frame.landmarks[1]?.landmarks ?? [];
 
     this.renderHand(ctx, w, h, leftHand, theme.leftHand, "left");
     this.renderHand(ctx, w, h, rightHand, theme.rightHand, "right");
@@ -222,6 +230,35 @@ export class AdvancedCanvasRenderer {
         ctx.arc(landmarks[i].x * w, landmarks[i].y * h, theme.jointRadius, 0, Math.PI * 2);
         ctx.fill();
       }
+    }
+  }
+
+  private renderExtractedPose(ctx: CanvasRenderingContext2D, w: number, h: number, landmarks: LandmarkPoint[]): void {
+    ctx.strokeStyle = "#C0392B";
+    ctx.fillStyle = "#E74C3C";
+    ctx.lineWidth = 2;
+    for (const [start, end] of MEDIAPIPE_POSE_CONNECTIONS) {
+      const a = landmarks[start];
+      const b = landmarks[end];
+      if (!a || !b) continue;
+      ctx.beginPath();
+      ctx.moveTo(a.x * w, a.y * h);
+      ctx.lineTo(b.x * w, b.y * h);
+      ctx.stroke();
+    }
+    for (const landmark of landmarks) {
+      ctx.beginPath();
+      ctx.arc(landmark.x * w, landmark.y * h, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  private renderExtractedFace(ctx: CanvasRenderingContext2D, w: number, h: number, landmarks: LandmarkPoint[]): void {
+    ctx.fillStyle = "#7F1D1D";
+    for (const landmark of landmarks) {
+      ctx.beginPath();
+      ctx.arc(landmark.x * w, landmark.y * h, 0.8, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 

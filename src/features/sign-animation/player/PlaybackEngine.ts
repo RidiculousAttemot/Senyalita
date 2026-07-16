@@ -59,13 +59,21 @@ export class PlaybackEngine {
   private blendTime = 0;
   private previousFrame: AnimationFrame | null = null;
 
+  private durationMs(): number {
+    return this.currentClip?.asset.duration ?? 0;
+  }
+
+  private durationSec(): number {
+    return this.durationMs() / 1000;
+  }
+
   getState(): PlaybackState {
     const asset = this.currentClip?.asset;
     return {
       isPlaying: this.isPlaying,
       isPaused: this.isPaused,
       currentTime: this.currentTime,
-      duration: asset?.duration ?? 0,
+      duration: this.durationSec(),
       currentGesture: this.currentClip?.gesture ?? null,
       currentIndex: this.currentFrameIndex,
       queueLength: this.queue.length + (this.currentClip ? 1 : 0),
@@ -192,14 +200,15 @@ export class PlaybackEngine {
   }
 
   private getFrameAtTime(asset: GestureAnimationAsset, time: number): AnimationFrame {
-    const { frames, duration } = asset;
+    const { frames } = asset;
     if (!frames || frames.length === 0) {
       return { timestamp: 0, landmarks: [] };
     }
     if (frames.length === 1) return frames[0];
 
-    const clampedTime = Math.max(0, Math.min(time, duration));
-    const progress = duration > 0 ? clampedTime / duration : 0;
+    const durationSec = asset.duration / 1000;
+    const clampedTime = Math.max(0, Math.min(time, durationSec));
+    const progress = durationSec > 0 ? clampedTime / durationSec : 0;
     const totalFrames = frames.length;
 
     const exactIndex = progress * (totalFrames - 1);
@@ -230,12 +239,12 @@ export class PlaybackEngine {
     this.currentTime += effectiveDelta;
 
     const asset = this.currentClip.asset;
-    const duration = asset.duration;
+    const durSec = this.durationSec();
 
-    if (this.currentTime >= duration && !this.loop) {
+    if (durSec > 0 && this.currentTime >= durSec && !this.loop) {
       this.callbacks.onComplete?.(this.currentClip);
       if (this.queue.length > 0) {
-        this.currentTime -= duration;
+        this.currentTime -= durSec;
         this.processNext();
         return;
       }
@@ -245,8 +254,8 @@ export class PlaybackEngine {
       return;
     }
 
-    if (this.currentTime >= duration && this.loop) {
-      this.currentTime = this.currentTime % duration;
+    if (durSec > 0 && this.currentTime >= durSec && this.loop) {
+      this.currentTime = this.currentTime % durSec;
     }
 
     let frame = this.getFrameAtTime(asset, this.currentTime);
@@ -267,7 +276,7 @@ export class PlaybackEngine {
       }
     }
 
-    const frameDelta = duration / asset.frames.length;
+    const frameDelta = durSec > 0 ? durSec / asset.frames.length : 1 / 30;
     this.currentFrameIndex = Math.min(
       Math.floor(this.currentTime / frameDelta),
       asset.frames.length - 1,
@@ -288,7 +297,7 @@ export class PlaybackEngine {
         this.blendTime = 0;
         this.previousFrame = this.getFrameAtTime(
           prevClip.asset,
-          prevClip.asset.duration,
+          prevClip.asset.duration / 1000,
         );
       } else {
         this.blending = false;

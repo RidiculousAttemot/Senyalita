@@ -117,6 +117,7 @@ export type TelemetryEvent = {
   event_data: Record<string, unknown>;
   user_id: string | null;
   session_id: string | null;
+  session_token: string | null;
   gesture_label: string | null;
   confidence: number | null;
   created_at: string;
@@ -679,6 +680,7 @@ type Tables = {
       event_data?: Record<string, unknown>;
       user_id?: string | null;
       session_id?: string | null;
+      session_token?: string | null;
       gesture_label?: string | null;
       confidence?: number | null;
       created_at?: string;
@@ -689,6 +691,7 @@ type Tables = {
       event_data?: Record<string, unknown>;
       user_id?: string | null;
       session_id?: string | null;
+      session_token?: string | null;
       gesture_label?: string | null;
       confidence?: number | null;
       created_at?: string;
@@ -1440,6 +1443,130 @@ type Tables = {
       validation_status?: string | null;
       notes?: string | null;
       created_at?: string;
+    };
+    Relationships: [];
+  };
+  animation_assets: {
+    Row: {
+      id: string;
+      gloss: string;
+      published_version_id: string | null;
+      created_at: string;
+      updated_at: string;
+    };
+    Insert: {
+      id?: string;
+      gloss: string;
+      published_version_id?: string | null;
+      created_at?: string;
+      updated_at?: string;
+    };
+    Update: {
+      gloss?: string;
+      published_version_id?: string | null;
+      updated_at?: string;
+    };
+    Relationships: [];
+  };
+  animation_asset_versions: {
+    Row: {
+      id: string;
+      asset_id: string;
+      version: number;
+      source_video_path: string | null;
+      landmark_json_path: string | null;
+      status: "pending" | "processing" | "failed" | "ready" | "approved" | "published" | "archived";
+      fps: number | null;
+      total_frames: number | null;
+      duration_ms: number | null;
+      quality_score: number | null;
+      extraction_metadata: Record<string, unknown>;
+      created_by: string | null;
+      approved_by: string | null;
+      approved_at: string | null;
+      created_at: string;
+      updated_at: string;
+    };
+    Insert: {
+      id?: string;
+      asset_id: string;
+      version: number;
+      source_video_path?: string | null;
+      landmark_json_path?: string | null;
+      status?: "pending" | "processing" | "failed" | "ready" | "approved" | "published" | "archived";
+      fps?: number | null;
+      total_frames?: number | null;
+      duration_ms?: number | null;
+      quality_score?: number | null;
+      extraction_metadata?: Record<string, unknown>;
+      created_by?: string | null;
+      approved_by?: string | null;
+      approved_at?: string | null;
+      created_at?: string;
+      updated_at?: string;
+    };
+    Update: {
+      source_video_path?: string | null;
+      landmark_json_path?: string | null;
+      status?: "pending" | "processing" | "failed" | "ready" | "approved" | "published" | "archived";
+      fps?: number | null;
+      total_frames?: number | null;
+      duration_ms?: number | null;
+      quality_score?: number | null;
+      extraction_metadata?: Record<string, unknown>;
+      approved_by?: string | null;
+      approved_at?: string | null;
+      updated_at?: string;
+    };
+    Relationships: [];
+  };
+  animation_processing_jobs: {
+    Row: {
+      id: string;
+      version_id: string;
+      status: "queued" | "processing" | "completed" | "failed";
+      progress: number;
+      error_message: string | null;
+      created_at: string;
+      updated_at: string;
+    };
+    Insert: {
+      id?: string;
+      version_id: string;
+      status?: "queued" | "processing" | "completed" | "failed";
+      progress?: number;
+      error_message?: string | null;
+      created_at?: string;
+      updated_at?: string;
+    };
+    Update: {
+      status?: "queued" | "processing" | "completed" | "failed";
+      progress?: number;
+      error_message?: string | null;
+      updated_at?: string;
+    };
+    Relationships: [];
+  };
+  animation_asset_reviews: {
+    Row: {
+      id: string;
+      version_id: string;
+      reviewer_id: string;
+      decision: "approved" | "rejected";
+      notes: string | null;
+      created_at: string;
+    };
+    Insert: {
+      id?: string;
+      version_id: string;
+      reviewer_id: string;
+      decision: "approved" | "rejected";
+      notes?: string | null;
+      created_at?: string;
+    };
+    Update: {
+      decision?: "approved" | "rejected";
+      notes?: string | null;
     };
     Relationships: [];
   };

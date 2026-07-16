@@ -16,13 +16,6 @@ export const middleware = async (request: NextRequest) => {
   if (isAdminPath(pathname)) {
     const isAuthenticated = user?.app_metadata?.role === "admin";
 
-    if (pathname === "/admin/login" && isAuthenticated) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/admin";
-      url.search = "";
-      return NextResponse.redirect(url);
-    }
-
     if (isProtectedAdminPath(pathname) && !isAuthenticated) {
       const url = request.nextUrl.clone();
       url.pathname = "/admin/login";

@@ -3,11 +3,17 @@ import { defineConfig } from "vitest/config";
 import path from "path";
 
 export default defineConfig({
+  oxc: {
+    jsx: {
+      runtime: "automatic",
+    },
+  },
   test: {
     environment: "jsdom",
     include: [
       "src/features/**/__tests__/**/*.test.ts",
       "src/features/**/__tests__/**/*.test.tsx",
+      "src/components/**/__tests__/**/*.test.tsx",
       "src/lib/__tests__/**/*.test.ts",
       "src/lib/supabase/**/__tests__/**/*.test.ts"
     ],

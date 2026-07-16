@@ -1,5 +1,5 @@
 import type { AnimationFrame, LandmarkPoint } from "../types";
-import { HAND_CONNECTIONS } from "../types";
+import { HAND_CONNECTIONS, MEDIAPIPE_POSE_CONNECTIONS } from "../types";
 
 export interface LandmarkRendererOptions {
   width: number;
@@ -62,14 +62,49 @@ export class LandmarkCanvasRenderer {
       return;
     }
 
-    const leftHand = frame.landmarks[0];
-    const rightHand = frame.landmarks.length > 1 ? frame.landmarks[1] : null;
+    const leftHand = frame.landmarks.find((hand) => hand.side === "left") ?? frame.landmarks[0];
+    const rightHand = frame.landmarks.find((hand) => hand.side === "right") ?? (frame.landmarks.length > 1 ? frame.landmarks[1] : null);
 
     if (leftHand && this.opts.showLeftHand) {
       this.drawHand(ctx, leftHand.landmarks, this.opts.leftColor);
     }
     if (rightHand && this.opts.showRightHand) {
       this.drawHand(ctx, rightHand.landmarks, this.opts.rightColor);
+    }
+    if (frame.poseLandmarks && frame.poseLandmarks.length > 0) {
+      this.drawPose(ctx, frame.poseLandmarks);
+    }
+    if (frame.faceLandmarks && frame.faceLandmarks.length > 0) {
+      this.drawFace(ctx, frame.faceLandmarks);
+    }
+  }
+
+  private drawPose(ctx: CanvasRenderingContext2D, landmarks: LandmarkPoint[]): void {
+    ctx.strokeStyle = "#C0392B";
+    ctx.fillStyle = "#E74C3C";
+    ctx.lineWidth = this.opts.lineWidth;
+    for (const [start, end] of MEDIAPIPE_POSE_CONNECTIONS) {
+      const a = landmarks[start];
+      const b = landmarks[end];
+      if (!a || !b) continue;
+      ctx.beginPath();
+      ctx.moveTo(a.x * this.canvas.width, a.y * this.canvas.height);
+      ctx.lineTo(b.x * this.canvas.width, b.y * this.canvas.height);
+      ctx.stroke();
+    }
+    for (const landmark of landmarks) {
+      ctx.beginPath();
+      ctx.arc(landmark.x * this.canvas.width, landmark.y * this.canvas.height, this.opts.jointRadius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  private drawFace(ctx: CanvasRenderingContext2D, landmarks: LandmarkPoint[]): void {
+    ctx.fillStyle = "#7F1D1D";
+    for (const landmark of landmarks) {
+      ctx.beginPath();
+      ctx.arc(landmark.x * this.canvas.width, landmark.y * this.canvas.height, 0.8, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 

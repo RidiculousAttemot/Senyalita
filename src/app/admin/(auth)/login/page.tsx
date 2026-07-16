@@ -1,21 +1,12 @@
-import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import AdminLoginForm from "./AdminLoginForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminLoginPage({
+export default function AdminLoginPage({
   searchParams,
 }: {
   searchParams: { setup?: string; denied?: string };
 }) {
-  const supabase = await createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (user?.app_metadata?.role === "admin") {
-    redirect("/admin");
-  }
-
   return (
     <div className="auth-shell">
       <header className="auth-header">
@@ -34,8 +25,8 @@ export default async function AdminLoginPage({
           <p className="admin-kicker">Senyalita Admin</p>
           <h1>Sign in to Admin</h1>
           <p className="panel-note auth-desc">
-            Sign in with your Supabase admin account. The user must have
-            <code> app_metadata.role = &quot; admin&quot; </code> assigned.
+            Use your authorized administrator account to manage Senyalita.
+            Access is restricted to approved administrators.
           </p>
           {searchParams?.setup ? (
             <p className="auth-banner auth-banner-info">
@@ -50,7 +41,7 @@ export default async function AdminLoginPage({
           <AdminLoginForm />
           <p className="auth-foot">
             <span className="auth-foot-note">Local development only.</span>
-            Admin access is not linked from the public site.
+            This area is separate from the public site.
           </p>
         </section>
       </main>

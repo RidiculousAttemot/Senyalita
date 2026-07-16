@@ -1,0 +1,119 @@
+import { NextRequest, NextResponse } from "next/server";
+import type { GestureAnimationAsset } from "@/features/sign-animation/types";
+import { requireAdmin } from "@/lib/supabase/queries/profiles";
+import { createSupabaseServiceClient } from "@/lib/supabase/service";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+const LANDMARK_BUCKET = "animation-landmarks";
+
+function isGestureAnimationAsset(value: unknown): value is GestureAnimationAsset {
+  if (!value || typeof value !== "object") return false;
+  const asset = value as Partial<GestureAnimationAsset>;
+  return typeof asset.label === "string" && Array.isArray(asset.frames) && typeof asset.fps === "number";
+}
+
+export async function POST(request: NextRequest, { params }: { params: { versionId: string } }) {
+  try {
+    const admin = await requireAdmin();
+    const body = await request.json() as {
+      action?: "complete-processing" | "approve" | "reject" | "publish" | "archive";
+      asset?: unknown;
+      qualityScore?: number;
+      notes?: string;
+    };
+    if (!body.action) return NextResponse.json({ error: "An asset action is required." }, { status: 400 });
+
+    const supabase = createSupabaseServiceClient();
+    const { data: version, error: versionError } = await supabase
+      .from("animation_asset_versions")
+      .select("id, asset_id, status")
+      .eq("id", params.versionId)
+      .maybeSingle();
+    if (versionError || !version) return NextResponse.json({ error: "Animation version not found." }, { status: 404 });
+
+    if (body.action === "complete-processing") {
+      if (!isGestureAnimationAsset(body.asset)) {
+        return NextResponse.json({ error: "A valid generated landmark animation is required." }, { status: 400 });
+      }
+      const landmarkPath = `${version.asset_id}/${version.id}/landmarks.json`;
+      const { error: uploadError } = await supabase.storage
+        .from(LANDMARK_BUCKET)
+        .upload(landmarkPath, JSON.stringify(body.asset), { contentType: "application/json", upsert: true });
+      if (uploadError) throw new Error(uploadError.message);
+
+      const { error: updateError } = await supabase
+        .from("animation_asset_versions")
+        .update({
+          status: "ready",
+          landmark_json_path: landmarkPath,
+          fps: body.asset.fps,
+          total_frames: body.asset.totalFrames,
+          duration_ms: Math.round(body.asset.duration),
+          quality_score: typeof body.qualityScore === "number" ? body.qualityScore : null,
+          extraction_metadata: body.asset.metadata,
+        })
+        .eq("id", version.id);
+      if (updateError) throw new Error(updateError.message);
+      await supabase.from("animation_processing_jobs").update({ status: "completed", progress: 100 }).eq("version_id", version.id);
+      return NextResponse.json({ ok: true, status: "ready" });
+    }
+
+    if (body.action === "approve" || body.action === "reject") {
+      if (body.action === "approve" && version.status !== "ready") {
+        return NextResponse.json({ error: "Only a ready animation can be approved." }, { status: 409 });
+      }
+      const nextStatus = body.action === "approve" ? "approved" : "failed";
+      const { error: reviewError } = await supabase.from("animation_asset_reviews").insert({
+        version_id: version.id,
+        reviewer_id: admin.id,
+        decision: body.action === "approve" ? "approved" : "rejected",
+        notes: body.notes ?? null,
+      });
+      if (reviewError) throw new Error(reviewError.message);
+      const { error: updateError } = await supabase
+        .from("animation_asset_versions")
+        .update({ status: nextStatus, approved_by: body.action === "approve" ? admin.id : null, approved_at: body.action === "approve" ? new Date().toISOString() : null })
+        .eq("id", version.id);
+      if (updateError) throw new Error(updateError.message);
+      return NextResponse.json({ ok: true, status: nextStatus });
+    }
+
+    if (body.action === "publish") {
+      if (version.status !== "approved") {
+        return NextResponse.json({ error: "Only an approved animation can be published." }, { status: 409 });
+      }
+      const { error: archiveError } = await supabase
+        .from("animation_asset_versions")
+        .update({ status: "archived" })
+        .eq("asset_id", version.asset_id)
+        .eq("status", "published");
+      if (archiveError) throw new Error(archiveError.message);
+      const { error: publishError } = await supabase
+        .from("animation_asset_versions")
+        .update({ status: "published" })
+        .eq("id", version.id);
+      if (publishError) throw new Error(publishError.message);
+      const { error: assetError } = await supabase
+        .from("animation_assets")
+        .update({ published_version_id: version.id })
+        .eq("id", version.asset_id);
+      if (assetError) throw new Error(assetError.message);
+      return NextResponse.json({ ok: true, status: "published" });
+    }
+
+    if (body.action === "archive") {
+      const { error: archiveError } = await supabase
+        .from("animation_asset_versions")
+        .update({ status: "archived" })
+        .eq("id", version.id);
+      if (archiveError) throw new Error(archiveError.message);
+      return NextResponse.json({ ok: true, status: "archived" });
+    }
+
+    return NextResponse.json({ error: "Unsupported asset action." }, { status: 400 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to update animation version." }, { status: 403 });
+  }
+}

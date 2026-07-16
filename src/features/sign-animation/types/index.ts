@@ -6,6 +6,7 @@ export interface LandmarkPoint {
 
 export interface HandLandmarks {
   landmarks: LandmarkPoint[];
+  side?: "left" | "right";
 }
 
 export interface BodyPose {
@@ -41,6 +42,8 @@ export interface EnhancedFrame {
 export interface AnimationFrame {
   timestamp: number;
   landmarks: HandLandmarks[];
+  poseLandmarks?: LandmarkPoint[];
+  faceLandmarks?: LandmarkPoint[];
 }
 
 export interface GestureAnimationAsset {
@@ -165,4 +168,8 @@ export const BODY_CONNECTIONS: ConnectionPair[] = [
   [3, 5], [4, 6], // shoulders → elbows
   [5, 7], [6, 8], // elbows → wrists
   [7, 9], [8, 10], // wrists → hands
+];
+
+export const MEDIAPIPE_POSE_CONNECTIONS: ConnectionPair[] = [
+  [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28], [27, 31], [28, 32],
 ];
