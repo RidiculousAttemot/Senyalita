@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, CheckCircle2, Database, ArrowUpRight, Download, Plus } from "lucide-react";
+import { Loader2, CheckCircle2, Database } from "lucide-react";
 
 interface ReviewItem {
   id: string;

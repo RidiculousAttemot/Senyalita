@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, AlertTriangle, BarChart3, TrendingUp, TrendingDown } from "lucide-react";
+import { Loader2, AlertTriangle, BarChart3 } from "lucide-react";
 
 interface ConfusionPair {
   gesture_label: string;

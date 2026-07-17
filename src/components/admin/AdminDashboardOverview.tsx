@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { Activity, ArrowUpRight, BarChart3, BrainCircuit, Camera, Clock3, Database, Film, Gauge, Sparkles, Wand2, WandSparkles, BookOpen } from "lucide-react";
+import { Activity, ArrowUpRight, BarChart3, BrainCircuit, Camera, Clock3, Database, Film, Gauge, Sparkles, Wand2, WandSparkles } from "lucide-react";
 import { fetchAdminAnalytics } from "@/lib/supabase/queries/analytics";
 import { listTelemetryEvents } from "@/lib/supabase/queries/telemetry";
 import { createSupabaseServerClient } from "@/lib/supabase/server";

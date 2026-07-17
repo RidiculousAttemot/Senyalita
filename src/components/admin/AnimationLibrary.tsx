@@ -4,21 +4,14 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Search,
   Filter,
-  Play,
   Eye,
-  Edit3,
-  RotateCcw,
   Send,
   Archive,
-  Trash2,
-  Copy,
   CheckCircle2,
   Clock,
   AlertTriangle,
   XCircle,
   FileJson,
-  Layers,
-  BarChart3,
   Star,
 } from "lucide-react";
 import type { AnimationLibraryAsset } from "@/lib/animationLibrary";

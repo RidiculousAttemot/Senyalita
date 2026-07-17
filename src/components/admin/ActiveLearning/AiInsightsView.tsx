@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, Lightbulb, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, BarChart3, BookOpen, BrainCircuit } from "lucide-react";
+import { Loader2, Lightbulb, TrendingUp, TrendingDown, AlertTriangle, BarChart3, BrainCircuit, BookOpen } from "lucide-react";
 import { shouldSuggestRetraining, generateRetrainingSuggestion } from "@/features/active-learning/retrainingSuggester";
 import { WORD_TO_GLOSS } from "@/features/gesture-mapping/glossDictionary";
 

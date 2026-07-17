@@ -13,6 +13,4 @@ export * as analytics from "./queries/analytics";
 export * as feedback from "./queries/feedback";
 export * as telemetryQueries from "./queries/telemetry";
 export * as textToSignLogs from "./queries/textToSignLogs";
-export * as driftSnapshots from "./queries/driftSnapshots";
-export * as retrainingJobs from "./queries/retrainingJobs";
-export * as deploymentHistory from "./queries/deploymentHistory";
+

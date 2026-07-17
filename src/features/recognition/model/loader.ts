@@ -66,9 +66,7 @@ const loadModel = async (): Promise<boolean> => {
         error: null,
       });
 
-      console.log(
-        `[ModelLoader] Ready | version: bilstm_v4 | path: ${MODEL_URL} | classes: ${labelsData.labels.length} | input: [1,35,${FEATURE_DIMENSION}]`
-      );
+      
 
       return true;
     } catch (err) {

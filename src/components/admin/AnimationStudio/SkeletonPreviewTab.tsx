@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   Play,
   Pause,
@@ -8,8 +8,6 @@ import {
   SkipBack,
   SkipForward,
   Repeat,
-  ChevronLeft,
-  ChevronRight,
   Maximize2,
   Eye,
   EyeOff,

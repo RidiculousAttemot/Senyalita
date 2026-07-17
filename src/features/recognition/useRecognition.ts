@@ -11,7 +11,6 @@ import { loadModel, infer, getCachedResult } from "./model";
 import { ModeManager, type RecognitionMode } from "./recognitionModes";
 import { RecognitionPriorityManager } from "./priority";
 
-const DEBUG = true;
 
 const INFERENCE_INTERVAL_MS = 100;
 const FAST_INFERENCE_INTERVAL_MS = 50;
@@ -109,7 +108,7 @@ export const useRecognition = (
           const { sample, usedEarly, frameCount } = bufferRef.current.adaptiveSample(EARLY_CONFIDENCE_THRESHOLD);
           if (!sample) return;
 
-          if (DEBUG) console.log(`[PIPELINE:Infer] ${frameCount} frames (early=${usedEarly})`);
+          
 
           const inferStart = performance.now();
 
@@ -124,9 +123,7 @@ export const useRecognition = (
               lastUiUpdateRef.current = performance.now();
             }
 
-            if (DEBUG) {
-              console.log(`[INFER] label="${temporalResult.label}" conf=${temporalResult.confidence.toFixed(4)} top3=[${temporalResult.topK.slice(0,3).map(k => `${k.label}:${k.confidence.toFixed(3)}`).join(', ')}]`);
-            }
+            
 
             const translated = translateResult(temporalResult);
             const smoothed = smootherRef.current?.smooth(translated) ?? translated;
@@ -211,12 +208,7 @@ export const useRecognition = (
       const now = performance.now();
       if (bufferRef.current) {
         bufferRef.current.append(left, right);
-        if (DEBUG) {
-          const len = bufferRef.current.length;
-          if (len === 1 || len === 5 || len % 10 === 0) {
-            console.log(`[PIPELINE:Buffer] ${len} frames | left=${left ? "filled" : "null"} right=${right ? "filled" : "null"}`);
-          }
-        }
+        
         if (now - lastUiUpdateRef.current > UI_UPDATE_INTERVAL_MS) {
           setBufferLength(bufferRef.current.length);
         }

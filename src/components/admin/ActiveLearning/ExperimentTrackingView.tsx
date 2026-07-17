@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, FlaskConical, TrendingUp, Clock, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, FlaskConical, CheckCircle2, XCircle } from "lucide-react";
 
 interface Experiment {
   id: string;

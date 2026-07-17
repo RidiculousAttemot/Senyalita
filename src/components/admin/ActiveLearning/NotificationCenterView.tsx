@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, Bell, AlertTriangle, CheckCircle2, Info, XCircle, ExternalLink, Archive } from "lucide-react";
+import { Loader2, Bell, ExternalLink, AlertTriangle, Info, CheckCircle2, XCircle } from "lucide-react";
 
 interface NotificationEvent {
   id: string;

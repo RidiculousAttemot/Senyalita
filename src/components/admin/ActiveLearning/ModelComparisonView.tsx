@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Loader2, ArrowLeftRight, CheckCircle2, XCircle, TrendingUp, TrendingDown } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Loader2, TrendingUp, TrendingDown } from "lucide-react";
 
 interface Model {
   id: string;

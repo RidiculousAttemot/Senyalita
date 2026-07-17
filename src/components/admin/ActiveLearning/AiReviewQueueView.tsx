@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, CheckCircle2, XCircle, AlertTriangle, Search, Filter, ArrowUpRight, BookOpen, Tag } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, AlertTriangle, Search, BookOpen } from "lucide-react";
 import type { ReviewQueueItem } from "@/lib/supabase/types";
 
 interface QueueItemDisplay extends ReviewQueueItem {
