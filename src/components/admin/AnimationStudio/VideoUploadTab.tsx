@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Upload, Camera, Film, X, FileVideo, AlertCircle, Wand2, Monitor, RefreshCw, Check, Play } from "lucide-react";
+import { Upload, Camera, Film, X, AlertCircle, Wand2, Monitor, RefreshCw, Check, Activity } from "lucide-react";
 import type { VideoMetadata } from "./types";
+import type { AnimationFrame, GestureAnimationAsset, LandmarkPoint } from "@/features/sign-animation/types";
+import { HAND_CONNECTIONS } from "@/features/sign-animation/types";
+import { drawFullPose, drawStylizedFace, drawFullHand } from "@/features/sign-animation/renderer/renderUtils";
 
 interface VideoUploadTabProps {
   onVideoReady: (meta: VideoMetadata) => void;
@@ -29,16 +32,256 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
   const [selectedCamera, setSelectedCamera] = useState("");
   const [cameraLoading, setCameraLoading] = useState(false);
 
+  // Holistic live overlay state
+  const [holisticLoading, setHolisticLoading] = useState(false);
+  const [holisticReady, setHolisticReady] = useState(false);
+  const [holisticError, setHolisticError] = useState("");
+  const [showSkeletonOverlay, setShowSkeletonOverlay] = useState(true);
+  const [diagFrameCount, setDiagFrameCount] = useState(0);
+  const [diagFps, setDiagFps] = useState(0);
+  const [diagPoseDetected, setDiagPoseDetected] = useState(false);
+  const [diagLeftHandDetected, setDiagLeftHandDetected] = useState(false);
+  const [diagRightHandDetected, setDiagRightHandDetected] = useState(false);
+  const [recordedLandmarkCount, setRecordedLandmarkCount] = useState(0);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const webcamVideoRef = useRef<HTMLVideoElement>(null);
   const previewVideoRef = useRef<HTMLVideoElement>(null);
+  const skeletonCanvasRef = useRef<HTMLCanvasElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const holisticLandmarkerRef = useRef<any>(null);
+  const holAnimFrameRef = useRef<number | null>(null);
+  const recordedFramesRef = useRef<AnimationFrame[]>([]);
+  const holFpsTimestampsRef = useRef<number[]>([]);
+  const recordedAssetRef = useRef<GestureAnimationAsset | null>(null);
+  const recordPhaseRef = useRef<RecordPhase>("idle");
 
   const MAX_DURATION = 60;
   const MAX_SIZE = 524288000;
+
+  const stopHolistic = useCallback(() => {
+    if (holAnimFrameRef.current !== null) {
+      cancelAnimationFrame(holAnimFrameRef.current);
+      holAnimFrameRef.current = null;
+    }
+    if (holisticLandmarkerRef.current) {
+      try { holisticLandmarkerRef.current.close(); } catch {}
+      holisticLandmarkerRef.current = null;
+    }
+    setHolisticReady(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const prevPoseLandmarksRef = useRef<LandmarkPoint[] | null>(null);
+  const prevFaceLandmarksRef = useRef<LandmarkPoint[] | null>(null);
+  const prevLeftHandRef = useRef<LandmarkPoint[] | null>(null);
+  const prevRightHandRef = useRef<LandmarkPoint[] | null>(null);
+
+  const lerpLandmarks = (current: LandmarkPoint[] | null | undefined, previous: LandmarkPoint[] | null): LandmarkPoint[] | null => {
+    if (!current) return previous;
+    if (!previous || current.length !== previous.length) return current;
+    const t = 0.3;
+    return current.map((p, i) => ({
+      x: previous[i].x * (1 - t) + p.x * t,
+      y: previous[i].y * (1 - t) + p.y * t,
+      z: (previous[i].z ?? 0) * (1 - t) + (p.z ?? 0) * t,
+    }));
+  };
+
+  const drawSkeleton = useCallback((ctx: CanvasRenderingContext2D, w: number, h: number, frame: AnimationFrame) => {
+    ctx.clearRect(0, 0, w, h);
+
+    const style = {
+      bodyColor: "#94a3b8",
+      jointColor: "#cbd5e1",
+      faceColor: "rgba(251,191,36,0.08)",
+      faceFeatureColor: "#fbbf24",
+      leftHandColor: "#C0593A",
+      rightHandColor: "#60A5FA",
+      lineWidth: 2,
+      jointRadius: 2.5,
+    };
+
+    if (frame.poseLandmarks && frame.poseLandmarks.length > 0) {
+      const smoothed = lerpLandmarks(frame.poseLandmarks, prevPoseLandmarksRef.current);
+      prevPoseLandmarksRef.current = frame.poseLandmarks;
+      drawFullPose(ctx, smoothed ?? frame.poseLandmarks, w, h, style);
+    }
+
+    if (frame.faceLandmarks && frame.faceLandmarks.length > 0) {
+      const smoothed = lerpLandmarks(frame.faceLandmarks, prevFaceLandmarksRef.current);
+      prevFaceLandmarksRef.current = frame.faceLandmarks;
+      drawStylizedFace(ctx, smoothed ?? frame.faceLandmarks, w, h, style);
+    }
+
+    for (const hand of frame.landmarks) {
+      const color = hand.side === "left" ? style.leftHandColor : style.rightHandColor;
+      let landmarks = hand.landmarks;
+      if (hand.side === "left") {
+        const smoothed = lerpLandmarks(hand.landmarks, prevLeftHandRef.current);
+        prevLeftHandRef.current = hand.landmarks;
+        if (smoothed) landmarks = smoothed;
+      } else {
+        const smoothed = lerpLandmarks(hand.landmarks, prevRightHandRef.current);
+        prevRightHandRef.current = hand.landmarks;
+        if (smoothed) landmarks = smoothed;
+      }
+      drawFullHand(ctx, landmarks, color, w, h, style.lineWidth, style.jointRadius);
+    }
+  }, []);
+
+  const startHolisticDetection = useCallback(async () => {
+    const video = webcamVideoRef.current;
+    const canvas = skeletonCanvasRef.current;
+    if (!video || !canvas) return;
+
+    setHolisticLoading(true);
+    try {
+      const { FilesetResolver, HolisticLandmarker } = await import("@mediapipe/tasks-vision");
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm"
+      );
+      const landmarker = await HolisticLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/latest/holistic_landmarker.task",
+          delegate: "GPU",
+        },
+        runningMode: "VIDEO",
+      });
+      holisticLandmarkerRef.current = landmarker;
+      setHolisticReady(true);
+      setHolisticLoading(false);
+      setHolisticError("");
+
+      const ctx = canvas.getContext("2d")!;
+
+      const detectLoop = (timestamp: number) => {
+        if (!holisticLandmarkerRef.current || !video || video.readyState < 2) {
+          holAnimFrameRef.current = requestAnimationFrame(detectLoop);
+          return;
+        }
+
+        if (ctx && video.videoWidth > 0 && video.videoHeight > 0) {
+          const rect = video.getBoundingClientRect();
+          const w = Math.round(rect.width);
+          const h = Math.round(rect.height);
+          if (w > 0 && h > 0 && (canvas.width !== w || canvas.height !== h)) {
+            canvas.width = w;
+            canvas.height = h;
+          }
+        }
+
+        const result = holisticLandmarkerRef.current.detectForVideo(video, timestamp);
+        const poseLm = result.poseLandmarks?.[0] ?? [];
+        const faceLm = result.faceLandmarks?.[0] ?? [];
+        const leftHand = result.leftHandLandmarks?.[0] ?? [];
+        const rightHand = result.rightHandLandmarks?.[0] ?? [];
+
+        setDiagPoseDetected(poseLm.length >= 11);
+        setDiagLeftHandDetected(leftHand.length >= 21);
+        setDiagRightHandDetected(rightHand.length >= 21);
+
+        // FPS tracking
+        holFpsTimestampsRef.current.push(timestamp);
+        const oneSecAgo = timestamp - 1000;
+        holFpsTimestampsRef.current = holFpsTimestampsRef.current.filter(t => t > oneSecAgo);
+        if (holFpsTimestampsRef.current.length > 1) {
+          setDiagFps(holFpsTimestampsRef.current.length);
+        }
+
+        const frame: AnimationFrame = {
+          timestamp,
+          landmarks: [
+            ...(leftHand.length >= 21 ? [{ landmarks: leftHand.map((p: any) => ({ x: p.x, y: p.y, z: p.z })), side: "left" as const }] : []),
+            ...(rightHand.length >= 21 ? [{ landmarks: rightHand.map((p: any) => ({ x: p.x, y: p.y, z: p.z })), side: "right" as const }] : []),
+          ],
+          poseLandmarks: poseLm.map((p: any) => ({ x: p.x, y: p.y, z: p.z })),
+          faceLandmarks: faceLm.map((p: any) => ({ x: p.x, y: p.y, z: p.z })),
+        };
+
+        if (recordPhaseRef.current === "recording") {
+          recordedFramesRef.current.push(frame);
+          setDiagFrameCount(recordedFramesRef.current.length);
+        }
+
+        if (ctx) {
+          const w = canvas.width;
+          const h = canvas.height;
+          ctx.clearRect(0, 0, w, h);
+          drawSkeleton(ctx, w, h, frame);
+        }
+
+        holAnimFrameRef.current = requestAnimationFrame(detectLoop);
+      };
+
+      holAnimFrameRef.current = requestAnimationFrame(detectLoop);
+    } catch (err) {
+      setHolisticError(err instanceof Error ? err.message : "Failed to load Holistic model");
+      setHolisticLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawSkeleton]);
+
+  useEffect(() => { recordPhaseRef.current = recordPhase; }, [recordPhase]);
+
+  // Camera diagnostics — logs video state every second while webcam is active
+  useEffect(() => {
+    if (source !== "webcam" || !webcamActive) return;
+    const diagInterval = setInterval(() => {
+      const v = webcamVideoRef.current;
+      if (!v) return;
+      console.log(`[Camera Diag] ${JSON.stringify({
+        readyState: v.readyState,
+        videoWidth: v.videoWidth,
+        videoHeight: v.videoHeight,
+        paused: v.paused,
+        ended: v.ended,
+        hasSrcObject: !!v.srcObject,
+        srcObjectType: v.srcObject ? (v.srcObject as MediaStream)?.getVideoTracks?.()?.length ?? 'unknown' : 'none',
+        hasHolistic: !!holisticLandmarkerRef.current,
+        holisticReady: holisticReady,
+        recordPhase: recordPhaseRef.current,
+        framesCaptured: recordedFramesRef.current.length,
+      })}`, v.srcObject ? {
+        tracks: (v.srcObject as MediaStream).getVideoTracks().map((t: MediaStreamTrack) => ({
+          label: t.label,
+          enabled: t.enabled,
+          readyState: t.readyState,
+        }))
+      } : 'no stream');
+    }, 1000);
+    return () => clearInterval(diagInterval);
+  }, [source, webcamActive, holisticReady]);
+
+  // Bind stream to video element AFTER source triggers the <video> to mount.
+  // This fixes the race where the ref is null because setSource() hasn't run yet.
+  useEffect(() => {
+    if (source !== "webcam" || !streamRef.current) return;
+    const video = webcamVideoRef.current;
+    if (!video) return;
+
+    console.log("[Webcam] Binding stream to video element");
+    video.srcObject = streamRef.current;
+
+    const startPipeline = async () => {
+      try {
+        if (video.readyState < 1) {
+          await new Promise<void>((resolve) => { video.onloadedmetadata = () => resolve(); });
+        }
+        console.log("[Webcam] Metadata loaded:", { videoWidth: video.videoWidth, videoHeight: video.videoHeight });
+        await video.play();
+        console.log("[Webcam] Video playing");
+        startHolisticDetection();
+      } catch (err) {
+        console.error("[Webcam] Failed to start video pipeline:", err);
+      }
+    };
+    startPipeline();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source]);
 
   useEffect(() => {
     navigator.mediaDevices?.enumerateDevices().then((devices) => {
@@ -50,6 +293,7 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
 
   useEffect(() => {
     return () => {
+      stopHolistic();
       if (videoUrl) URL.revokeObjectURL(videoUrl);
       if (recordedUrl) URL.revokeObjectURL(recordedUrl);
       stopWebcam();
@@ -57,17 +301,29 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
   }, [videoUrl, recordedUrl]);
 
   const stopWebcam = useCallback(() => {
+    stopHolistic();
+    if (webcamVideoRef.current && webcamVideoRef.current.srcObject) {
+      webcamVideoRef.current.srcObject = null;
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
     setWebcamActive(false);
     setRecordPhase("idle");
+    setDiagFrameCount(0);
+    setDiagFps(0);
+    setDiagPoseDetected(false);
+    setDiagLeftHandDetected(false);
+    setDiagRightHandDetected(false);
+    recordedFramesRef.current = [];
+    recordedAssetRef.current = null;
+    setRecordedLandmarkCount(0);
     if (recordTimerRef.current) {
       clearInterval(recordTimerRef.current);
       recordTimerRef.current = null;
     }
-  }, []);
+  }, [stopHolistic]);
 
   const startWebcam = useCallback(async (deviceId?: string) => {
     setError("");
@@ -80,15 +336,23 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
         audio: false,
       };
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      streamRef.current = stream;
-      if (webcamVideoRef.current) {
-        webcamVideoRef.current.srcObject = stream;
+      if (!stream || !stream.active) {
+        throw new Error("Camera stream is not active");
       }
+      console.log("[Webcam] Stream obtained:", {
+        id: stream.id,
+        active: stream.active,
+        videoTracks: stream.getVideoTracks().length,
+        audioTracks: stream.getAudioTracks().length,
+        trackLabels: stream.getVideoTracks().map((t: MediaStreamTrack) => t.label),
+      });
+      streamRef.current = stream;
       setWebcamActive(true);
       setRecordPhase("streaming");
+      // Set source NOW so the <video> element renders on next tick
       setSource("webcam");
-    } catch {
-      setError("Camera access denied or unavailable. Please allow camera permission or upload a video instead.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Camera access denied or unavailable.");
     } finally {
       setCameraLoading(false);
     }
@@ -96,9 +360,22 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
 
   const startRecording = useCallback(() => {
     if (!streamRef.current) return;
+    const v = webcamVideoRef.current;
+    console.log("[Recording] Starting. Pre-recording video state:", {
+      readyState: v?.readyState,
+      videoWidth: v?.videoWidth,
+      videoHeight: v?.videoHeight,
+      paused: v?.paused,
+      hasSrcObject: !!v?.srcObject,
+      streamTracks: streamRef.current.getVideoTracks().length,
+      trackStates: streamRef.current.getVideoTracks().map((t: MediaStreamTrack) => ({ enabled: t.enabled, readyState: t.readyState })),
+    });
     setError("");
     setRecordPhase("recording");
     setRecordDuration(0);
+    recordedFramesRef.current = [];
+    setDiagFrameCount(0);
+    setRecordedLandmarkCount(0);
     const chunks: BlobPart[] = [];
     const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
       ? "video/webm;codecs=vp9"
@@ -123,6 +400,20 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
     };
 
     recorder.start(100);
+    const v2 = webcamVideoRef.current;
+    if (v2) {
+      setTimeout(() => {
+        console.log("[Recording] Post-recording video state (500ms after start):", {
+          readyState: v2.readyState,
+          videoWidth: v2.videoWidth,
+          videoHeight: v2.videoHeight,
+          paused: v2.paused,
+          hasSrcObject: !!v2.srcObject,
+          streamTracks: streamRef.current?.getVideoTracks().length,
+          trackStates: streamRef.current?.getVideoTracks().map((t: MediaStreamTrack) => ({ enabled: t.enabled, readyState: t.readyState })),
+        });
+      }, 500);
+    }
     const startTime = Date.now();
     recordTimerRef.current = setInterval(() => {
       const elapsed = (Date.now() - startTime) / 1000;
@@ -147,7 +438,12 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
     setFile(recordedFile);
     setVideoUrl(recordedUrl);
     setSource("file");
+
+    // Generate asset from recorded landmark frames
+    const frames = recordedFramesRef.current;
+
     stopWebcam();
+
     const video = document.createElement("video");
     video.preload = "metadata";
     video.onloadedmetadata = () => {
@@ -158,16 +454,42 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
         setVideoUrl("");
         return;
       }
-      const meta: VideoMetadata = {
-        file: recordedFile,
-        url: recordedUrl,
-        duration: video.duration,
-        width: video.videoWidth,
-        height: video.videoHeight,
-        fps: 30,
-        fileSize: recordedBlob.size,
+
+      const buildMeta = (preAsset: GestureAnimationAsset | null) => {
+        const meta: VideoMetadata = {
+          file: recordedFile,
+          url: recordedUrl,
+          duration: video.duration,
+          width: video.videoWidth,
+          height: video.videoHeight,
+          fps: 30,
+          fileSize: recordedBlob.size,
+          preExtractedAsset: preAsset ?? undefined,
+        };
+        setMetadata(meta);
       };
-      setMetadata(meta);
+
+      if (frames.length > 10) {
+        import("@/features/sign-animation/processing").then((mod) => {
+          const repaired = mod.repairMissingFrames(frames);
+          const normalized = mod.normalizeFrameSequence(repaired, 30);
+          const asset = mod.createGestureAnimationAsset({
+            frames: normalized,
+            fps: 30,
+            label: `WEBCAM-${Date.now()}`,
+            language: "FSL",
+            source: "animation-studio-webcam",
+          });
+          recordedAssetRef.current = asset;
+          setRecordedLandmarkCount(asset.frames.length);
+          buildMeta(asset);
+        }).catch((err) => {
+          console.error("[Video] Failed to process webcam landmark frames:", err);
+          buildMeta(null);
+        });
+      } else {
+        buildMeta(null);
+      }
     };
     video.onerror = () => setError("Could not read recorded video.");
     video.src = recordedUrl;
@@ -262,6 +584,9 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
     setRecordedUrl("");
     setRecordDuration(0);
     setUploadProgress(0);
+    setRecordedLandmarkCount(0);
+    recordedFramesRef.current = [];
+    recordedAssetRef.current = null;
     stopWebcam();
   }, [videoUrl, recordedUrl]);
 
@@ -578,7 +903,7 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
                 <div className="vupload-spinner" />
                 <p style={{ color: "#94a3b8", fontSize: 14 }}>Initializing camera...</p>
               </div>
-            ) : !webcamActive ? (
+            ) : (
               <div
                 className="vupload-zone"
                 onClick={() => startWebcam(selectedCamera || undefined)}
@@ -620,107 +945,222 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
                   </div>
                 )}
               </div>
-            ) : (
-              <>
-                <div className="vupload-webcam-wrapper">
-                  <video
-                    ref={webcamVideoRef}
-                    className={`vupload-webcam-video ${mirrored ? "mirrored" : ""}`}
-                    autoPlay
-                    muted
-                    playsInline
-                  />
-                  {recordPhase === "recording" && (
-                    <div className="vupload-recording-indicator">
-                      <span className="vupload-recording-dot" />
-                      REC
-                    </div>
-                  )}
-                  {recordPhase !== "idle" && (
-                    <div className="vupload-timer">
-                      {formatDuration(recordDuration)}
-                    </div>
-                  )}
-                </div>
-
-                <div className="vupload-controls">
-                  {recordPhase === "streaming" && (
-                    <button className="vupload-btn vupload-btn-danger" onClick={startRecording}>
-                      <Camera /> Start Recording
-                    </button>
-                  )}
-                  {recordPhase === "recording" && (
-                    <button className="vupload-btn vupload-btn-danger" onClick={stopRecording}>
-                      <Film /> Stop ({formatDuration(recordDuration)})
-                    </button>
-                  )}
-                  <button className="vupload-btn" onClick={stopWebcam}>
-                    <X /> Cancel
-                  </button>
-                  <button
-                    className="vupload-btn"
-                    onClick={() => setMirrored(!mirrored)}
-                    title="Toggle mirror"
-                    style={{ padding: "8px 10px" }}
-                  >
-                    <RefreshCw size={16} />
-                  </button>
-                  {cameras.length > 1 && (
-                    <select
-                      value={selectedCamera}
-                      onChange={(e) => {
-                        setSelectedCamera(e.target.value);
-                        stopWebcam();
-                        setTimeout(() => startWebcam(e.target.value), 300);
-                      }}
-                      style={{
-                        background: "#1e293b",
-                        border: "1px solid #334155",
-                        borderRadius: 6,
-                        color: "#e2e8f0",
-                        padding: "6px 8px",
-                        fontSize: 12,
-                      }}
-                    >
-                      {cameras.map((cam) => (
-                        <option key={cam.deviceId} value={cam.deviceId}>
-                          {cam.label || `Camera ${cam.deviceId.slice(0, 8)}`}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-
-                {recordPhase === "done" && recordedBlob && (
-                  <div className="vupload-recorded-preview">
-                    <video ref={previewVideoRef} src={recordedUrl} controls />
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8, justifyContent: "center" }}>
-                      <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>
-                        Recording: {formatDuration(recordDuration)} &middot;{" "}
-                        {formatSize(recordedBlob.size)}
-                      </p>
-                      <button className="vupload-btn vupload-btn-success" onClick={handleRecordedConfirm}>
-                        <Check size={16} /> Use This Video
-                      </button>
-                      <button
-                        className="vupload-btn"
-                        onClick={() => {
-                          setRecordedBlob(null);
-                          URL.revokeObjectURL(recordedUrl);
-                          setRecordedUrl("");
-                          setRecordDuration(0);
-                          setRecordPhase("streaming");
-                        }}
-                      >
-                        <X size={16} /> Retake
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
             )}
           </div>
         </div>
+      )}
+
+      {/* WEBCAM LIVE VIEW */}
+      {source === "webcam" && (
+        <>
+          <div style={{ position: "relative", borderRadius: 12, overflow: "hidden", background: "#000", width: "100%", minHeight: 420 }}>
+            <video
+              ref={webcamVideoRef}
+              className={`vupload-webcam-video ${mirrored ? "mirrored" : ""}`}
+              autoPlay
+              muted
+              playsInline
+              style={{ width: "100%", height: "auto", display: "block", position: "relative", zIndex: 1 }}
+            />
+            {showSkeletonOverlay && (
+              <canvas
+                ref={skeletonCanvasRef}
+                width={400}
+                height={400}
+                style={{
+                  position: "absolute", top: 0, left: 0,
+                  width: "100%", height: "100%",
+                  display: "block", zIndex: 2,
+                  pointerEvents: "none",
+                }}
+              />
+            )}
+            {recordPhase === "recording" && (
+              <div className="vupload-recording-indicator" style={{ zIndex: 3 }}>
+                <span className="vupload-recording-dot" />
+                REC
+              </div>
+            )}
+            {recordPhase !== "idle" && (
+              <div className="vupload-timer" style={{ zIndex: 3 }}>
+                {formatDuration(recordDuration)}
+              </div>
+            )}
+            {!holisticReady && !holisticLoading && (
+              <div style={{ position: "absolute", zIndex: 3, bottom: 8, left: 8, fontSize: 11, color: "#94a3b8", background: "rgba(0,0,0,0.6)", padding: "4px 8px", borderRadius: 4 }}>
+                Holistic: {holisticError || "not started"}
+              </div>
+            )}
+            {holisticLoading && (
+              <div style={{ position: "absolute", zIndex: 3, bottom: 8, left: 8, fontSize: 11, color: "#60a5fa", background: "rgba(0,0,0,0.6)", padding: "4px 8px", borderRadius: 4 }}>
+                Loading Holistic...
+              </div>
+            )}
+            {holisticReady && showSkeletonOverlay && (
+              <div style={{ position: "absolute", zIndex: 3, bottom: 8, left: 8, display: "flex", gap: 6, fontSize: 10 }}>
+                {[
+                  { label: "Pose", on: diagPoseDetected },
+                  { label: "L Hand", on: diagLeftHandDetected },
+                  { label: "R Hand", on: diagRightHandDetected },
+                ].map((d) => (
+                  <span key={d.label} style={{
+                    padding: "2px 6px", borderRadius: 3,
+                    background: d.on ? "rgba(74,222,128,0.2)" : "rgba(100,116,139,0.2)",
+                    color: d.on ? "#86efac" : "#64748b",
+                  }}>{d.label}</span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: "flex", gap: 12, padding: "6px 10px", background: "#0f172a", borderRadius: 8, border: "1px solid #1e293b", fontSize: 11, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ color: webcamActive ? "#4ade80" : "#64748b", display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: webcamActive ? "#4ade80" : "#64748b" }} />
+              Camera {webcamActive ? "Ready" : "Off"}
+            </span>
+            <span style={{ color: holisticReady ? "#4ade80" : holisticLoading ? "#60a5fa" : "#64748b" }}>
+              Holistic: {holisticReady ? "Ready" : holisticLoading ? "Loading..." : "Off"}
+            </span>
+            {holisticReady && (
+              <>
+                <span style={{ color: "#94a3b8" }}>{diagFps} FPS</span>
+                <span style={{ color: "#94a3b8" }}>{diagFrameCount} frames</span>
+              </>
+            )}
+            {recordPhase === "recording" && (
+              <span style={{ color: "#fca5a5" }}>Recording {formatDuration(recordDuration)}</span>
+            )}
+          </div>
+
+          <div className="vupload-controls">
+            {recordPhase === "streaming" && (
+              <button className="vupload-btn vupload-btn-danger" onClick={startRecording}>
+                <Camera /> Start Recording
+              </button>
+            )}
+            {recordPhase === "recording" && (
+              <button className="vupload-btn vupload-btn-danger" onClick={stopRecording}>
+                <Film /> Stop ({formatDuration(recordDuration)})
+              </button>
+            )}
+            <button className="vupload-btn" onClick={handleReset}>
+              <X /> Cancel
+            </button>
+            <button
+              className="vupload-btn"
+              onClick={() => setMirrored(!mirrored)}
+              title="Toggle mirror"
+              style={{ padding: "8px 10px" }}
+            >
+              <RefreshCw size={16} />
+            </button>
+            <button
+              className="vupload-btn"
+              onClick={() => setShowSkeletonOverlay((s) => !s)}
+              title="Toggle skeleton overlay"
+              style={{ padding: "8px 10px", color: showSkeletonOverlay ? "#60a5fa" : "#64748b" }}
+            >
+              <Activity size={16} />
+            </button>
+            {cameras.length > 1 && (
+              <select
+                value={selectedCamera}
+                onChange={(e) => {
+                  setSelectedCamera(e.target.value);
+                  stopWebcam();
+                  setTimeout(() => startWebcam(e.target.value), 300);
+                }}
+                style={{
+                  background: "#1e293b",
+                  border: "1px solid #334155",
+                  borderRadius: 6,
+                  color: "#e2e8f0",
+                  padding: "6px 8px",
+                  fontSize: 12,
+                }}
+              >
+                {cameras.map((cam) => (
+                  <option key={cam.deviceId} value={cam.deviceId}>
+                    {cam.label || `Camera ${cam.deviceId.slice(0, 8)}`}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Diagnostics Panel */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+            gap: 4, marginTop: 8,
+            padding: 8,
+            background: "#0f172a",
+            borderRadius: 8,
+            border: "1px solid #1e293b",
+            fontSize: 11,
+          }}>
+            {[
+              { label: "Camera Stream", ok: webcamActive && !!streamRef.current },
+              { label: "Video Playing", ok: webcamActive },
+              { label: "Video Width", ok: (webcamVideoRef.current?.videoWidth ?? 0) > 0 },
+              { label: "Video Height", ok: (webcamVideoRef.current?.videoHeight ?? 0) > 0 },
+              { label: "Holistic Ready", ok: holisticReady },
+              { label: "FPS", ok: diagFps >= 15 },
+              { label: "Pose Detected", ok: diagPoseDetected },
+              { label: "Left Hand", ok: diagLeftHandDetected },
+              { label: "Right Hand", ok: diagRightHandDetected },
+              { label: "Recording", ok: recordPhase === "recording" },
+            ].map((d) => (
+              <div key={d.label} style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "4px 6px", borderRadius: 4,
+                background: "rgba(30,41,59,0.5)",
+              }}>
+                <span style={{ color: d.ok ? "#4ade80" : "#64748b", fontSize: 13 }}>
+                  {d.ok ? "✅" : "❌"}
+                </span>
+                <span style={{ color: "#94a3b8", whiteSpace: "nowrap" }}>{d.label}</span>
+              </div>
+            ))}
+          </div>
+
+          {recordPhase === "done" && recordedBlob && (
+            <div className="vupload-recorded-preview">
+              <video ref={previewVideoRef} src={recordedUrl} controls />
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, justifyContent: "center" }}>
+                <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>
+                  Recording: {formatDuration(recordDuration)} &middot;{" "}
+                  {formatSize(recordedBlob.size)}
+                </p>
+                {recordedLandmarkCount > 0 && (
+                  <p style={{ margin: 0, fontSize: 11, color: "#4ade80" }}>
+                    {recordedLandmarkCount} landmark frames captured
+                  </p>
+                )}
+                {recordedFramesRef.current.length > 0 && recordedLandmarkCount === 0 && (
+                  <p style={{ margin: 0, fontSize: 11, color: "#fde68a" }}>
+                    Processing landmarks...
+                  </p>
+                )}
+                <button className="vupload-btn vupload-btn-success" onClick={handleRecordedConfirm}>
+                  <Check size={16} /> Use This Video
+                </button>
+                <button
+                  className="vupload-btn"
+                  onClick={() => {
+                    setRecordedBlob(null);
+                    URL.revokeObjectURL(recordedUrl);
+                    setRecordedUrl("");
+                    setRecordDuration(0);
+                    setRecordPhase("streaming");
+                  }}
+                >
+                  <X size={16} /> Retake
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* ERROR */}

@@ -7,6 +7,7 @@ import {
   AlertCircle,
   Play,
   Tag,
+  RefreshCw,
 } from "lucide-react";
 import type { VideoMetadata, ExtractionResult } from "./types";
 import type {
@@ -42,6 +43,8 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
   const rendererRef = useRef<LandmarkCanvasRenderer | null>(null);
   const startTimeRef = useRef(0);
 
+  const hasPreExtracted = !!videoMeta.preExtractedAsset;
+
   useEffect(() => {
     if (!skeletonCanvasRef.current) return;
     rendererRef.current = new LandmarkCanvasRenderer(skeletonCanvasRef.current, {
@@ -56,6 +59,28 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
     }
   }, [liveFrame]);
 
+  // Auto-start extraction if there's a pre-extracted asset from webcam
+  useEffect(() => {
+    if (hasPreExtracted && videoMeta.preExtractedAsset) {
+      setShowSplit(true);
+      const asset = videoMeta.preExtractedAsset;
+      setProgress({
+        status: "complete",
+        currentFrame: asset.frames.length,
+        totalFrames: asset.frames.length,
+        progressPercent: 100,
+        message: `Webcam recording captured ${asset.frames.length} landmark frames`,
+      });
+      onExtractionComplete({
+        asset,
+        frames: asset.frames,
+        metadata: { sourceFps: 30, extractedFrames: asset.frames.length, processingTime: 0 },
+      });
+      setSuggesting(true);
+      suggestGloss(asset).then((result) => { setGlossSuggestion(result); setSuggesting(false); });
+    }
+  }, [hasPreExtracted, videoMeta.preExtractedAsset, onExtractionComplete]);
+
   const startExtraction = useCallback(async () => {
     setError("");
     setShowSplit(true);
@@ -63,12 +88,22 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
     const vid = videoRef.current;
     if (!vid) return;
 
-    vid.src = videoMeta.url;
-    vid.load();
+    console.log(`[Video] Starting extraction for: ${videoMeta.url}, duration=${videoMeta.duration}s, dims=${videoMeta.width}x${videoMeta.height}`);
 
     try {
+      if (vid.readyState < 2) {
+        console.log("[Video] Waiting for video metadata...");
+        await new Promise<void>((resolve, reject) => {
+          vid.onloadedmetadata = () => resolve();
+          vid.onerror = () => reject(new Error("Video failed to load"));
+          vid.load();
+        });
+        console.log("[Video] Metadata loaded");
+      }
+      vid.currentTime = 0;
       await vid.play();
       vid.pause();
+      console.log("[Video] Ready for extraction");
 
       const rawSequence = await extractLandmarksFromVideo(
         vid,
@@ -96,6 +131,9 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
 
       const processingTime = Date.now() - startTimeRef.current;
 
+      console.log(`[Preview] Asset ready: ${processed.asset.frames.length} frames, ${(processed.asset.duration / 1000).toFixed(2)}s duration`);
+      console.log(`[Preview] Quality score: ${processed.quality.totalScore}%, smoothness: ${processed.quality.smoothness}%`);
+
       setProgress({
         status: "complete", currentFrame: processed.asset.frames.length, totalFrames: processed.asset.frames.length,
         progressPercent: 100,
@@ -111,8 +149,8 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
       suggestGloss(processed.asset).then((result) => { setGlossSuggestion(result); setSuggesting(false); });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Extraction failed";
-      const details = err instanceof Error ? err.stack : "";
-      setError(`${msg}${details ? `\n${details}` : ""}`);
+      console.error(`[Extraction] ${msg}`, err);
+      setError(`${msg}`);
       setProgress((prev) => ({ ...prev, status: "error", message: msg }));
     }
   }, [videoMeta, onExtractionComplete]);

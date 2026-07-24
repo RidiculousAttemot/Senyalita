@@ -27,6 +27,16 @@ const config: Config = {
         "warn-bg": "#fff4e8",
         "warn-border": "#f0c8a5",
         "warn-text": "#9a5f2b",
+        // Senyalita landing-page palette — scoped to "/" only, see .claude/skills.
+        "senyalita-primary": "#2563EB",
+        "senyalita-secondary": "#3B82F6",
+        "senyalita-accent": "#22C55E",
+        "senyalita-warm": "#F8FAFC",
+        "senyalita-surface": "#FFFFFF",
+        "senyalita-dark": "#0F172A",
+        "senyalita-text": "#1E293B",
+        "senyalita-muted": "#64748B",
+        "senyalita-border": "#E2E8F0",
       },
       fontFamily: {
         sans: ["var(--font-inter)", "sans-serif"],
@@ -36,11 +46,26 @@ const config: Config = {
         "float-slow": "float 8s ease-in-out infinite",
         "float-medium": "float 6s ease-in-out infinite",
         "float-fast": "float 4s ease-in-out infinite",
+        "pulse-soft": "pulse-soft 2.4s ease-in-out infinite",
+        "draw-line": "draw-line 1.8s ease-out forwards",
+        marquee: "marquee 28s linear infinite",
       },
       keyframes: {
         float: {
           "0%, 100%": { transform: "translateY(0px)" },
           "50%": { transform: "translateY(-20px)" },
+        },
+        "pulse-soft": {
+          "0%, 100%": { opacity: "0.4", transform: "scale(1)" },
+          "50%": { opacity: "1", transform: "scale(1.15)" },
+        },
+        "draw-line": {
+          "0%": { strokeDashoffset: "1" },
+          "100%": { strokeDashoffset: "0" },
+        },
+        marquee: {
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(-50%)" },
         },
       },
     },

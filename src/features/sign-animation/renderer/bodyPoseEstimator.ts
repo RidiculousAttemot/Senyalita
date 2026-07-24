@@ -1,17 +1,17 @@
 import type { LandmarkPoint, HandLandmarks, BodyPose, NonManualFeatures } from "../types";
 
 const DEFAULT_BODY_POSE: BodyPose = {
-  head: { x: 0, y: -1.6, z: 0 },
-  neck: { x: 0, y: -1.2, z: 0 },
-  torso: { x: 0, y: -0.4, z: 0 },
-  leftShoulder: { x: -0.35, y: -0.5, z: 0 },
-  rightShoulder: { x: 0.35, y: -0.5, z: 0 },
-  leftElbow: { x: -0.55, y: -0.9, z: 0 },
-  rightElbow: { x: 0.55, y: -0.9, z: 0 },
-  leftWrist: { x: -0.55, y: -1.3, z: 0 },
-  rightWrist: { x: 0.55, y: -1.3, z: 0 },
-  leftHand: { x: -0.55, y: -1.4, z: 0 },
-  rightHand: { x: 0.55, y: -1.4, z: 0 },
+  head: { x: 0.5, y: 0.08, z: 0 },
+  neck: { x: 0.5, y: 0.20, z: 0 },
+  torso: { x: 0.5, y: 0.45, z: 0 },
+  leftShoulder: { x: 0.32, y: 0.30, z: 0 },
+  rightShoulder: { x: 0.68, y: 0.30, z: 0 },
+  leftElbow: { x: 0.26, y: 0.50, z: 0 },
+  rightElbow: { x: 0.74, y: 0.50, z: 0 },
+  leftWrist: { x: 0.22, y: 0.68, z: 0 },
+  rightWrist: { x: 0.78, y: 0.68, z: 0 },
+  leftHand: { x: 0.20, y: 0.72, z: 0 },
+  rightHand: { x: 0.80, y: 0.72, z: 0 },
 };
 
 const DEFAULT_NON_MANUAL: NonManualFeatures = {
@@ -30,46 +30,46 @@ export function estimateBodyPose(
   const leftHand = landmarks[0]?.landmarks ?? [];
   const rightHand = landmarks[1]?.landmarks ?? [];
 
-  const leftWristPos = leftHand.length > 0 ? leftHand[0] : { x: -0.55, y: -1.3, z: 0 };
-  const rightWristPos = rightHand.length > 0 ? rightHand[0] : { x: 0.55, y: -1.3, z: 0 };
+  const leftWristPos = leftHand.length > 0 ? leftHand[0] : { x: 0.22, y: 0.68, z: 0 };
+  const rightWristPos = rightHand.length > 0 ? rightHand[0] : { x: 0.78, y: 0.68, z: 0 };
 
   const leftHandPos = leftHand.length > 0
     ? averageLandmarks(leftHand.slice(5, 9))
-    : { x: -0.55, y: -1.4, z: 0 };
+    : { x: 0.20, y: 0.72, z: 0 };
   const rightHandPos = rightHand.length > 0
     ? averageLandmarks(rightHand.slice(5, 9))
-    : { x: 0.55, y: -1.4, z: 0 };
+    : { x: 0.80, y: 0.72, z: 0 };
 
   const bodyLean = computeBodyLean(leftWristPos, rightWristPos);
-  const shoulderWidth = 0.35;
-  const shoulderY = -0.5 + bodyLean * 0.1;
+  const shoulderWidth = 0.18;
+  const shoulderY = 0.30 + bodyLean * 0.05;
 
   const leftShoulder: LandmarkPoint = {
-    x: -shoulderWidth + bodyLean * 0.05,
+    x: 0.5 - shoulderWidth + bodyLean * 0.03,
     y: shoulderY,
     z: 0,
   };
   const rightShoulder: LandmarkPoint = {
-    x: shoulderWidth + bodyLean * 0.05,
+    x: 0.5 + shoulderWidth + bodyLean * 0.03,
     y: shoulderY,
     z: 0,
   };
 
-  const headY = -1.6 + bodyLean * 0.05;
-  const neckY = -1.2 + bodyLean * 0.05;
-  const torsoY = -0.4 + bodyLean * 0.1;
+  const headY = 0.08 + bodyLean * 0.05;
+  const neckY = 0.20 + bodyLean * 0.05;
+  const torsoY = 0.45 + bodyLean * 0.05;
 
   const head = prevPose
-    ? dampenPose({ x: bodyLean * 0.03, y: headY, z: bodyLean * 0.02 }, prevPose.head)
-    : { x: bodyLean * 0.03, y: headY, z: bodyLean * 0.02 };
+    ? dampenPose({ x: 0.5 + bodyLean * 0.03, y: headY, z: bodyLean * 0.02 }, prevPose.head)
+    : { x: 0.5 + bodyLean * 0.03, y: headY, z: bodyLean * 0.02 };
 
   const neck = prevPose
-    ? dampenPose({ x: 0, y: neckY, z: 0 }, prevPose.neck)
-    : { x: 0, y: neckY, z: 0 };
+    ? dampenPose({ x: 0.5, y: neckY, z: 0 }, prevPose.neck)
+    : { x: 0.5, y: neckY, z: 0 };
 
   const torso = prevPose
-    ? dampenPose({ x: bodyLean * 0.03, y: torsoY, z: 0 }, prevPose.torso)
-    : { x: bodyLean * 0.03, y: torsoY, z: 0 };
+    ? dampenPose({ x: 0.5 + bodyLean * 0.03, y: torsoY, z: 0 }, prevPose.torso)
+    : { x: 0.5 + bodyLean * 0.03, y: torsoY, z: 0 };
 
   const leftElbow = computeElbow(
     leftShoulder,
@@ -119,8 +119,8 @@ export function estimateNonManual(
   if (leftHand.length > 0) {
     const wristY = leftHand[0].y;
     const palmCenter = averageLandmarks(leftHand.slice(0, 5));
-    eyebrowRaise = Math.max(0, Math.min(1, (-palmCenter.y - 1.2) / 0.8));
-    headNod = Math.max(0, Math.min(1, Math.abs(leftHand[0].x) * 0.5));
+    eyebrowRaise = Math.max(0, Math.min(1, (0.5 - palmCenter.y) * 3));
+    headNod = Math.max(0, Math.min(1, (0.5 - leftHand[0].y) * 2));
 
     const wristSpeed = Math.abs(leftHand[0].x - (leftHand[5]?.x ?? 0));
     headShake = Math.min(1, wristSpeed * 0.5);
@@ -155,7 +155,7 @@ function computeBodyLean(
   rightWrist: LandmarkPoint,
 ): number {
   const avgX = (leftWrist.x + rightWrist.x) / 2;
-  return Math.max(-0.3, Math.min(0.3, avgX * 0.5));
+  return Math.max(-0.3, Math.min(0.3, (avgX - 0.5) * 0.5));
 }
 
 function computeElbow(

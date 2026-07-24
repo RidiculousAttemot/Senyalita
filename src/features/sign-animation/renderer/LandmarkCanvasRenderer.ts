@@ -1,5 +1,7 @@
 import type { AnimationFrame, LandmarkPoint } from "../types";
-import { HAND_CONNECTIONS, MEDIAPIPE_POSE_CONNECTIONS } from "../types";
+import { HAND_CONNECTIONS } from "../types";
+import { drawFullPose, drawStylizedFace, drawFullHand } from "./renderUtils";
+import type { RenderStyle } from "./renderUtils";
 
 export interface LandmarkRendererOptions {
   width: number;
@@ -18,6 +20,11 @@ export class LandmarkCanvasRenderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D | null;
   private opts: Required<LandmarkRendererOptions>;
+  private prevPoseLandmarks: LandmarkPoint[] | null = null;
+  private prevFaceLandmarks: LandmarkPoint[] | null = null;
+  private prevLeftHand: LandmarkPoint[] | null = null;
+  private prevRightHand: LandmarkPoint[] | null = null;
+  private lerpFactor: number = 0.3;
 
   constructor(canvas: HTMLCanvasElement, options?: Partial<LandmarkRendererOptions>) {
     this.canvas = canvas;
@@ -45,6 +52,20 @@ export class LandmarkCanvasRenderer {
     this.canvas.height = height;
   }
 
+  private lerpLandmarks(current: LandmarkPoint[] | null, previous: LandmarkPoint[] | null): LandmarkPoint[] | null {
+    if (!current) return previous;
+    if (!previous || current.length !== previous.length) {
+      this.lerpFactor = 0;
+      return current;
+    }
+    const t = this.lerpFactor;
+    return current.map((p, i) => ({
+      x: previous[i].x * (1 - t) + p.x * t,
+      y: previous[i].y * (1 - t) + p.y * t,
+      z: (previous[i].z ?? 0) * (1 - t) + (p.z ?? 0) * t,
+    }));
+  }
+
   render(frame: AnimationFrame | null): void {
     const ctx = this.ctx;
     if (!ctx) return;
@@ -62,91 +83,53 @@ export class LandmarkCanvasRenderer {
       return;
     }
 
-    const leftHand = frame.landmarks.find((hand) => hand.side === "left") ?? frame.landmarks[0];
-    const rightHand = frame.landmarks.find((hand) => hand.side === "right") ?? (frame.landmarks.length > 1 ? frame.landmarks[1] : null);
+    const leftHandEntry = frame.landmarks.find((hand) => hand.side === "left") ?? frame.landmarks[0];
+    const rightHandEntry = frame.landmarks.find((hand) => hand.side === "right") ?? (frame.landmarks.length > 1 ? frame.landmarks[1] : null);
 
-    if (leftHand && this.opts.showLeftHand) {
-      this.drawHand(ctx, leftHand.landmarks, this.opts.leftColor);
-    }
-    if (rightHand && this.opts.showRightHand) {
-      this.drawHand(ctx, rightHand.landmarks, this.opts.rightColor);
-    }
+    const style: RenderStyle = {
+      bodyColor: "#94a3b8",
+      jointColor: "#cbd5e1",
+      faceColor: "rgba(251,191,36,0.08)",
+      faceFeatureColor: "#fbbf24",
+      leftHandColor: this.opts.leftColor,
+      rightHandColor: this.opts.rightColor,
+      lineWidth: this.opts.lineWidth,
+      jointRadius: this.opts.jointRadius,
+    };
+
+    const wNorm = this.canvas.width;
+    const hNorm = this.canvas.height;
+
     if (frame.poseLandmarks && frame.poseLandmarks.length > 0) {
-      this.drawPose(ctx, frame.poseLandmarks);
+      const smoothed = this.lerpLandmarks(frame.poseLandmarks, this.prevPoseLandmarks);
+      this.prevPoseLandmarks = frame.poseLandmarks;
+      drawFullPose(ctx, smoothed ?? frame.poseLandmarks, wNorm, hNorm, style);
     }
+
     if (frame.faceLandmarks && frame.faceLandmarks.length > 0) {
-      this.drawFace(ctx, frame.faceLandmarks);
-    }
-  }
-
-  private drawPose(ctx: CanvasRenderingContext2D, landmarks: LandmarkPoint[]): void {
-    ctx.strokeStyle = "#C0392B";
-    ctx.fillStyle = "#E74C3C";
-    ctx.lineWidth = this.opts.lineWidth;
-    for (const [start, end] of MEDIAPIPE_POSE_CONNECTIONS) {
-      const a = landmarks[start];
-      const b = landmarks[end];
-      if (!a || !b) continue;
-      ctx.beginPath();
-      ctx.moveTo(a.x * this.canvas.width, a.y * this.canvas.height);
-      ctx.lineTo(b.x * this.canvas.width, b.y * this.canvas.height);
-      ctx.stroke();
-    }
-    for (const landmark of landmarks) {
-      ctx.beginPath();
-      ctx.arc(landmark.x * this.canvas.width, landmark.y * this.canvas.height, this.opts.jointRadius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  private drawFace(ctx: CanvasRenderingContext2D, landmarks: LandmarkPoint[]): void {
-    ctx.fillStyle = "#7F1D1D";
-    for (const landmark of landmarks) {
-      ctx.beginPath();
-      ctx.arc(landmark.x * this.canvas.width, landmark.y * this.canvas.height, 0.8, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  private drawHand(
-    ctx: CanvasRenderingContext2D,
-    landmarks: LandmarkPoint[],
-    color: string,
-  ): void {
-    const w = this.canvas.width;
-    const h = this.canvas.height;
-
-    ctx.strokeStyle = color;
-    ctx.lineWidth = this.opts.lineWidth;
-    ctx.lineCap = "round";
-
-    for (const [i, j] of HAND_CONNECTIONS) {
-      const a = landmarks[i];
-      const b = landmarks[j];
-      if (a && b) {
-        ctx.beginPath();
-        ctx.moveTo(a.x * w, a.y * h);
-        ctx.lineTo(b.x * w, b.y * h);
-        ctx.stroke();
-      }
+      const smoothed = this.lerpLandmarks(frame.faceLandmarks, this.prevFaceLandmarks);
+      this.prevFaceLandmarks = frame.faceLandmarks;
+      drawStylizedFace(ctx, smoothed ?? frame.faceLandmarks, wNorm, hNorm, style);
     }
 
-    ctx.fillStyle = color;
-    for (let k = 0; k < landmarks.length; k++) {
-      const p = landmarks[k];
-      if (p) {
-        ctx.beginPath();
-        ctx.arc(p.x * w, p.y * h, this.opts.jointRadius, 0, 2 * Math.PI);
-        ctx.fill();
-      }
+    if (leftHandEntry && this.opts.showLeftHand) {
+      const smoothed = this.lerpLandmarks(leftHandEntry.landmarks, this.prevLeftHand);
+      this.prevLeftHand = leftHandEntry.landmarks;
+      drawFullHand(ctx, smoothed ?? leftHandEntry.landmarks, style.leftHandColor, w, h, this.opts.lineWidth, this.opts.jointRadius);
     }
 
-    if (this.opts.showLabels) {
-      ctx.fillStyle = "#94a3b8";
-      ctx.font = "9px monospace";
-      for (let k = 0; k < landmarks.length; k++) {
-        const p = landmarks[k];
+    if (rightHandEntry && this.opts.showRightHand) {
+      const smoothed = this.lerpLandmarks(rightHandEntry.landmarks, this.prevRightHand);
+      this.prevRightHand = rightHandEntry.landmarks;
+      drawFullHand(ctx, smoothed ?? rightHandEntry.landmarks, style.rightHandColor, w, h, this.opts.lineWidth, this.opts.jointRadius);
+    }
+
+    if (this.opts.showLabels && frame.poseLandmarks) {
+      for (let k = 0; k < frame.poseLandmarks.length; k++) {
+        const p = frame.poseLandmarks[k];
         if (p) {
+          ctx.fillStyle = "#94a3b8";
+          ctx.font = "9px monospace";
           ctx.fillText(String(k), p.x * w + 4, p.y * h - 2);
         }
       }
@@ -165,6 +148,10 @@ export class LandmarkCanvasRenderer {
     const ctx = this.ctx;
     if (!ctx) return;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.prevPoseLandmarks = null;
+    this.prevFaceLandmarks = null;
+    this.prevLeftHand = null;
+    this.prevRightHand = null;
   }
 
   dispose(): void {

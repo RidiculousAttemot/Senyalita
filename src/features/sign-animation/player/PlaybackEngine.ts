@@ -16,6 +16,10 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
+function lerpPoint(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }, t: number) {
+  return { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), z: lerp(a.z, b.z, t) };
+}
+
 function blendLandmarks(
   from: HandLandmarks[],
   to: HandLandmarks[],
@@ -31,13 +35,27 @@ function blendLandmarks(
     for (let i = 0; i < maxLm; i++) {
       const la = i < a.length ? a[i] : { x: 0, y: 0, z: 0 };
       const lb = i < b.length ? b[i] : { x: 0, y: 0, z: 0 };
-      blended.push({
-        x: lerp(la.x, lb.x, t),
-        y: lerp(la.y, lb.y, t),
-        z: lerp(la.z, lb.z, t),
-      });
+      blended.push(lerpPoint(la, lb, t));
     }
     result.push({ landmarks: blended });
+  }
+  return result;
+}
+
+function blendPoseOrFace(
+  from: { x: number; y: number; z: number }[] | undefined,
+  to: { x: number; y: number; z: number }[] | undefined,
+  t: number,
+): { x: number; y: number; z: number }[] | undefined {
+  if (!from && !to) return undefined;
+  if (!from) return to;
+  if (!to) return from;
+  const max = Math.max(from.length, to.length);
+  const result: { x: number; y: number; z: number }[] = [];
+  for (let i = 0; i < max; i++) {
+    const a = i < from.length ? from[i] : { x: 0, y: 0, z: 0 };
+    const b = i < to.length ? to[i] : { x: 0, y: 0, z: 0 };
+    result.push(lerpPoint(a, b, t));
   }
   return result;
 }
@@ -221,12 +239,12 @@ export class PlaybackEngine {
 
     if (indexA === indexB || t === 0) return frameA;
 
-    const blended: HandLandmarks[] = blendLandmarks(
-      frameA.landmarks,
-      frameB.landmarks,
-      t,
-    );
-    return { timestamp: clampedTime, landmarks: blended };
+    return {
+      timestamp: clampedTime,
+      landmarks: blendLandmarks(frameA.landmarks, frameB.landmarks, t),
+      poseLandmarks: blendPoseOrFace(frameA.poseLandmarks, frameB.poseLandmarks, t),
+      faceLandmarks: blendPoseOrFace(frameA.faceLandmarks, frameB.faceLandmarks, t),
+    };
   }
 
   private tick(delta: number): void {
@@ -269,7 +287,12 @@ export class PlaybackEngine {
         frame.landmarks,
         eased,
       );
-      frame = { timestamp: frame.timestamp, landmarks: blendedLandmarks };
+      frame = {
+        timestamp: frame.timestamp,
+        landmarks: blendedLandmarks,
+        poseLandmarks: blendPoseOrFace(this.previousFrame.poseLandmarks, frame.poseLandmarks, eased),
+        faceLandmarks: blendPoseOrFace(this.previousFrame.faceLandmarks, frame.faceLandmarks, eased),
+      };
       if (bt >= 1) {
         this.blending = false;
         this.previousFrame = null;

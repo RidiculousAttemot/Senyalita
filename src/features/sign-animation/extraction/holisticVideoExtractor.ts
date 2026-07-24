@@ -31,7 +31,7 @@ const DEFAULT_WASM_PATH = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@
 
 export function mapHolisticVideoResult(result: HolisticResultLike, timestamp: number): AnimationFrame | null {
   const frame = mapHolisticResultToFrame(result, timestamp);
-  const hasLandmarks = frame.landmarks.length > 0 || frame.poseLandmarks!.length > 0 || frame.faceLandmarks!.length > 0;
+  const hasLandmarks = frame.landmarks.length > 0 || (frame.poseLandmarks ?? []).length > 0 || (frame.faceLandmarks ?? []).length > 0;
 
   return hasLandmarks ? frame : null;
 }
@@ -48,10 +48,13 @@ export async function extractLandmarksFromVideo(
     throw new Error("The source video must have a valid duration before extraction.");
   }
 
+  console.log(`[Holistic] Loading MediaPipe with duration=${video.duration}s, dimensions=${video.videoWidth}x${video.videoHeight}`);
+
   const { FilesetResolver, HolisticLandmarker } = await import("@mediapipe/tasks-vision");
   const vision = await FilesetResolver.forVisionTasks(options.wasmPath ?? DEFAULT_WASM_PATH);
   let landmarker;
   try {
+    console.log("[Holistic] Attempting GPU delegate...");
     landmarker = await HolisticLandmarker.createFromOptions(vision, {
       baseOptions: {
         modelAssetPath: options.modelAssetPath ?? process.env.NEXT_PUBLIC_MEDIAPIPE_HOLISTIC_MODEL_URL ?? DEFAULT_MODEL_ASSET_PATH,
@@ -59,7 +62,9 @@ export async function extractLandmarksFromVideo(
       },
       runningMode: "VIDEO",
     });
+    console.log("[Holistic] GPU delegate initialized successfully");
   } catch {
+    console.warn("[Holistic] GPU failed, falling back to CPU");
     landmarker = await HolisticLandmarker.createFromOptions(vision, {
       baseOptions: {
         modelAssetPath: options.modelAssetPath ?? process.env.NEXT_PUBLIC_MEDIAPIPE_HOLISTIC_MODEL_URL ?? DEFAULT_MODEL_ASSET_PATH,
@@ -67,6 +72,7 @@ export async function extractLandmarksFromVideo(
       },
       runningMode: "VIDEO",
     });
+    console.log("[Holistic] CPU delegate initialized");
   }
 
   const sourceFps = 30;
@@ -77,6 +83,8 @@ export async function extractLandmarksFromVideo(
   let callbackHandle: number | undefined;
   let animationFrameHandle: number | undefined;
   let stopped = false;
+
+  console.log(`[Extraction] Starting: ${totalFrames} total frames expected`);
 
   try {
     video.currentTime = 0;
@@ -102,7 +110,8 @@ export async function extractLandmarksFromVideo(
         if (stopped) return;
         if (video.currentTime !== lastCapturedTime) {
           lastCapturedTime = video.currentTime;
-          const frame = mapHolisticVideoResult(landmarker.detectForVideo(video, timestamp), timestamp);
+          const result = landmarker.detectForVideo(video, timestamp);
+          const frame = mapHolisticVideoResult(result, timestamp);
           if (frame) frames.push(frame);
           const currentFrame = Math.min(totalFrames, Math.max(1, Math.round(video.currentTime * sourceFps)));
           onProgress?.({ currentFrame, totalFrames, progress: currentFrame / totalFrames, frame: frame ?? undefined });
@@ -125,6 +134,11 @@ export async function extractLandmarksFromVideo(
   } finally {
     video.pause();
     landmarker.close();
+  }
+
+  console.log(`[Extraction] Complete: ${frames.length}/${totalFrames} frames extracted`);
+  if (frames.length === 0) {
+    console.warn("[Extraction] No frames were extracted — video may be blank or unreadable");
   }
 
   return { duration: video.duration, frames, sourceFps };

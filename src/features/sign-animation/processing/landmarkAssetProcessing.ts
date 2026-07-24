@@ -44,8 +44,8 @@ export function repairMissingFrames(frames: AnimationFrame[]): AnimationFrame[] 
 
 export function mapHolisticResultToFrame(result: HolisticResultLike, timestamp: number): AnimationFrame {
   const cloneLandmarks = (landmarks: HolisticLandmark[] | undefined) => landmarks?.map((landmark) => ({ ...landmark })) ?? [];
-  const leftHand = cloneLandmarks(result.leftHandLandmarks[0]);
-  const rightHand = cloneLandmarks(result.rightHandLandmarks[0]);
+  const leftHand = cloneLandmarks(result.leftHandLandmarks?.[0]);
+  const rightHand = cloneLandmarks(result.rightHandLandmarks?.[0]);
 
   return {
     timestamp,
@@ -53,8 +53,8 @@ export function mapHolisticResultToFrame(result: HolisticResultLike, timestamp: 
       ...(leftHand.length > 0 ? [{ landmarks: leftHand, side: "left" as const }] : []),
       ...(rightHand.length > 0 ? [{ landmarks: rightHand, side: "right" as const }] : []),
     ],
-    poseLandmarks: cloneLandmarks(result.poseLandmarks[0]),
-    faceLandmarks: cloneLandmarks(result.faceLandmarks[0]),
+    poseLandmarks: cloneLandmarks(result.poseLandmarks?.[0]),
+    faceLandmarks: cloneLandmarks(result.faceLandmarks?.[0]),
   };
 }
 
@@ -82,21 +82,24 @@ export function normalizeFrameSequence(frames: AnimationFrame[], fps: number): A
 export function createGestureAnimationAsset(input: CreateGestureAnimationAssetInput): GestureAnimationAsset {
   if (input.frames.length === 0) throw new Error("At least one extracted frame is required.");
 
-  const frames = normalizeFrameSequence(repairMissingFrames(input.frames), input.fps);
-  const duration = Math.max(0, frames[frames.length - 1].timestamp - frames[0].timestamp);
+  if (input.frames.some((f) => f.landmarks.some((h) => h.landmarks.some((p) => !Number.isFinite(p.x) || !Number.isFinite(p.y))))) {
+    throw new Error("Invalid landmark data detected: non-finite values found in landmark coordinates.");
+  }
+
+  const duration = Math.max(0, input.frames[input.frames.length - 1].timestamp - input.frames[0].timestamp);
 
   return {
     label: input.label,
     language: input.language ?? "FSL",
     fps: input.fps,
     duration,
-    totalFrames: frames.length,
-    frames,
+    totalFrames: input.frames.length,
+    frames: input.frames,
     metadata: {
       signerId: input.signerId,
       source: input.source ?? "landmark-video-extraction",
       featureDimension: 3,
-      sequenceLength: frames.length,
+      sequenceLength: input.frames.length,
       version: 1,
     },
   };

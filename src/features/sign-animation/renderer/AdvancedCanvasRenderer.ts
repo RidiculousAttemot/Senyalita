@@ -5,8 +5,17 @@ import type {
   AvatarTheme,
   LandmarkPoint,
 } from "../types";
-import { HAND_CONNECTIONS, BODY_CONNECTIONS, LANDMARK_COLORS, MEDIAPIPE_POSE_CONNECTIONS } from "../types";
-import { estimateBodyPose, estimateNonManual, getDefaultNonManual } from "./bodyPoseEstimator";
+import { HAND_CONNECTIONS, BODY_CONNECTIONS } from "../types";
+import { estimateBodyPose, estimateNonManual } from "./bodyPoseEstimator";
+import { reconstructPose, smoothRig, drawAvatar, drawLandmarkFrame } from "./avatarRenderer";
+import type { ReconstructedRig, LandmarkRenderOptions } from "./avatarRenderer";
+
+export type RenderMode = "avatar" | "landmark";
+
+export interface DebugOverlayConfig {
+  video?: HTMLVideoElement;
+  opacity: number; // 0–1
+}
 
 export interface AdvancedRendererOptions {
   width: number;
@@ -17,6 +26,11 @@ export interface AdvancedRendererOptions {
   lineWidth: number;
   jointRadius: number;
   backgroundColor: string;
+  renderMode: RenderMode;
+  smoothingAlpha: number; // 0 = no smoothing, 1 = max smoothing
+  interpolationFactor: number; // 0 = no interp, 1 = max interp
+  debugOverlay: DebugOverlayConfig | null;
+  debugLandmarkIndices: boolean; // draw index numbers on landmarks
 }
 
 const THEME_COLORS: Record<AvatarTheme, {
@@ -42,13 +56,74 @@ const THEME_COLORS: Record<AvatarTheme, {
   },
 };
 
+/** Catmull-Rom interpolation: t in [0,1] between p1 and p2 */
+function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number): number {
+  const t2 = t * t, t3 = t2 * t;
+  return 0.5 * (
+    (2 * p1) +
+    (-p0 + p2) * t +
+    (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
+    (-p0 + 3 * p1 - 3 * p2 + p3) * t3
+  );
+}
+
+function lerpLandmark(a: LandmarkPoint, b: LandmarkPoint, t: number): LandmarkPoint {
+  return {
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+    z: a.z + (b.z - a.z) * t,
+  };
+}
+
+function catmullRomLandmark(p0: LandmarkPoint, p1: LandmarkPoint, p2: LandmarkPoint, p3: LandmarkPoint, t: number): LandmarkPoint {
+  return {
+    x: catmullRom(p0.x, p1.x, p2.x, p3.x, t),
+    y: catmullRom(p0.y, p1.y, p2.y, p3.y, t),
+    z: catmullRom(p0.z, p1.z, p2.z, p3.z, t),
+  };
+}
+
+function smoothArray(current: LandmarkPoint[], prev: LandmarkPoint[] | null, alpha: number): LandmarkPoint[] {
+  if (!prev || current.length !== prev.length) return current.map(p => ({ ...p }));
+  const out: LandmarkPoint[] = [];
+  for (let i = 0; i < current.length; i++) {
+    const c = current[i], p = prev[i];
+    if (c && p) {
+      out.push({
+        x: p.x + (c.x - p.x) * (1 - alpha),
+        y: p.y + (c.y - p.y) * (1 - alpha),
+        z: p.z + (c.z - p.z) * (1 - alpha),
+      });
+    } else {
+      out.push(c ? { ...c } : p ? { ...p } : { x: 0.5, y: 0.5, z: 0 });
+    }
+  }
+  return out;
+}
+
 export class AdvancedCanvasRenderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private options: AdvancedRendererOptions;
   private prevBodyPose: BodyPose | null = null;
+  private prevRig: ReconstructedRig | null = null;
+
+  // Smoothed landmark buffers
+  private smoothPose: LandmarkPoint[] | null = null;
+  private smoothFace: LandmarkPoint[] | null = null;
+  private smoothLeftHand: LandmarkPoint[] | null = null;
+  private smoothRightHand: LandmarkPoint[] | null = null;
+
+  // Catmull-Rom history (need 4 frames)
+  private poseHistory: LandmarkPoint[][] = [];
+  private faceHistory: LandmarkPoint[][] = [];
+  private leftHandHistory: LandmarkPoint[][] = [];
+  private rightHandHistory: LandmarkPoint[][] = [];
+  private histTimestamp: number[] = [];
+
   private frameCount = 0;
-  private lastRenderTime = 0;
+  private lastFrameTime = 0;
+  private measuredFps = 0;
   private renderTimes: number[] = [];
 
   constructor(canvas: HTMLCanvasElement, options?: Partial<AdvancedRendererOptions>) {
@@ -63,6 +138,11 @@ export class AdvancedCanvasRenderer {
       lineWidth: 2,
       jointRadius: 3,
       backgroundColor: "#0f172a",
+      renderMode: "landmark",
+      smoothingAlpha: 0.25,
+      interpolationFactor: 0,
+      debugOverlay: null,
+      debugLandmarkIndices: false,
       ...options,
     };
     this.setSize(this.options.width, this.options.height);
@@ -77,6 +157,14 @@ export class AdvancedCanvasRenderer {
 
   setTheme(theme: AvatarTheme): void {
     this.options.theme = theme;
+  }
+
+  setDebugOverlay(cfg: DebugOverlayConfig | null): void {
+    this.options.debugOverlay = cfg;
+  }
+
+  setDebugLandmarkIndices(enabled: boolean): void {
+    this.options.debugLandmarkIndices = enabled;
   }
 
   render(frame: AnimationFrame | null, extra?: { bodyPose?: BodyPose; nonManual?: NonManualFeatures }): void {
@@ -95,47 +183,158 @@ export class AdvancedCanvasRenderer {
       ctx.textAlign = "center";
       ctx.fillText("No animation data", w / 2, h / 2);
       this.prevBodyPose = null;
+      this.prevRig = null;
       return;
     }
 
-    const bodyPose = extra?.bodyPose ?? estimateBodyPose(frame.landmarks, this.prevBodyPose ?? undefined);
-    this.prevBodyPose = bodyPose;
-
-    const nonManual = extra?.nonManual ?? estimateNonManual(frame.landmarks);
     const theme = THEME_COLORS[this.options.theme];
+    const nonManual = extra?.nonManual ?? estimateNonManual(frame.landmarks);
 
     if (this.options.showNonManual) {
       this.renderNonManualIndicators(ctx, w, nonManual);
     }
 
-    if (frame.poseLandmarks && frame.poseLandmarks.length > 0) {
-      this.renderExtractedPose(ctx, w, h, frame.poseLandmarks);
+    // ── Debug overlay: draw video frame first ──
+    if (this.options.debugOverlay?.video && this.options.debugOverlay.opacity > 0) {
+      const vid = this.options.debugOverlay.video;
+      if (vid.readyState >= 2) {
+        ctx.globalAlpha = this.options.debugOverlay.opacity;
+        ctx.drawImage(vid, 0, 0, w, h);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    const poseData = frame.poseLandmarks;
+    const faceData = frame.faceLandmarks;
+    const hasFullPose = poseData && poseData.length >= 33;
+
+    if (hasFullPose && this.options.renderMode === "landmark") {
+      const leftHand = frame.landmarks.find((h) => h.side === "left")?.landmarks
+        ?? frame.landmarks[0]?.landmarks ?? [];
+      const rightHand = frame.landmarks.find((h) => h.side === "right")?.landmarks
+        ?? frame.landmarks[1]?.landmarks ?? [];
+
+      // Push into Catmull-Rom history (up to 4 frames)
+      this.poseHistory.push(poseData!.map(p => ({ ...p })));
+      this.faceHistory.push(faceData ? faceData.map(p => ({ ...p })) : []);
+      this.leftHandHistory.push(leftHand.map(p => ({ ...p })));
+      this.rightHandHistory.push(rightHand.map(p => ({ ...p })));
+      this.histTimestamp.push(frame.timestamp);
+      while (this.poseHistory.length > 4) {
+        this.poseHistory.shift();
+        this.faceHistory.shift();
+        this.leftHandHistory.shift();
+        this.rightHandHistory.shift();
+        this.histTimestamp.shift();
+      }
+
+      const interpFactor = this.options.interpolationFactor;
+      const hasHistory = this.poseHistory.length >= 4 && interpFactor > 0;
+
+      // Catmull-Rom interpolation between stored frames
+      let renderPose = poseData!;
+      let renderFace = faceData;
+      let renderLeftHand = leftHand;
+      let renderRightHand = rightHand;
+
+      if (hasHistory) {
+        const t = interpFactor;
+        renderPose = poseData!.map((p, i) => {
+          if (!p) return p;
+          const h = this.poseHistory.map(f => f[i]);
+          return h[0] && h[1] && h[2] && h[3] ? catmullRomLandmark(h[0], h[1], h[2], h[3], t) : { ...p };
+        });
+        if (faceData) {
+          renderFace = faceData.map((p, i) => {
+            if (!p) return p;
+            const h = this.faceHistory.map(f => f[i]);
+            return h[0] && h[1] && h[2] && h[3] ? catmullRomLandmark(h[0], h[1], h[2], h[3], t) : { ...p };
+          });
+        }
+        renderLeftHand = leftHand.map((p, i) => {
+          const h = this.leftHandHistory.map(f => f[i]);
+          return h[0] && h[1] && h[2] && h[3] ? catmullRomLandmark(h[0], h[1], h[2], h[3], t) : { ...p };
+        });
+        renderRightHand = rightHand.map((p, i) => {
+          const h = this.rightHandHistory.map(f => f[i]);
+          return h[0] && h[1] && h[2] && h[3] ? catmullRomLandmark(h[0], h[1], h[2], h[3], t) : { ...p };
+        });
+      }
+
+      // EMA smoothing
+      const alpha = this.options.smoothingAlpha;
+      const finalPose = smoothArray(renderPose, this.smoothPose, alpha);
+      const finalFace = renderFace ? smoothArray(renderFace, this.smoothFace, alpha) : undefined;
+      const finalLeftHand = smoothArray(renderLeftHand, this.smoothLeftHand, alpha);
+      const finalRightHand = smoothArray(renderRightHand, this.smoothRightHand, alpha);
+
+      this.smoothPose = finalPose;
+      this.smoothFace = finalFace ?? null;
+      this.smoothLeftHand = finalLeftHand;
+      this.smoothRightHand = finalRightHand;
+
+      drawLandmarkFrame(ctx, finalPose, finalFace, finalLeftHand, finalRightHand, w, h, {
+        signLanguageMode: true,
+        debug: this.options.debugLandmarkIndices,
+        fps: this.measuredFps,
+      });
+
+      this.prevBodyPose = null;
+      this.prevRig = null;
+
+    } else if (hasFullPose && this.options.renderMode === "avatar") {
+      // Avatar mode: hierarchical reconstruction (alternative view)
+      const leftHand = frame.landmarks.find((h) => h.side === "left")?.landmarks
+        ?? frame.landmarks[0]?.landmarks ?? [];
+      const rightHand = frame.landmarks.find((h) => h.side === "right")?.landmarks
+        ?? frame.landmarks[1]?.landmarks ?? [];
+
+      const rig = reconstructPose(poseData!, faceData, leftHand, rightHand);
+      this.prevRig = smoothRig(rig, this.prevRig);
+
+      if (theme.glowEnabled) {
+        ctx.shadowColor = theme.body;
+        ctx.shadowBlur = 8;
+      }
+      drawAvatar(ctx, this.prevRig, w, h, this.options.theme, nonManual);
+      ctx.shadowBlur = 0;
+      this.prevBodyPose = null;
+
     } else {
+      // Fallback: no full pose data
+      const bodyPose = extra?.bodyPose ?? estimateBodyPose(frame.landmarks, this.prevBodyPose ?? undefined);
+      this.prevBodyPose = bodyPose;
+      this.prevRig = null;
+
       this.renderBody(ctx, w, h, bodyPose, theme);
+
+      if (this.options.theme === "avatar2d") {
+        this.renderFace(ctx, w, h, bodyPose, nonManual);
+      }
+
+      ctx.shadowBlur = 0;
+
+      const leftHand = frame.landmarks.find((h) => h.side === "left")?.landmarks ?? frame.landmarks[0]?.landmarks ?? [];
+      const rightHand = frame.landmarks.find((h) => h.side === "right")?.landmarks ?? frame.landmarks[1]?.landmarks ?? [];
+
+      this.renderHand(ctx, w, h, leftHand, theme.leftHand, "left");
+      this.renderHand(ctx, w, h, rightHand, theme.rightHand, "right");
     }
-
-    if (frame.faceLandmarks && frame.faceLandmarks.length > 0) {
-      this.renderExtractedFace(ctx, w, h, frame.faceLandmarks);
-    }
-
-    if (this.options.theme === "avatar2d") {
-      this.renderFace(ctx, w, h, bodyPose, nonManual);
-    }
-
-    const leftHand = frame.landmarks.find((hand) => hand.side === "left")?.landmarks ?? frame.landmarks[0]?.landmarks ?? [];
-    const rightHand = frame.landmarks.find((hand) => hand.side === "right")?.landmarks ?? frame.landmarks[1]?.landmarks ?? [];
-
-    this.renderHand(ctx, w, h, leftHand, theme.leftHand, "left");
-    this.renderHand(ctx, w, h, rightHand, theme.rightHand, "right");
 
     if (this.options.showLabels) {
-      this.renderLabels(ctx, w, h, bodyPose, frame);
+      this.renderLabels(ctx, w, h, frame);
     }
 
     this.frameCount++;
     const elapsed = performance.now() - renderStart;
     this.renderTimes.push(elapsed);
     if (this.renderTimes.length > 60) this.renderTimes.shift();
+
+    const now = performance.now();
+    if (this.lastFrameTime > 0) {
+      this.measuredFps = this.measuredFps * 0.9 + (1000 / (now - this.lastFrameTime)) * 0.1;
+    }
+    this.lastFrameTime = now;
   }
 
   private renderBody(
@@ -233,35 +432,6 @@ export class AdvancedCanvasRenderer {
     }
   }
 
-  private renderExtractedPose(ctx: CanvasRenderingContext2D, w: number, h: number, landmarks: LandmarkPoint[]): void {
-    ctx.strokeStyle = "#C0392B";
-    ctx.fillStyle = "#E74C3C";
-    ctx.lineWidth = 2;
-    for (const [start, end] of MEDIAPIPE_POSE_CONNECTIONS) {
-      const a = landmarks[start];
-      const b = landmarks[end];
-      if (!a || !b) continue;
-      ctx.beginPath();
-      ctx.moveTo(a.x * w, a.y * h);
-      ctx.lineTo(b.x * w, b.y * h);
-      ctx.stroke();
-    }
-    for (const landmark of landmarks) {
-      ctx.beginPath();
-      ctx.arc(landmark.x * w, landmark.y * h, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  private renderExtractedFace(ctx: CanvasRenderingContext2D, w: number, h: number, landmarks: LandmarkPoint[]): void {
-    ctx.fillStyle = "#7F1D1D";
-    for (const landmark of landmarks) {
-      ctx.beginPath();
-      ctx.arc(landmark.x * w, landmark.y * h, 0.8, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
   private renderNonManualIndicators(
     ctx: CanvasRenderingContext2D,
     w: number,
@@ -284,6 +454,24 @@ export class AdvancedCanvasRenderer {
       ctx.fillStyle = ind.value > 0.5 ? "#bbf7d0" : ind.value > 0.2 ? "#fde68a" : "#64748b";
       const barW = Math.min(40, ind.value * 40);
       ctx.fillRect(ind.x + 40, ind.y - 8, barW, 6);
+    }
+  }
+
+  private renderLabels(
+    ctx: CanvasRenderingContext2D,
+    w: number, h: number,
+    frame: AnimationFrame,
+  ): void {
+    ctx.font = "9px monospace";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#94a3b8";
+
+    if (frame.landmarks[0]) {
+      for (let i = 0; i < frame.landmarks[0].landmarks.length; i++) {
+        const lm = frame.landmarks[0].landmarks[i];
+        ctx.fillStyle = "#c0593a";
+        ctx.fillText(`${i}`, lm.x * w + 6, lm.y * h);
+      }
     }
   }
 
@@ -344,37 +532,20 @@ export class AdvancedCanvasRenderer {
     }
   }
 
-  private renderLabels(
-    ctx: CanvasRenderingContext2D,
-    w: number, h: number,
-    pose: BodyPose,
-    frame: AnimationFrame,
-  ): void {
-    ctx.font = "9px monospace";
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#94a3b8";
-
-    const bodyLabels = ["HEAD", "NECK", "TORSO", "L_SHOULDER", "R_SHOULDER", "L_ELBOW", "R_ELBOW", "L_WRIST", "R_WRIST", "L_HAND", "R_HAND"];
-    const nodes = [
-      pose.head, pose.neck, pose.torso,
-      pose.leftShoulder, pose.rightShoulder,
-      pose.leftElbow, pose.rightElbow,
-      pose.leftWrist, pose.rightWrist,
-      pose.leftHand, pose.rightHand,
-    ];
-
-    for (let i = 0; i < nodes.length; i++) {
-      ctx.fillText(bodyLabels[i], nodes[i].x * w, nodes[i].y * h - 10);
-    }
-
-    if (frame.landmarks[0]) {
-      for (let i = 0; i < frame.landmarks[0].landmarks.length; i++) {
-        const lm = frame.landmarks[0].landmarks[i];
-        ctx.fillStyle = "#c0593a";
-        ctx.fillText(`${i}`, lm.x * w + 6, lm.y * h);
-      }
-    }
+  setRenderMode(mode: RenderMode): void {
+    this.options.renderMode = mode;
+    this.prevRig = null;
   }
+
+  setSmoothing(alpha: number): void {
+    this.options.smoothingAlpha = Math.max(0, Math.min(1, alpha));
+  }
+
+  setInterpolation(factor: number): void {
+    this.options.interpolationFactor = Math.max(0, Math.min(1, factor));
+  }
+
+
 
   getAverageRenderTime(): number {
     if (this.renderTimes.length === 0) return 0;
@@ -392,7 +563,18 @@ export class AdvancedCanvasRenderer {
   dispose(): void {
     this.clear();
     this.prevBodyPose = null;
+    this.prevRig = null;
+    this.smoothPose = null;
+    this.smoothFace = null;
+    this.smoothLeftHand = null;
+    this.smoothRightHand = null;
+    this.poseHistory = [];
+    this.faceHistory = [];
+    this.leftHandHistory = [];
+    this.rightHandHistory = [];
+    this.histTimestamp = [];
     this.renderTimes = [];
     this.frameCount = 0;
+    this.measuredFps = 0;
   }
 }

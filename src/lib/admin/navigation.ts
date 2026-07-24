@@ -54,7 +54,10 @@ export const ADMIN_NAVIGATION: AdminNavigationSection[] = [
     label: "Type-to-Sign",
     items: [
       { label: "Animation Training", href: "/admin/animation-studio", icon: Wand2, exact: true },
+      { label: "Animation Dataset", href: "/admin/animation-dataset", icon: Database },
       { label: "Animation Library", href: "/admin/animation-library", icon: Film },
+      { label: "Animation Inspector", href: "/admin/animation-inspector", icon: Activity },
+      { label: "Playback Analytics", href: "/admin/playback-analytics", icon: TrendingUp },
       { label: "Translation Debug", href: "/admin/translation-debug", icon: Bug },
       { label: "Translation Evaluation", href: "/admin/translation-evaluation", icon: TrendingUp },
     ],

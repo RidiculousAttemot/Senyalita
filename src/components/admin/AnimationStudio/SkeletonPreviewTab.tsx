@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type { VideoMetadata, ExtractionResult } from "./types";
 import type { AnimationFrame, GestureAnimationAsset } from "@/features/sign-animation/types";
+import { drawFullPose, drawStylizedFace, drawFullHand } from "@/features/sign-animation/renderer/renderUtils";
 
 interface SkeletonPreviewTabProps {
   extractionResult: ExtractionResult;
@@ -71,204 +72,36 @@ export function SkeletonPreviewTab({ extractionResult, videoMeta }: SkeletonPrev
       return;
     }
 
-    const padding = 40;
-    const drawW = w - padding * 2;
-    const drawH = h - padding * 2;
-    const scaleX = drawW;
-    const scaleY = drawH;
-    const offsetX = padding;
-    const offsetY = padding;
-
-    const sx = (x: number) => offsetX + (x + 0.5) * scaleX;
-    const sy = (y: number) => offsetY + (y + 1) * scaleY;
-
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-
-    const poseLm = frame.poseLandmarks;
-    const faceLm = frame.faceLandmarks;
-    const leftHand = frame.landmarks.find((h) => h.side === "left")?.landmarks ?? [];
-    const rightHand = frame.landmarks.find((h) => h.side === "right")?.landmarks ?? [];
-    const anyHand = frame.landmarks[0]?.landmarks ?? [];
-
-    if (poseLm && poseLm.length >= 33) {
-      const p = poseLm;
-
-      const poseBones: [number, number, string][] = [
-        [11, 12, "#94a3b8"],
-        [11, 13, "#94a3b8"], [13, 15, "#94a3b8"],
-        [12, 14, "#94a3b8"], [14, 16, "#94a3b8"],
-        [11, 23, "#64748b"], [12, 24, "#64748b"],
-        [23, 24, "#64748b"],
-        [23, 25, "#475569"], [25, 27, "#475569"],
-        [24, 26, "#475569"], [26, 28, "#475569"],
-        [27, 29, "#334155"], [29, 31, "#334155"],
-        [28, 30, "#334155"], [30, 32, "#334155"],
-        [0, 1, "#fbbf24"], [1, 2, "#fbbf24"], [2, 3, "#fbbf24"], [3, 7, "#fbbf24"],
-        [0, 4, "#fbbf24"], [4, 5, "#fbbf24"], [5, 6, "#fbbf24"], [6, 8, "#fbbf24"],
-        [9, 10, "#fbbf24"],
-        [11, 22, "#60a5fa"], [11, 23, "#60a5fa"],
-        [12, 24, "#60a5fa"], [12, 22, "#60a5fa"],
-      ];
-
-      for (const [i, j, color] of poseBones) {
-        if (i < p.length && j < p.length) {
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(sx(p[i].x), sy(p[i].y));
-          ctx.lineTo(sx(p[j].x), sy(p[j].y));
-          ctx.stroke();
-        }
-      }
-
-      const jointIndices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
-      for (const i of jointIndices) {
-        if (i < p.length) {
-          ctx.fillStyle = "#cbd5e1";
-          ctx.beginPath();
-          ctx.arc(sx(p[i].x), sy(p[i].y), 3, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-
-      const headIdx = 0;
-      if (headIdx < p.length) {
-        ctx.strokeStyle = "#fbbf24";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        const hx = sx(p[headIdx].x);
-        const hy = sy(p[headIdx].y);
-        ctx.arc(hx, hy, 18, 0, Math.PI * 2);
-        ctx.stroke();
-
-        ctx.fillStyle = "#fbbf24";
-        ctx.beginPath();
-        ctx.arc(hx - 4, hy - 3, 2, 0, Math.PI * 2);
-        ctx.arc(hx + 4, hy - 3, 2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      const neckIdx = 11;
-      const midHip = p[23] && p[24]
-        ? { x: (p[23].x + p[24].x) / 2, y: (p[23].y + p[24].y) / 2 }
-        : null;
-
-      if (neckIdx < p.length && midHip) {
-        ctx.strokeStyle = "#94a3b8";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(sx(p[neckIdx].x), sy(p[neckIdx].y));
-        ctx.lineTo(sx(midHip.x), sy(midHip.y));
-        ctx.stroke();
-      }
-    } else {
-      const cx = w / 2;
-      const cy = h / 2;
-
-      ctx.strokeStyle = "#94a3b8";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(cx, cy - 80, 18, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.fillStyle = "#94a3b8";
-      ctx.beginPath();
-      ctx.arc(cx - 4, cy - 83, 2, 0, Math.PI * 2);
-      ctx.arc(cx + 4, cy - 83, 2, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = "#94a3b8";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - 62);
-      ctx.lineTo(cx, cy + 40);
-      ctx.stroke();
-
-      ctx.strokeStyle = "#94a3b8";
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - 50);
-      ctx.lineTo(cx - 50, cy - 20);
-      ctx.moveTo(cx, cy - 50);
-      ctx.lineTo(cx + 50, cy - 20);
-      ctx.stroke();
-
-      ctx.strokeStyle = "#64748b";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(cx - 50, cy - 20);
-      ctx.lineTo(cx - 60, cy + 30);
-      ctx.moveTo(cx + 50, cy - 20);
-      ctx.lineTo(cx + 60, cy + 30);
-      ctx.stroke();
-
-      ctx.strokeStyle = "#475569";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy + 40);
-      ctx.lineTo(cx - 40, cy + 140);
-      ctx.moveTo(cx, cy + 40);
-      ctx.lineTo(cx + 40, cy + 140);
-      ctx.stroke();
-    }
-
-    if (faceLm && faceLm.length > 0) {
-      ctx.fillStyle = "rgba(251,191,36,0.15)";
-      for (const pt of faceLm) {
-        ctx.beginPath();
-        ctx.arc(sx(pt.x), sy(pt.y), 0.8, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-
-    const drawHand = (landmarks: { x: number; y: number; z: number }[], color: string) => {
-      if (landmarks.length < 21) return;
-
-      const handBones: [number, number][] = [
-        [0, 1], [1, 2], [2, 3], [3, 4],
-        [0, 5], [5, 6], [6, 7], [7, 8],
-        [0, 9], [9, 10], [10, 11], [11, 12],
-        [0, 13], [13, 14], [14, 15], [15, 16],
-        [0, 17], [17, 18], [18, 19], [19, 20],
-      ];
-
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      for (const [i, j] of handBones) {
-        if (i < landmarks.length && j < landmarks.length) {
-          ctx.beginPath();
-          ctx.moveTo(sx(landmarks[i].x), sy(landmarks[i].y));
-          ctx.lineTo(sx(landmarks[j].x), sy(landmarks[j].y));
-          ctx.stroke();
-        }
-      }
-
-      const palmPoints = [0, 1, 5, 9, 13, 17];
-      ctx.fillStyle = color;
-      for (const i of palmPoints) {
-        if (i < landmarks.length) {
-          ctx.beginPath();
-          ctx.arc(sx(landmarks[i].x), sy(landmarks[i].y), 4, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-
-      const tipPoints = [4, 8, 12, 16, 20];
-      ctx.fillStyle = "#fde68a";
-      for (const i of tipPoints) {
-        if (i < landmarks.length) {
-          ctx.beginPath();
-          ctx.arc(sx(landmarks[i].x), sy(landmarks[i].y), 3, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
+    const style = {
+      bodyColor: "#94a3b8",
+      jointColor: "#cbd5e1",
+      faceColor: "rgba(251,191,36,0.08)",
+      faceFeatureColor: "#fbbf24",
+      leftHandColor: "#c0593a",
+      rightHandColor: "#60a5fa",
+      lineWidth: 2,
+      jointRadius: 3,
     };
 
-    if (leftHand.length > 0) drawHand(leftHand, "#c0593a");
-    if (rightHand.length > 0) drawHand(rightHand, "#60a5fa");
+    if (frame.poseLandmarks && frame.poseLandmarks.length > 0) {
+      drawFullPose(ctx, frame.poseLandmarks, w, h, style);
+    }
 
-    if (showLabels && poseLm) {
+    if (frame.faceLandmarks && frame.faceLandmarks.length > 0) {
+      drawStylizedFace(ctx, frame.faceLandmarks, w, h, style);
+    }
+
+    const leftHand = frame.landmarks.find((h) => h.side === "left");
+    const rightHand = frame.landmarks.find((h) => h.side === "right");
+
+    if (leftHand) {
+      drawFullHand(ctx, leftHand.landmarks, style.leftHandColor, w, h, style.lineWidth, style.jointRadius);
+    }
+    if (rightHand) {
+      drawFullHand(ctx, rightHand.landmarks, style.rightHandColor, w, h, style.lineWidth, style.jointRadius);
+    }
+
+    if (showLabels && frame.poseLandmarks) {
       ctx.font = "9px monospace";
       ctx.fillStyle = "#64748b";
       ctx.textAlign = "center";
@@ -276,8 +109,8 @@ export function SkeletonPreviewTab({ extractionResult, videoMeta }: SkeletonPrev
       const labelNames = ["HEAD", "L_SHOULDER", "R_SHOULDER", "L_HAND", "R_HAND", "L_HIP", "R_HIP", "L_KNEE", "R_KNEE"];
       for (let i = 0; i < labelIndices.length; i++) {
         const idx = labelIndices[i];
-        if (idx < poseLm.length) {
-          ctx.fillText(labelNames[i], sx(poseLm[idx].x), sy(poseLm[idx].y) - 10);
+        if (idx < frame.poseLandmarks.length) {
+          ctx.fillText(labelNames[i], frame.poseLandmarks[idx].x * w, frame.poseLandmarks[idx].y * h - 10);
         }
       }
     }

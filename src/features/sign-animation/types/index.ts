@@ -173,3 +173,192 @@ export const BODY_CONNECTIONS: ConnectionPair[] = [
 export const MEDIAPIPE_POSE_CONNECTIONS: ConnectionPair[] = [
   [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28], [27, 31], [28, 32],
 ];
+
+/** Official MediaPipe Pose connections (33 landmarks) */
+export const FULL_POSE_CONNECTIONS: ConnectionPair[] = [
+  [0, 1], [1, 2], [2, 3], [3, 7],
+  [0, 4], [4, 5], [5, 6], [6, 8],
+  [9, 10],
+  [11, 12], [11, 13], [13, 15],
+  [12, 14], [14, 16],
+  [15, 17], [15, 19], [15, 21], [17, 19],
+  [16, 18], [16, 20], [16, 22], [18, 20],
+  [11, 23], [12, 24], [23, 24],
+  [23, 25], [25, 27], [27, 29], [29, 31], [27, 31],
+  [24, 26], [26, 28], [28, 30], [30, 32], [28, 32],
+];
+
+export const FACE_OVAL: number[] = [
+  10, 338, 297, 332, 284, 251, 389, 356, 454, 323,
+  361, 288, 397, 365, 379, 378, 400, 377, 152, 148,
+  176, 149, 150, 136, 172, 58, 132, 93, 234, 127,
+  162, 21, 54, 103, 67, 109, 10,
+];
+
+export const FACE_LEFT_EYEBROW: number[] = [46, 53, 52, 65, 55, 70, 63, 105, 66, 107];
+export const FACE_RIGHT_EYEBROW: number[] = [276, 283, 282, 295, 285, 300, 293, 334, 296, 336];
+export const FACE_LEFT_EYE: number[] = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
+export const FACE_RIGHT_EYE: number[] = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
+export const FACE_NOSE_BRIDGE: number[] = [168, 193, 122, 196, 419];
+export const FACE_NOSE_TIP: number[] = [1, 2, 98, 97];
+export const FACE_LIPS_OUTER: number[] = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185];
+export const FACE_LIPS_INNER: number[] = [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 316, 315];
+
+// --- Phase 2: Natural Sign Playback types ---
+
+export type SentenceType = "statement" | "question" | "exclamation" | "command" | "greeting" | "unknown";
+
+export interface ExpressionRule {
+  sentenceType: SentenceType;
+  expression: string;
+  intensity: number;
+}
+
+export interface TransitionPlan {
+  fromGesture: string;
+  toGesture: string;
+  fromFrame: AnimationFrame | null;
+  toFrame: AnimationFrame | null;
+  duration: number;
+  blendMethod: "linear" | "smoothstep" | "anticipate";
+  holdBefore: number;
+  holdAfter: number;
+}
+
+export interface AnimationPlan {
+  gestures: string[];
+  transitions: TransitionPlan[];
+  totalDuration: number;
+  expressionTimeline: Array<{ time: number; expression: string; intensity: number }>;
+  pauseTimeline: Array<{ time: number; duration: number; reason: string }>;
+}
+
+export interface FingerspellingConfig {
+  enabled: boolean;
+  speed: number;
+  letterPause: number;
+  handShape: "right" | "left";
+}
+
+export interface ResolverResult {
+  resolved: boolean;
+  strategy: ResolutionStrategy;
+  originalGloss: string;
+  resolvedGloss: string;
+  asset: GestureAnimationAsset | null;
+  confidence: number;
+  fallbackChain?: string[];
+}
+
+export interface PlaybackAnalyticsEvent {
+  type: "gesture_played" | "transition" | "fingerspell" | "resolution_fallback" | "cache_hit" | "cache_miss" | "phrase_resolved" | "recommendation" | "translation_latency";
+  timestamp: number;
+  gesture?: string;
+  duration?: number;
+  details?: string;
+}
+
+export interface AnimationInspectorData {
+  originalGloss: string;
+  resolvedGloss: string;
+  strategy: ResolverResult["strategy"];
+  assetDuration: number;
+  frameCount: number;
+  fps: number;
+  transitionIn: string | null;
+  transitionOut: string | null;
+  expression: string;
+  timingSpeed: number;
+  confidence: number;
+  missingFrames: number;
+  coarticulationScore: number;
+  cacheHit: boolean;
+}
+
+// --- Phase 3: Intelligent Sentence-Level types ---
+
+export interface PhraseEntry {
+  phrase: string;
+  canonicalKey: string;
+  type: "greeting" | "common" | "question" | "farewell" | "politeness";
+}
+
+export interface PlaybackSegment {
+  type: "phrase" | "gloss" | "fingerspell" | "pause";
+  originalText: string;
+  resolvedText: string;
+  asset: GestureAnimationAsset | null;
+  duration: number;
+  strategy: ResolverResult["strategy"];
+  expression: string;
+}
+
+export interface PlaybackPlan {
+  inputText: string;
+  language: string;
+  sentenceType: SentenceType;
+  segments: PlaybackSegment[];
+  totalDuration: number;
+  expressionTimeline: Array<{ time: number; expression: string; intensity: number }>;
+  pauseTimeline: Array<{ time: number; duration: number; reason: string }>;
+  transitionTimeline: Array<{ time: number; from: string; to: string; duration: number }>;
+  metadata: {
+    phraseCount: number;
+    glossCount: number;
+    fingerspellCount: number;
+    pauseCount: number;
+    fallbackCount: number;
+    resolutionChain: string[];
+  };
+}
+
+export interface MotionCurveConfig {
+  interpolation: "linear" | "smoothstep" | "ease-in" | "ease-out" | "ease-in-out" | "bezier";
+  bezierPoints?: [number, number, number, number];
+  handSpeed: number;
+  wristSpeed: number;
+  elbowSpeed: number;
+  shoulderSpeed: number;
+  bodySpeed: number;
+}
+
+export interface BodyMotionConfig {
+  enabled: boolean;
+  idleBreathing: boolean;
+  headMotion: boolean;
+  shoulderMovement: boolean;
+  torsoSway: boolean;
+  weightShifting: boolean;
+  naturalRestPose: boolean;
+  amplitude: number;
+}
+
+export interface AnimationRecommendation {
+  word: string;
+  frequency: number;
+  language: string;
+  firstSeen: number;
+  lastSeen: number;
+  currentPlayback: string;
+  occurrences: number;
+  recommendation: string;
+}
+
+export interface TranslationPipelinePlugin {
+  name: string;
+  init: () => Promise<void>;
+  translate?: (text: string, context: { language: string; sentenceType: SentenceType }) => Promise<string[]>;
+  generatePose?: (text: string, context: { language: string }) => Promise<GestureAnimationAsset | null>;
+  isAvailable: () => boolean;
+}
+
+export type ResolutionStrategy =
+  | "exact_phrase"
+  | "phrase_alias"
+  | "exact_gloss"
+  | "gloss_alias"
+  | "synonym"
+  | "morphological"
+  | "category_mapping"
+  | "fingerspell"
+  | "unknown_placeholder";

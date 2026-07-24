@@ -9,13 +9,18 @@ import { CoarticulationEngine } from "./coarticulation";
 import { GestureTimingOptimizer } from "./gestureTiming";
 import { NonManualController } from "../engine/nonManualFeatures";
 import { PerformanceOptimizer } from "./performanceOptimizer";
-import type { AnimationClip, PlaybackState, AvatarTheme, GestureAnimationAsset } from "../types";
+import { TransitionEngine } from "./TransitionEngine";
+import { FingerspellingEngine } from "./FingerspellingEngine";
+import { SmartAnimationResolver } from "./SmartAnimationResolver";
+import { AnimationCache, PlaybackAnalytics } from "./AnimationCache";
+import type { AnimationClip, PlaybackState, AvatarTheme, GestureAnimationAsset, AnimationInspectorData } from "../types";
 import { AVATAR_THEMES } from "../types";
 
 export interface SignAnimationPlayerHandle {
   play: () => void;
   pause: () => void;
   replay: () => void;
+  reset: () => void;
   stop: () => void;
   getPlayState: () => PlaybackState;
 }
@@ -34,6 +39,8 @@ interface SignAnimationPlayerProps {
   backgroundColor?: string;
   onComplete?: () => void;
   onGestureChange?: (gesture: string, current: number, total: number) => void;
+  onInspectorData?: (data: AnimationInspectorData) => void;
+  onAnalyticsEvent?: (event: Parameters<PlaybackAnalytics["record"]>[0]) => void;
 }
 
 const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnimationPlayerProps>(function SignAnimationPlayer({
@@ -50,6 +57,8 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
   backgroundColor,
   onComplete,
   onGestureChange,
+  onInspectorData,
+  onAnalyticsEvent,
 }: SignAnimationPlayerProps, ref) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<PlaybackEngine | null>(null);
@@ -58,6 +67,11 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
   const timingRef = useRef<GestureTimingOptimizer | null>(null);
   const nonManualRef = useRef<NonManualController | null>(null);
   const perfRef = useRef<PerformanceOptimizer | null>(null);
+  const transitionRef = useRef<TransitionEngine | null>(null);
+  const fingerspellRef = useRef<FingerspellingEngine | null>(null);
+  const resolverRef = useRef<SmartAnimationResolver | null>(null);
+  const cacheRef = useRef<AnimationCache | null>(null);
+  const analyticsRef = useRef<PlaybackAnalytics | null>(null);
   const currentGestureRef = useRef<string>("");
   const clipsRef = useRef(clips);
   clipsRef.current = clips;
@@ -93,21 +107,66 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
     const perf = new PerformanceOptimizer();
     perfRef.current = perf;
 
+    const animLoader = new AnimationLoader();
+    const transition = new TransitionEngine();
+    transitionRef.current = transition;
+
+    const fingerspell = new FingerspellingEngine({ enabled: true, speed: 1, letterPause: 80, handShape: "right" });
+    fingerspellRef.current = fingerspell;
+
+    const resolver = new SmartAnimationResolver(animLoader);
+    resolverRef.current = resolver;
+
+    const cache = new AnimationCache();
+    cacheRef.current = cache;
+
+    const analytics = new PlaybackAnalytics();
+    analyticsRef.current = analytics;
+
     engine.setCallbacks({
       onFrame: (frame, time, clip) => {
-        perf.recordFrame(performance.now());
-        setPlayState((prev) => ({ ...prev, currentTime: time }));
+        try {
+          perf.recordFrame(performance.now());
+          setPlayState((prev) => ({ ...prev, currentTime: time }));
 
-        const gestureLabel = clip?.gesture ?? currentGestureRef.current;
-        const coarticulated = coarticulation.processFrame(frame, gestureLabel, 1 / 30);
+          const gestureLabel = clip?.gesture ?? currentGestureRef.current;
+          let processedFrame = frame;
 
-        nonManual.setGestureExpression(gestureLabel);
-        nonManual.update(1 / 30);
+          if (transitionRef.current) {
+            processedFrame = transitionRef.current.blendFrames(frame, frame, 1);
+          }
 
-        const bodyPose = undefined;
-        renderer.render(coarticulated, {
-          nonManual: nonManual.getFeatures(),
-        });
+          const coarticulated = coarticulation.processFrame(processedFrame, gestureLabel, 1 / 30);
+
+          nonManual.setGestureExpression(gestureLabel);
+          nonManual.update(1 / 30);
+
+          renderer.render(coarticulated, {
+            nonManual: nonManual.getFeatures(),
+          });
+
+          // Inspector data
+          if (onInspectorData && clip) {
+            onInspectorData({
+              originalGloss: gestureLabel,
+              resolvedGloss: gestureLabel,
+              strategy: "exact_gloss",
+              assetDuration: clip.asset.duration,
+              frameCount: clip.asset.totalFrames,
+              fps: clip.asset.fps,
+              transitionIn: null,
+              transitionOut: null,
+              expression: nonManual.getFeatures().facialExpression,
+              timingSpeed: timingRef.current?.getSpeedForGesture(clip.asset) ?? 1,
+              confidence: 1,
+              missingFrames: 0,
+              coarticulationScore: coarticulation.getConfig().enabled ? 1 : 0,
+              cacheHit: (cacheRef.current?.getStats().hitRate ?? 0) > 0,
+            });
+          }
+        } catch (err) {
+          console.error("[Playback] Render error:", err);
+        }
       },
       onGestureChange: (gesture, index, total) => {
         currentGestureRef.current = gesture;
@@ -115,10 +174,25 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
           ...prev, currentGesture: gesture, currentIndex: index, queueLength: total,
         }));
         onGestureChange?.(gesture, index, total);
+        analyticsRef.current?.record({ type: "gesture_played", gesture, details: `index ${index}/${total}` });
 
         const c = clipsRef.current;
         if (index > 0 && c[index - 1]) {
           coarticulation.startTransition(c[index - 1].gesture, gesture);
+          if (transitionRef.current) {
+            const prevAsset = c[index - 1]?.asset;
+            const nextAsset = c[index]?.asset;
+            if (prevAsset && nextAsset) {
+              transitionRef.current.createTransition(
+                c[index - 1].gesture, gesture,
+                transitionRef.current.getLastFrame(prevAsset.frames),
+                transitionRef.current.getFirstFrame(nextAsset.frames),
+              );
+            }
+          }
+        }
+        if (onAnalyticsEvent) {
+          onAnalyticsEvent({ type: "gesture_played", gesture, details: `index ${index}/${total}` });
         }
       },
       onComplete: () => {},
@@ -136,6 +210,11 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
       renderer.dispose();
       engineRef.current = null;
       rendererRef.current = null;
+      transitionRef.current = null;
+      fingerspellRef.current = null;
+      resolverRef.current = null;
+      cacheRef.current = null;
+      analyticsRef.current = null;
     };
   }, [onComplete, onGestureChange, width, height, theme, showLabels, showNonManual, highContrast, backgroundColor, speed]);
 
@@ -143,6 +222,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
     const engine = engineRef.current;
     if (!engine || clips.length === 0) return;
 
+    engine.stop();
     engine.clearQueue();
     const firstClip = clips[0];
     const remaining = clips.slice(1);
@@ -206,6 +286,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
       setPlayState((prev) => ({ ...prev, isPaused: true }));
     },
     replay: handleReplay,
+    reset: handleReplay,
     stop: handleStop,
     getPlayState: () => playStateRef.current,
   }), [handleReplay, handleStop]);

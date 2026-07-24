@@ -5,10 +5,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Play, Pause, RotateCcw, Settings, Loader2, Volume2, Info } from "lucide-react";
+import { Play, Pause, RotateCcw, Settings, Loader2, Volume2, Info, SpellCheck } from "lucide-react";
 import { globalPipeline } from '@/features/translation-pipeline';
 import { AnimationLoader } from '@/features/sign-animation/loader';
 import { SignAnimationPlayer } from '@/features/sign-animation/player/SignAnimationPlayer';
+import { FingerspellingEngine } from '@/features/sign-animation/player/FingerspellingEngine';
 import type { AnimationClip, AvatarTheme } from '@/features/sign-animation/types';
 import {
   Tooltip,
@@ -38,9 +39,16 @@ export function TypeToSignInterface() {
   const [isPaused, setIsPaused] = useState(false);
   const [currentGestureIndex, setCurrentGestureIndex] = useState(0);
   const [selectedAvatarTheme, setSelectedAvatarTheme] = useState<AvatarTheme>('minimal');
+  const [fallbackWords, setFallbackWords] = useState<string[]>([]);
 
   const previewRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<any>(null);
+  const fingerspellingEngineRef = useRef(new FingerspellingEngine());
+
+  const handleGestureChange = useCallback((g: string, index: number) => {
+    setCurrentGesture(g);
+    setCurrentGestureIndex(index);
+  }, []);
 
   useEffect(() => {
     const el = previewRef.current;
@@ -62,6 +70,7 @@ export function TypeToSignInterface() {
     setClips([]);
     setIsPlaying(false);
     setIsPaused(false);
+    setFallbackWords([]);
 
     try {
       const pipelineResult = globalPipeline.translate(trimmed);
@@ -73,7 +82,7 @@ export function TypeToSignInterface() {
 
       const loader = new AnimationLoader();
       const loadedClips: AnimationClip[] = [];
-      const unavailableGlosses: string[] = [];
+      const fallbackUsed: string[] = [];
 
       const assetMap = new Map<string, any>();
       for (const key of uniqueKeys) {
@@ -83,10 +92,20 @@ export function TypeToSignInterface() {
         }
       }
 
+      const fsEngine = fingerspellingEngineRef.current;
+
       for (let i = 0; i < pipelineResult.animationPlan.items.length; i++) {
         const item = pipelineResult.animationPlan.items[i];
         if (item.fallbackUsed) {
-          unavailableGlosses.push(item.gloss);
+          if (fsEngine.isFingerspellable(item.gloss)) {
+            const fsAsset = fsEngine.generateFingerspellingAsset(item.gloss);
+            loadedClips.push({
+              id: `fs-${item.gloss}-${i}-${Date.now()}`,
+              gesture: item.gloss,
+              asset: fsAsset,
+            });
+            fallbackUsed.push(item.gloss);
+          }
           continue;
         }
         const asset = assetMap.get(item.animationKey);
@@ -97,13 +116,22 @@ export function TypeToSignInterface() {
             asset,
           });
         } else {
-          unavailableGlosses.push(item.gloss);
+          if (fsEngine.isFingerspellable(item.gloss)) {
+            const fsAsset = fsEngine.generateFingerspellingAsset(item.gloss);
+            loadedClips.push({
+              id: `fs-${item.gloss}-${i}-${Date.now()}`,
+              gesture: item.gloss,
+              asset: fsAsset,
+            });
+            fallbackUsed.push(item.gloss);
+          }
         }
       }
 
       setClips(loadedClips);
-      if (unavailableGlosses.length > 0) {
-        setError(`Animation unavailable: ${[...new Set(unavailableGlosses)].join(", ")}.`);
+      setFallbackWords(fallbackUsed);
+      if (fallbackUsed.length > 0) {
+        setError(`Resolved by Fingerspelling: ${fallbackUsed.join(", ")}`);
       }
       setAnimationKey((prev) => prev + 1);
       if (loadedClips.length > 0) {
@@ -221,10 +249,7 @@ export function TypeToSignInterface() {
                     width={previewSize.width}
                     height={previewSize.height}
                     theme={selectedAvatarTheme}
-                    onGestureChange={(g, index) => {
-                      setCurrentGesture(g);
-                      setCurrentGestureIndex(index);
-                    }}
+                    onGestureChange={handleGestureChange}
                   />
                   
                 </div>
@@ -253,7 +278,10 @@ export function TypeToSignInterface() {
                 <button aria-label={isPlaying && !isPaused ? "Pause animation" : "Play animation"} onClick={handlePlayPause} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#d88567] text-white shadow-sm hover:bg-[#bc6d53] transition-colors">
                   {isPlaying && !isPaused ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
                 </button>
-                <span className="min-w-[96px] text-center text-xs font-medium text-stone-500">{currentGesture || "..."} · {currentGestureIndex + 1}/{clips.length}</span>
+                <span className="min-w-[96px] text-center text-xs font-medium text-stone-500">
+                  {currentGesture || "..."} · {currentGestureIndex + 1}/{clips.length}
+                  {fallbackWords.length > 0 && <span className="ml-1 text-amber-500">(FS)</span>}
+                </span>
               </div>
             )}
             
@@ -337,8 +365,19 @@ export function TypeToSignInterface() {
           <CardContent className="p-5">
             <h3 className="text-[11px] font-bold tracking-[0.15em] text-stone-400 uppercase mb-3">Translation status</h3>
             <p className="text-sm leading-5 text-stone-500">
-              {loading ? "Preparing your FSL sign sequence..." : error ? error : clips.length > 0 ? `${clips.length} sign${clips.length === 1 ? "" : "s"} ready via translation pipeline.` : "Enter a message to generate a signing preview."}
+              {loading ? "Preparing your FSL sign sequence..." : error ? error : clips.length > 0 ? `${clips.length} sign${clips.length === 1 ? "" : "s"} ready.` : "Enter a message to generate a signing preview."}
             </p>
+            {fallbackWords.length > 0 && (
+              <div className="mt-3 flex items-start gap-2 p-2 rounded-lg bg-amber-50 border border-amber-200">
+                <SpellCheck className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                <div className="text-xs text-amber-800">
+                  <span className="font-semibold">Fallback: Alphabet Fingerspelling</span>
+                  <p className="mt-1 text-amber-700">
+                    {fallbackWords.join(", ")} — will be fingerspelled letter by letter.
+                  </p>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

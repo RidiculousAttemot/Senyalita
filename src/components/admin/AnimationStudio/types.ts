@@ -28,6 +28,7 @@ export interface VideoMetadata {
   height: number;
   fps: number;
   fileSize: number;
+  preExtractedAsset?: GestureAnimationAsset;
 }
 
 export interface ExtractionResult {
