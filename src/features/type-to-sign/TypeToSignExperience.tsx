@@ -3,10 +3,13 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 // @ts-expect-error - .jsx file, no TS declaration
 import AppNav from '@/components/shared/AppNav';
+import { globalLoader } from '@/features/sign-animation/hooks/useAnimationClip';
 import { globalPipeline } from '@/features/translation-pipeline';
-import { AnimationLoader } from '@/features/sign-animation/loader';
 import { SignAnimationPlayer } from '@/features/sign-animation/player/SignAnimationPlayer';
-import type { AnimationClip, AvatarTheme } from '@/features/sign-animation/types';
+import { GhostAvatarPreview } from '@/features/sign-animation/player/GhostAvatarPreview';
+import type { AvatarTheme } from '@/features/sign-animation/types';
+import { preloadCommonAssets } from '@/lib/commonAssetsPreload';
+import { useProgressiveSignTranslation } from './useProgressiveSignTranslation';
 import styles from './TypeToSignExperience.module.css';
 
 const supportedChars = [
@@ -25,13 +28,9 @@ const quickPhrases = ['ABC', 'FSL', 'Ñ', 'NG'];
 
 export default function TypeToSignExperience() {
   const [message, setMessage] = useState('');
-  const [translated, setTranslated] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [selectedAvatar, setSelectedAvatar] = useState('Warm');
   const [avatarMode, setAvatarMode] = useState('human');
-  const [clips, setClips] = useState<AnimationClip[]>([]);
-  const [animationKey, setAnimationKey] = useState(0);
+  const [sequenceKey, setSequenceKey] = useState(0);
   const [currentGesture, setCurrentGesture] = useState<string | null>(null);
   const [previewSize, setPreviewSize] = useState({ width: 320, height: 340 });
   const [isPlaying, setIsPlaying] = useState(false);
@@ -42,6 +41,28 @@ export default function TypeToSignExperience() {
   const previewRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<any>(null);
   const totalClipsRef = useRef(0);
+
+  const translation = useProgressiveSignTranslation({
+    // This surface has never had a fingerspelling fallback — an unresolved
+    // word is simply dropped, matching its original `if (fallbackUsed)
+    // continue;` behavior (returning null here does exactly that).
+    onPipelineResult: (result, inputText) => {
+      const unknownCount = result.unknownGlosses.length;
+      fetch('/api/text-to-sign/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input_text: inputText,
+          translated_gloss: result.glossSequence.map((g) => g.gloss).join(' '),
+          processing_time_ms: result.totalProcessingTimeMs,
+          unknown_token_count: unknownCount,
+          model_version: 'pipeline_v2',
+        }),
+      }).catch(() => {});
+    },
+  });
+  const { stage, clips, error, isStreaming } = translation;
+  const loading = stage === 'translating' || stage === 'loading';
 
   useEffect(() => {
     audioRef.current = typeof window !== 'undefined' ? (window.speechSynthesis ?? null) : null;
@@ -58,68 +79,33 @@ export default function TypeToSignExperience() {
     return () => observer.disconnect();
   }, []);
 
-  const translateSign = useCallback(async () => {
+  useEffect(() => {
+    preloadCommonAssets();
+  }, []);
+
+  const translateSign = useCallback(() => {
     const trimmed = message.trim();
+    if (!trimmed || loading) return;
+    setSequenceKey((k) => k + 1);
+    translation.translate(trimmed);
+  }, [message, loading, translation]);
+
+  const prefetchText = useCallback((text: string) => {
+    const trimmed = text.trim();
     if (!trimmed) return;
-
-    setLoading(true);
-    setError(null);
-    setTranslated(false);
-    setClips([]);
-
     try {
-      const pipelineResult = globalPipeline.translate(trimmed);
-      const glossKeys = pipelineResult.animationPlan.items
-        .filter((item) => !item.fallbackUsed)
-        .map((item) => item.animationKey);
-
-      const uniqueKeys = [...new Set(glossKeys)].filter(Boolean);
-
-      const loader = new AnimationLoader();
-      const loadedClips = [];
-
-      const assetMap = new Map<string, any>();
-      for (const key of uniqueKeys) {
-        const asset = await loader.load(key);
-        if (asset) {
-          assetMap.set(key, asset);
-        }
-      }
-
-      for (const item of pipelineResult.animationPlan.items) {
-        if (item.fallbackUsed) continue;
-        const asset = assetMap.get(item.animationKey);
-        if (asset) {
-          loadedClips.push({
-            id: `anim-${item.animationKey}-${loadedClips.length}-${Date.now()}`,
-            gesture: item.gloss,
-            asset,
-          });
-        }
-      }
-
-      setClips(loadedClips);
-      setAnimationKey((prev) => prev + 1);
-      setTranslated(true);
-
-      const unknownCount = pipelineResult.unknownGlosses.length;
-      fetch('/api/text-to-sign/log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input_text: trimmed,
-          translated_gloss: pipelineResult.glossSequence.map((g) => g.gloss).join(' '),
-          processing_time_ms: pipelineResult.totalProcessingTimeMs,
-          unknown_token_count: unknownCount,
-          model_version: 'pipeline_v2',
-        }),
-      }).catch(() => {});
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Translation failed');
-    } finally {
-      setLoading(false);
+      const keys = globalPipeline.translate(trimmed).animationPlan.items.map((i) => i.animationKey);
+      globalLoader.preload(keys.filter(Boolean));
+    } catch {
+      // best-effort — a malformed partial phrase mid-typing just skips warming.
     }
-  }, [message]);
+  }, []);
+
+  useEffect(() => {
+    if (!message.trim()) return;
+    const timer = setTimeout(() => prefetchText(message), 400);
+    return () => clearTimeout(timer);
+  }, [message, prefetchText]);
 
   const speakText = useCallback(() => {
     if (!message.trim()) return;
@@ -183,6 +169,7 @@ export default function TypeToSignExperience() {
     : 0;
 
   const selectedTheme = avatarStyles.find((a) => a.name === selectedAvatar)?.theme ?? 'minimal';
+  const hasStarted = clips.length > 0;
 
   return (
     <div className={styles.page}>
@@ -200,7 +187,7 @@ export default function TypeToSignExperience() {
 
             <div className={styles.controls}>
               <button className={styles.translateBtn} onClick={translateSign} disabled={loading}>
-                {loading ? 'Translating\u2026' : 'Translate to Sign'}
+                {loading ? 'Translating…' : 'Translate to Sign'}
               </button>
               <button className={styles.speakBtn} onClick={speakText}>
                 🎤 Speak
@@ -215,6 +202,7 @@ export default function TypeToSignExperience() {
                   key={phrase}
                   className={styles.chip}
                   onClick={() => setMessage(phrase)}
+                  onMouseEnter={() => prefetchText(phrase)}
                 >
                   {phrase}
                 </button>
@@ -224,7 +212,7 @@ export default function TypeToSignExperience() {
             <div className={styles.previewSection}>
               <p className={styles.previewLabel}>Sign animation</p>
               <div className={styles.previewBox}>
-                {!translated && !loading && !error ? (
+                {!hasStarted && !loading && !error ? (
                   <div className={styles.previewEmptyState}>
                     <div className={styles.previewIconWrap}>
                       <svg viewBox="0 0 24 24">
@@ -237,16 +225,17 @@ export default function TypeToSignExperience() {
                       Type a message and press Translate to see the avatar sign it.
                     </p>
                   </div>
-                ) : loading ? (
-                  <p className={styles.signingText}>Loading animations…</p>
+                ) : !hasStarted && loading ? (
+                  <GhostAvatarPreview label="Preparing sign animation…" sublabel="Loading motion data" className="h-full w-full" />
                 ) : error ? (
                   <p className={styles.signingText} style={{ color: '#ef4444' }}>{error}</p>
-                ) : clips.length > 0 ? (
+                ) : hasStarted ? (
                   <div className={styles.previewBoxPlayerWrap} ref={previewRef}>
                     <SignAnimationPlayer
                       ref={playerRef}
-                      key={animationKey}
+                      key={sequenceKey}
                       clips={clips}
+                      isStreaming={isStreaming}
                       width={previewSize.width}
                       height={previewSize.height}
                       speed={1}
@@ -263,7 +252,7 @@ export default function TypeToSignExperience() {
               </div>
             </div>
 
-            {translated && (
+            {hasStarted && (
               <div className={styles.playbackControls}>
                 <button className={styles.playBtn} onClick={handleReplay} title="Restart">↺</button>
                 <button className={styles.playBtn} onClick={handlePausePlay} disabled={!isPlaying && !isPaused} title={isPaused ? 'Play' : 'Pause'}>

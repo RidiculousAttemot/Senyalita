@@ -29,6 +29,14 @@ const DEFAULT_FINGERSPELLING_POSES: Record<string, number[][]> = {
   Z: [[0,0,0],[0,0.02,0],[0,0.04,0],[0,0.06,0],[0,0.08,0],[0.03,-0.01,0],[0.04,-0.03,0],[0.045,-0.05,-0.01],[0.05,-0.07,-0.01],[0.02,-0.01,0],[0.025,-0.03,0],[0.03,-0.05,0],[0.035,-0.07,0],[0.01,-0.01,0],[0.01,-0.03,0],[0.01,-0.05,0],[0.01,-0.07,0],[-0.02,0.02,0],[-0.03,0.03,0],[-0.04,0.04,0],[-0.05,0.05,0]],
 };
 
+/**
+ * Pose deltas above are authored in a unit where a full hand spans ~0.16.
+ * A hand that size reads as roughly the whole torso once anchored to the
+ * synthetic rig, so it is scaled down to sit just under head height.
+ */
+const HAND_SCALE = 0.7;
+const HAND_ORIGIN = { x: 0.55, y: 0.55 };
+
 export class FingerspellingEngine {
   private config: FingerspellingConfig;
   private letterCache: Map<string, GestureAnimationAsset> = new Map();
@@ -68,8 +76,8 @@ export class FingerspellingEngine {
         const progress = f / framesPerLetter;
         const smoothProgress = progress * progress * (3 - 2 * progress);
         const landmarks: LandmarkPoint[] = pose.map(p => ({
-          x: 0.55 + p[0] * 2.5 * smoothProgress,
-          y: 0.55 + p[1] * 2.5 * smoothProgress,
+          x: HAND_ORIGIN.x + p[0] * HAND_SCALE * smoothProgress,
+          y: HAND_ORIGIN.y + p[1] * HAND_SCALE * smoothProgress,
           z: (p[2] ?? 0) * smoothProgress,
         }));
 
@@ -94,7 +102,7 @@ export class FingerspellingEngine {
         const side = this.config.handShape === "right" ? "right" as const : "left" as const;
         frames.push({
           timestamp: frames.length * (1000 / fps),
-          landmarks: [{ landmarks: pose.map(p2 => ({ x: 0.55 + p2[0] * 2.5, y: 0.55 + p2[1] * 2.5, z: p2[2] ?? 0 })), side }],
+          landmarks: [{ landmarks: pose.map(p2 => ({ x: HAND_ORIGIN.x + p2[0] * HAND_SCALE, y: HAND_ORIGIN.y + p2[1] * HAND_SCALE, z: p2[2] ?? 0 })), side }],
           poseLandmarks: this.getDefaultPose(),
         });
       }
@@ -181,18 +189,20 @@ export class FingerspellingEngine {
   }
 
   private getDefaultPose(): LandmarkPoint[] {
+    // Signing arm (indices 14/16/18/20/22) is raised to chest height so the
+    // spelled handshape reads at signing space rather than hanging at the hip.
     const positions: [number, number][] = [
       [0.50, 0.15], [0.47, 0.13], [0.46, 0.13], [0.45, 0.13],
       [0.53, 0.13], [0.54, 0.13], [0.55, 0.13],
-      [0.42, 0.18], [0.58, 0.18],
-      [0.48, 0.18], [0.52, 0.18],
-      [0.35, 0.35], [0.65, 0.35],
-      [0.32, 0.50], [0.68, 0.50],
-      [0.30, 0.65], [0.70, 0.65],
-      [0.28, 0.68], [0.72, 0.68],
-      [0.29, 0.66], [0.71, 0.66],
-      [0.28, 0.65], [0.72, 0.65],
-      [0.40, 0.70], [0.60, 0.70],
+      [0.43, 0.19], [0.57, 0.19],
+      [0.48, 0.20], [0.52, 0.20],
+      [0.36, 0.31], [0.64, 0.31],
+      [0.33, 0.46], [0.69, 0.43],
+      [0.31, 0.60], [0.61, 0.31],
+      [0.29, 0.63], [0.59, 0.28],
+      [0.30, 0.61], [0.60, 0.27],
+      [0.29, 0.60], [0.62, 0.29],
+      [0.40, 0.68], [0.60, 0.68],
       [0.38, 0.82], [0.62, 0.82],
       [0.36, 0.92], [0.64, 0.92],
       [0.35, 0.94], [0.65, 0.94],

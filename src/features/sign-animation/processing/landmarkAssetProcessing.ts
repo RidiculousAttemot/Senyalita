@@ -17,6 +17,9 @@ export interface CreateGestureAnimationAssetInput {
   language?: string;
   signerId?: string;
   source?: string;
+  video?: string;
+  imageWidth?: number;
+  imageHeight?: number;
 }
 
 const cloneFrame = (frame: AnimationFrame, timestamp: number): AnimationFrame => ({
@@ -95,6 +98,9 @@ export function createGestureAnimationAsset(input: CreateGestureAnimationAssetIn
     duration,
     totalFrames: input.frames.length,
     frames: input.frames,
+    video: input.video,
+    imageWidth: input.imageWidth,
+    imageHeight: input.imageHeight,
     metadata: {
       signerId: input.signerId,
       source: input.source ?? "landmark-video-extraction",

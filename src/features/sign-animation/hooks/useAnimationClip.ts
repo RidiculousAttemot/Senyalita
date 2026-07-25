@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { AnimationLoader } from "../loader/AnimationLoader";
 import type { AnimationClip, GestureAnimationAsset } from "../types";
 
-const globalLoader = new AnimationLoader();
+export const globalLoader = new AnimationLoader();
 
 export function useAnimationClip(gestureLabel: string | null): {
   clip: AnimationClip | null;

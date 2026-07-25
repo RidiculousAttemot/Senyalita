@@ -2,12 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LandingFooter } from "@/components/landing/LandingFooter";
 
 export function Footer() {
   const pathname = usePathname();
 
   if (pathname === "/admin" || pathname?.startsWith("/admin/")) {
     return null;
+  }
+
+  // Landing page ("/") gets its own richer footer — scoped here so the
+  // simpler footer used by /translate, /learn, /conversation, etc. is untouched.
+  if (pathname === "/") {
+    return <LandingFooter />;
   }
 
   return (

@@ -1,0 +1,89 @@
+"use client";
+
+import { motion } from "framer-motion";
+import { ScanLine, Languages, Layers3, BookOpen, Database, Settings, type LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+interface Feature {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+}
+
+const features: Feature[] = [
+  {
+    icon: ScanLine,
+    title: "Live Sign Recognition",
+    description: "Recognize Filipino Sign Language in real time using your webcam — no download required.",
+  },
+  {
+    icon: Languages,
+    title: "AI Translation",
+    description: "Convert spoken or written Filipino and English into natural Filipino Sign Language.",
+  },
+  {
+    icon: Layers3,
+    title: "Landmark Animation",
+    description: "Visualize signs through smooth MediaPipe skeletal animation, not stiff pre-recorded clips.",
+  },
+  {
+    icon: BookOpen,
+    title: "Learning Mode",
+    description: "Practice the alphabet, numbers, and everyday phrases with guided, interactive lessons.",
+  },
+  {
+    icon: Database,
+    title: "Dataset Builder",
+    description: "Every contributed recording helps expand and refine the recognition model over time.",
+  },
+  {
+    icon: Settings,
+    title: "Admin Studio",
+    description: "A dedicated research workspace for managing animations, datasets, and model training.",
+  },
+];
+
+export function FeatureJourneySection() {
+  return (
+    <section id="features" className="scroll-mt-20 bg-senyalita-surface px-6 py-24 md:py-28">
+      <div className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-2xl text-center">
+          <span className="text-xs font-semibold uppercase tracking-wider text-senyalita-primary">What Senyalita does</span>
+          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight text-senyalita-dark md:text-4xl">
+            One platform, the whole signing journey
+          </h2>
+          <p className="mt-4 text-base leading-relaxed text-senyalita-muted">
+            From a first-time learner practicing the alphabet to real-time conversation
+            between Deaf and hearing users — every step is built around clear,
+            human communication.
+          </p>
+        </div>
+
+        <div className="relative mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {features.map((feature, i) => (
+            <motion.div
+              key={feature.title}
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.5, delay: (i % 3) * 0.08 }}
+              className={cn(
+                "group relative overflow-hidden rounded-2xl border border-senyalita-border bg-white p-7",
+                "transition-all duration-300 hover:-translate-y-1 hover:border-senyalita-primary/25 hover:shadow-xl hover:shadow-senyalita-primary/8",
+              )}
+            >
+              <span className="absolute right-5 top-5 font-display text-3xl font-bold text-senyalita-border transition-colors group-hover:text-senyalita-primary/15">
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-senyalita-primary/10 to-senyalita-secondary/10 text-senyalita-primary transition-transform duration-300 group-hover:scale-110">
+                <feature.icon className="h-6 w-6" strokeWidth={2} />
+              </div>
+              <h3 className="mt-5 text-lg font-semibold text-senyalita-dark">{feature.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-senyalita-muted">{feature.description}</p>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}

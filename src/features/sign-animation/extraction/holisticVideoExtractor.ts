@@ -18,12 +18,18 @@ export interface ExtractionProgress {
 export interface HolisticExtractionOptions {
   modelAssetPath?: string;
   wasmPath?: string;
+  videoPath?: string;
 }
 
 export interface ExtractedAnimationSequence {
   duration: number;
   frames: AnimationFrame[];
   sourceFps: number;
+  /** Original video dimensions for pixel-space rendering */
+  imageWidth?: number;
+  imageHeight?: number;
+  /** Path/URL to source video */
+  videoPath?: string;
 }
 
 const DEFAULT_MODEL_ASSET_PATH = "https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/latest/holistic_landmarker.task";
@@ -141,5 +147,12 @@ export async function extractLandmarksFromVideo(
     console.warn("[Extraction] No frames were extracted — video may be blank or unreadable");
   }
 
-  return { duration: video.duration, frames, sourceFps };
+  return {
+    duration: video.duration,
+    frames,
+    sourceFps,
+    imageWidth: video.videoWidth || undefined,
+    imageHeight: video.videoHeight || undefined,
+    videoPath: options.videoPath,
+  };
 }

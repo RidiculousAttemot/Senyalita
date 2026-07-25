@@ -27,6 +27,29 @@ const config: Config = {
         "warn-bg": "#fff4e8",
         "warn-border": "#f0c8a5",
         "warn-text": "#9a5f2b",
+        // Translation workspace palette — scoped to /translate.
+        fsl: {
+          bg: "#FDF8F0",
+          surface: "#FFFFFF",
+          raised: "#FFFCF7",
+          sunken: "#FBF4EA",
+          border: "#EDE2D6",
+          "border-strong": "#DFD0BF",
+          ink: "#2B221C",
+          body: "#5C4F44",
+          muted: "#8C7D6E",
+          faint: "#B3A697",
+          coral: "#D8694A",
+          "coral-dark": "#BC573C",
+          "coral-soft": "#FBEDE7",
+          navy: "#123B47",
+          teal: "#3F7F79",
+          "teal-soft": "#E8F2F0",
+          success: "#3E8E5E",
+          "success-soft": "#E7F3EB",
+          amber: "#A9701F",
+          "amber-soft": "#FBF0DC",
+        },
         // Senyalita landing-page palette — scoped to "/" only, see .claude/skills.
         "senyalita-primary": "#2563EB",
         "senyalita-secondary": "#3B82F6",
@@ -49,6 +72,8 @@ const config: Config = {
         "pulse-soft": "pulse-soft 2.4s ease-in-out infinite",
         "draw-line": "draw-line 1.8s ease-out forwards",
         marquee: "marquee 28s linear infinite",
+        shimmer: "shimmer 1.6s ease-in-out infinite",
+        "breathe-slow": "breathe-slow 3.2s ease-in-out infinite",
       },
       keyframes: {
         float: {
@@ -58,6 +83,14 @@ const config: Config = {
         "pulse-soft": {
           "0%, 100%": { opacity: "0.4", transform: "scale(1)" },
           "50%": { opacity: "1", transform: "scale(1.15)" },
+        },
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+        "breathe-slow": {
+          "0%, 100%": { opacity: "0.55", transform: "scale(1)" },
+          "50%": { opacity: "0.85", transform: "scale(1.03)" },
         },
         "draw-line": {
           "0%": { strokeDashoffset: "1" },

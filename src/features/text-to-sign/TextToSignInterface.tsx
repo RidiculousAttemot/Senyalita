@@ -85,6 +85,8 @@ export function TextToSignInterface({ onGestureChange }: TextToSignInterfaceProp
 
   const [selectedAvatar, setSelectedAvatar] = useState('Warm');
   const [avatarMode, setAvatarMode] = useState('human');
+  const [viewMode, setViewMode] = useState<'human' | 'skeleton' | 'split'>('skeleton');
+  const [showDebug, setShowDebug] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [currentGestureIndex, setCurrentGestureIndex] = useState(0);
@@ -515,6 +517,8 @@ export function TextToSignInterface({ onGestureChange }: TextToSignInterfaceProp
               theme={selectedTheme}
               onGestureChange={handleGestureChange}
               onComplete={handleComplete}
+              viewMode={viewMode}
+              showDebug={showDebug}
             />
           </div>
         ) : (
@@ -557,34 +561,68 @@ export function TextToSignInterface({ onGestureChange }: TextToSignInterfaceProp
         </div>
       )}
 
-      {/* Avatar Mode */}
+      {/* View Mode */}
       <div>
         <p style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-          Avatar Mode
+          View Mode
         </p>
         <div style={{ display: "flex", gap: 8 }}>
           <button
-            onClick={() => setAvatarMode('human')}
+            onClick={() => setViewMode('human')}
             style={{
               padding: "6px 14px", fontSize: 12, fontWeight: 500,
-              background: avatarMode === 'human' ? '#3b82f6' : '#1e293b',
-              color: avatarMode === 'human' ? '#fff' : '#94a3b8',
-              border: `1px solid ${avatarMode === 'human' ? '#3b82f6' : '#334155'}`,
+              background: viewMode === 'human' ? '#3b82f6' : '#1e293b',
+              color: viewMode === 'human' ? '#fff' : '#94a3b8',
+              border: `1px solid ${viewMode === 'human' ? '#3b82f6' : '#334155'}`,
               borderRadius: 6, cursor: "pointer",
             }}
           >
             Human
           </button>
           <button
-            disabled
+            onClick={() => setViewMode('skeleton')}
             style={{
               padding: "6px 14px", fontSize: 12, fontWeight: 500,
-              background: '#1e293b', color: '#475569',
-              border: "1px solid #1e293b", borderRadius: 6, cursor: "not-allowed", opacity: 0.5,
+              background: viewMode === 'skeleton' ? '#3b82f6' : '#1e293b',
+              color: viewMode === 'skeleton' ? '#fff' : '#94a3b8',
+              border: `1px solid ${viewMode === 'skeleton' ? '#3b82f6' : '#334155'}`,
+              borderRadius: 6, cursor: "pointer",
             }}
           >
             Skeleton
           </button>
+          <button
+            onClick={() => setViewMode('split')}
+            style={{
+              padding: "6px 14px", fontSize: 12, fontWeight: 500,
+              background: viewMode === 'split' ? '#3b82f6' : '#1e293b',
+              color: viewMode === 'split' ? '#fff' : '#94a3b8',
+              border: `1px solid ${viewMode === 'split' ? '#3b82f6' : '#334155'}`,
+              borderRadius: 6, cursor: "pointer",
+            }}
+          >
+            Split
+          </button>
+        </div>
+      </div>
+
+      {/* Debug Overlay */}
+      <div>
+        <p style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          Debug
+        </p>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: "#94a3b8" }}>
+            <input
+              type="checkbox"
+              checked={showDebug}
+              onChange={(e) => setShowDebug(e.target.checked)}
+            />
+            Show Frame Info
+          </label>
+          <span style={{ fontSize: 11, color: "#64748b" }}>
+            (Frame / FPS / Drift)
+          </span>
         </div>
       </div>
 

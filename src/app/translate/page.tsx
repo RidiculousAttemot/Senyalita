@@ -1,9 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { SignToTextInterface } from "@/features/sign-to-text/SignToTextInterface";
+import { Skeleton } from "@/components/ui/skeleton";
 import { TypeToSignInterface } from "@/features/type-to-sign/TypeToSignInterface";
+
+// Defers the sign-to-text chunk (TF.js model loader, MediaPipe wiring) until
+// the user actually opens this tab — the default tab is type-to-sign, so
+// most sessions never need to download it at all.
+const SignToTextInterface = dynamic(
+  () => import("@/features/sign-to-text/SignToTextInterface").then((m) => m.SignToTextInterface),
+  {
+    loading: () => (
+      <div className="mx-auto grid max-w-[1160px] gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <Skeleton className="h-[470px] w-full rounded-2xl" />
+        <Skeleton className="h-[470px] w-full rounded-2xl" />
+      </div>
+    ),
+    ssr: false,
+  },
+);
 
 export default function TranslatePage() {
   const [activeTab, setActiveTab] = useState<"sign-to-text" | "type-to-sign">("type-to-sign");

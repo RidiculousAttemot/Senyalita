@@ -77,7 +77,7 @@ export default function PresentationPage() {
         setSubtitleText("");
       },
     });
-    engine.loadClip(clip);
+    engine.loadSequence([clip]);
     engine.setSpeed(avatarSpeed);
   }, [avatarSpeed]);
 

@@ -7,8 +7,9 @@ import type {
 } from "../types";
 import { HAND_CONNECTIONS, BODY_CONNECTIONS } from "../types";
 import { estimateBodyPose, estimateNonManual } from "./bodyPoseEstimator";
-import { reconstructPose, smoothRig, drawAvatar, drawLandmarkFrame } from "./avatarRenderer";
-import type { ReconstructedRig, LandmarkRenderOptions } from "./avatarRenderer";
+import { reconstructPose, smoothRig, drawAvatar } from "./avatarRenderer";
+import type { ReconstructedRig } from "./avatarRenderer";
+import { drawSignFigure, WARM_FIGURE_PALETTE, CONTRAST_FIGURE_PALETTE } from "./signFigureRenderer";
 
 export type RenderMode = "avatar" | "landmark";
 
@@ -31,6 +32,7 @@ export interface AdvancedRendererOptions {
   interpolationFactor: number; // 0 = no interp, 1 = max interp
   debugOverlay: DebugOverlayConfig | null;
   debugLandmarkIndices: boolean; // draw index numbers on landmarks
+  highContrast: boolean;
 }
 
 const THEME_COLORS: Record<AvatarTheme, {
@@ -83,6 +85,25 @@ function catmullRomLandmark(p0: LandmarkPoint, p1: LandmarkPoint, p2: LandmarkPo
   };
 }
 
+/**
+ * Assets that carry only one hand (fingerspelling) tag it with a side. Falling
+ * back to positional lookup in that case renders the same hand twice, once per
+ * wrist — so positional lookup only applies when no side is labelled at all.
+ */
+function splitHands(frame: AnimationFrame): { left: LandmarkPoint[]; right: LandmarkPoint[] } {
+  const labelled = frame.landmarks.some((h) => h.side === "left" || h.side === "right");
+  if (labelled) {
+    return {
+      left: frame.landmarks.find((h) => h.side === "left")?.landmarks ?? [],
+      right: frame.landmarks.find((h) => h.side === "right")?.landmarks ?? [],
+    };
+  }
+  return {
+    left: frame.landmarks[0]?.landmarks ?? [],
+    right: frame.landmarks[1]?.landmarks ?? [],
+  };
+}
+
 function smoothArray(current: LandmarkPoint[], prev: LandmarkPoint[] | null, alpha: number): LandmarkPoint[] {
   if (!prev || current.length !== prev.length) return current.map(p => ({ ...p }));
   const out: LandmarkPoint[] = [];
@@ -121,6 +142,9 @@ export class AdvancedCanvasRenderer {
   private rightHandHistory: LandmarkPoint[][] = [];
   private histTimestamp: number[] = [];
 
+  private lastFrame: AnimationFrame | null = null;
+  private lastExtra: { bodyPose?: BodyPose; nonManual?: NonManualFeatures } | undefined;
+
   private frameCount = 0;
   private lastFrameTime = 0;
   private measuredFps = 0;
@@ -137,12 +161,13 @@ export class AdvancedCanvasRenderer {
       showNonManual: false,
       lineWidth: 2,
       jointRadius: 3,
-      backgroundColor: "#0f172a",
+      backgroundColor: "#FBF4EA",
       renderMode: "landmark",
       smoothingAlpha: 0.25,
       interpolationFactor: 0,
       debugOverlay: null,
       debugLandmarkIndices: false,
+      highContrast: false,
       ...options,
     };
     this.setSize(this.options.width, this.options.height);
@@ -157,6 +182,16 @@ export class AdvancedCanvasRenderer {
 
   setTheme(theme: AvatarTheme): void {
     this.options.theme = theme;
+  }
+
+  setOptions(partial: Partial<AdvancedRendererOptions>): void {
+    Object.assign(this.options, partial);
+    if (partial.width !== undefined || partial.height !== undefined) {
+      this.setSize(this.options.width, this.options.height);
+    }
+    // Resizing clears the canvas, so repaint the held frame rather than
+    // leaving the stage blank when playback has already finished.
+    if (this.lastFrame) this.render(this.lastFrame, this.lastExtra);
   }
 
   setDebugOverlay(cfg: DebugOverlayConfig | null): void {
@@ -178,14 +213,19 @@ export class AdvancedCanvasRenderer {
     ctx.fillRect(0, 0, w, h);
 
     if (!frame || frame.landmarks.length === 0) {
-      ctx.fillStyle = "#64748b";
+      ctx.fillStyle = this.options.highContrast ? "#e2e8f0" : "#a8998a";
       ctx.font = "13px monospace";
       ctx.textAlign = "center";
       ctx.fillText("No animation data", w / 2, h / 2);
       this.prevBodyPose = null;
       this.prevRig = null;
+      this.lastFrame = null;
+      this.lastExtra = undefined;
       return;
     }
+
+    this.lastFrame = frame;
+    this.lastExtra = extra;
 
     const theme = THEME_COLORS[this.options.theme];
     const nonManual = extra?.nonManual ?? estimateNonManual(frame.landmarks);
@@ -209,10 +249,7 @@ export class AdvancedCanvasRenderer {
     const hasFullPose = poseData && poseData.length >= 33;
 
     if (hasFullPose && this.options.renderMode === "landmark") {
-      const leftHand = frame.landmarks.find((h) => h.side === "left")?.landmarks
-        ?? frame.landmarks[0]?.landmarks ?? [];
-      const rightHand = frame.landmarks.find((h) => h.side === "right")?.landmarks
-        ?? frame.landmarks[1]?.landmarks ?? [];
+      const { left: leftHand, right: rightHand } = splitHands(frame);
 
       // Push into Catmull-Rom history (up to 4 frames)
       this.poseHistory.push(poseData!.map(p => ({ ...p })));
@@ -273,8 +310,8 @@ export class AdvancedCanvasRenderer {
       this.smoothLeftHand = finalLeftHand;
       this.smoothRightHand = finalRightHand;
 
-      drawLandmarkFrame(ctx, finalPose, finalFace, finalLeftHand, finalRightHand, w, h, {
-        signLanguageMode: true,
+      drawSignFigure(ctx, finalPose, finalFace, finalLeftHand, finalRightHand, w, h, {
+        palette: this.options.highContrast ? CONTRAST_FIGURE_PALETTE : WARM_FIGURE_PALETTE,
         debug: this.options.debugLandmarkIndices,
         fps: this.measuredFps,
       });
@@ -284,10 +321,7 @@ export class AdvancedCanvasRenderer {
 
     } else if (hasFullPose && this.options.renderMode === "avatar") {
       // Avatar mode: hierarchical reconstruction (alternative view)
-      const leftHand = frame.landmarks.find((h) => h.side === "left")?.landmarks
-        ?? frame.landmarks[0]?.landmarks ?? [];
-      const rightHand = frame.landmarks.find((h) => h.side === "right")?.landmarks
-        ?? frame.landmarks[1]?.landmarks ?? [];
+      const { left: leftHand, right: rightHand } = splitHands(frame);
 
       const rig = reconstructPose(poseData!, faceData, leftHand, rightHand);
       this.prevRig = smoothRig(rig, this.prevRig);
@@ -314,8 +348,7 @@ export class AdvancedCanvasRenderer {
 
       ctx.shadowBlur = 0;
 
-      const leftHand = frame.landmarks.find((h) => h.side === "left")?.landmarks ?? frame.landmarks[0]?.landmarks ?? [];
-      const rightHand = frame.landmarks.find((h) => h.side === "right")?.landmarks ?? frame.landmarks[1]?.landmarks ?? [];
+      const { left: leftHand, right: rightHand } = splitHands(frame);
 
       this.renderHand(ctx, w, h, leftHand, theme.leftHand, "left");
       this.renderHand(ctx, w, h, rightHand, theme.rightHand, "right");
@@ -562,6 +595,8 @@ export class AdvancedCanvasRenderer {
 
   dispose(): void {
     this.clear();
+    this.lastFrame = null;
+    this.lastExtra = undefined;
     this.prevBodyPose = null;
     this.prevRig = null;
     this.smoothPose = null;

@@ -53,6 +53,11 @@ export interface GestureAnimationAsset {
   duration: number;
   totalFrames: number;
   frames: AnimationFrame[];
+  /** Path/URL to original source video */
+  video?: string;
+  /** Original video dimensions for pixel-space rendering */
+  imageWidth?: number;
+  imageHeight?: number;
   metadata: {
     signerId?: string;
     source?: string;
@@ -89,6 +94,7 @@ export interface PlaybackState {
 }
 
 export type AvatarTheme = "minimal" | "skeleton" | "flat" | "avatar2d";
+export type ViewMode = "human" | "skeleton" | "split";
 
 export interface AvatarThemeConfig {
   id: AvatarTheme;
@@ -140,7 +146,7 @@ export interface AnimationQualityMetrics {
 }
 
 export type PlaybackEventCallback = {
-  onFrame?: (frame: AnimationFrame, time: number, clip: AnimationClip) => void;
+  onFrame?: (frame: AnimationFrame, time: number, clip: AnimationClip, frameIndex?: number) => void;
   onGestureChange?: (gesture: string, index: number, total: number) => void;
   onComplete?: (clip: AnimationClip) => void;
   onQueueComplete?: () => void;

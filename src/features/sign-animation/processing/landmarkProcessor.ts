@@ -12,6 +12,9 @@ export interface LandmarkProcessingOptions {
   language?: string;
   signerId?: string;
   source?: string;
+  video?: string;
+  imageWidth?: number;
+  imageHeight?: number;
 }
 
 const DEFAULT_OPTIONS: LandmarkProcessingOptions = {
@@ -73,6 +76,9 @@ export function processExtractedFrames(
     language: opts.language,
     signerId: opts.signerId,
     source: opts.source,
+    video: opts.video,
+    imageWidth: opts.imageWidth,
+    imageHeight: opts.imageHeight,
   });
 
   console.log(`[Asset] Created: duration=${asset.duration}ms, frameCount=${asset.frames.length}, fps=${asset.fps}`);

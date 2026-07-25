@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Keyboard, Video } from "lucide-react";
+import { LandingNav } from "@/components/landing/LandingNav";
 
 const navLinks = [
   { name: "Why it matters", href: "#why-it-matters" },
@@ -96,7 +97,13 @@ export function Header() {
     );
   }
 
-  // Otherwise, default landing page header
+  // Landing page ("/") gets its own Senyalita-branded nav — scoped here so it
+  // never touches the header used by /translate, /learn, /conversation, etc.
+  if (pathname === "/") {
+    return <LandingNav />;
+  }
+
+  // Otherwise, default header shared by remaining app pages (learn, conversation, history, presentation)
   return (
     <motion.header
       initial={{ y: -100 }}

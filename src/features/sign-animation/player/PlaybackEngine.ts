@@ -37,7 +37,10 @@ function blendLandmarks(
       const lb = i < b.length ? b[i] : { x: 0, y: 0, z: 0 };
       blended.push(lerpPoint(la, lb, t));
     }
-    result.push({ landmarks: blended });
+    // The side label must survive interpolation: dropping it makes a
+    // single-hand asset fall back to positional lookup and get drawn on the
+    // wrong wrist.
+    result.push({ landmarks: blended, side: from[h]?.side ?? to[h]?.side });
   }
   return result;
 }
@@ -62,6 +65,8 @@ function blendPoseOrFace(
 
 export class PlaybackEngine {
   private queue: AnimationClip[] = [];
+  private sequence: AnimationClip[] = [];
+  private sequenceIndex = 0;
   private currentClip: AnimationClip | null = null;
   private currentTime = 0;
   private currentFrameIndex = 0;
@@ -76,6 +81,7 @@ export class PlaybackEngine {
   private blending = false;
   private blendTime = 0;
   private previousFrame: AnimationFrame | null = null;
+  private exactMode = false;
 
   private durationMs(): number {
     return this.currentClip?.asset.duration ?? 0;
@@ -93,8 +99,8 @@ export class PlaybackEngine {
       currentTime: this.currentTime,
       duration: this.durationSec(),
       currentGesture: this.currentClip?.gesture ?? null,
-      currentIndex: this.currentFrameIndex,
-      queueLength: this.queue.length + (this.currentClip ? 1 : 0),
+      currentIndex: this.sequenceIndex,
+      queueLength: this.sequence.length,
       speed: this.speed,
       loop: this.loop,
     };
@@ -117,21 +123,37 @@ export class PlaybackEngine {
     if (config.duration !== undefined) this.blendConfig.duration = config.duration;
   }
 
-  loadClip(clip: AnimationClip): void {
-    if (this.isPlaying) {
-      this.queueClip(clip);
-      return;
-    }
-    this.currentClip = clip;
+  setExactMode(enabled: boolean): void {
+    this.exactMode = enabled;
+  }
+
+  /**
+   * Loads a whole sequence at once so the reported gesture index is the
+   * position within the sequence. Queueing clip-by-clip cannot do this: the
+   * total is only known once every clip has been queued.
+   */
+  loadSequence(clips: AnimationClip[], startIndex = 0): void {
+    this.stop();
+    if (clips.length === 0) return;
+    const start = Math.max(0, Math.min(startIndex, clips.length - 1));
+    this.sequence = clips;
+    this.sequenceIndex = start;
+    this.queue = clips.slice(start + 1);
+    this.currentClip = clips[start];
     this.currentTime = 0;
     this.currentFrameIndex = 0;
     this.isPlaying = true;
     this.isPaused = false;
     this.blending = false;
+    this.previousFrame = null;
     this.lastTimestamp = performance.now();
-    const total = this.queue.length + 1;
-    this.callbacks.onGestureChange?.(clip.gesture, 0, total);
+    this.callbacks.onGestureChange?.(clips[start].gesture, start, clips.length);
     this.startLoop();
+  }
+
+  seekToClip(index: number): void {
+    if (this.sequence.length === 0) return;
+    this.loadSequence(this.sequence, index);
   }
 
   queueClip(clip: AnimationClip): void {
@@ -139,6 +161,20 @@ export class PlaybackEngine {
   }
 
   queueClips(clips: AnimationClip[]): void {
+    this.queue = [...this.queue, ...clips];
+  }
+
+  /**
+   * Grows the current sequence in place (streaming/progressive translation:
+   * more clips arrive after playback has already started). Unlike
+   * `queueClips`, this also extends `sequence` so `getState().queueLength`
+   * and `replay()`/`seekToClip()` see the newly-arrived clips too. Only
+   * valid while something is already playing — if the engine has drained,
+   * use `loadSequence(fullClips, resumeIndex)` to resume instead.
+   */
+  appendToSequence(clips: AnimationClip[]): void {
+    if (clips.length === 0) return;
+    this.sequence = [...this.sequence, ...clips];
     this.queue = [...this.queue, ...clips];
   }
 
@@ -185,6 +221,10 @@ export class PlaybackEngine {
   }
 
   replay(): void {
+    if (this.sequence.length > 0) {
+      this.loadSequence(this.sequence, 0);
+      return;
+    }
     if (this.currentClip) {
       this.currentTime = 0;
       this.currentFrameIndex = 0;
@@ -223,6 +263,14 @@ export class PlaybackEngine {
       return { timestamp: 0, landmarks: [] };
     }
     if (frames.length === 1) return frames[0];
+
+    if (this.exactMode) {
+      const fps = asset.fps || 30;
+      const frameDuration = 1 / fps;
+      const frameIndex = Math.floor(time / frameDuration);
+      const clampedIndex = Math.min(Math.max(0, frameIndex), frames.length - 1);
+      return frames[clampedIndex];
+    }
 
     const durationSec = asset.duration / 1000;
     const clampedTime = Math.max(0, Math.min(time, durationSec));
@@ -305,7 +353,16 @@ export class PlaybackEngine {
       asset.frames.length - 1,
     );
 
-    this.callbacks.onFrame?.(frame, this.currentTime, this.currentClip);
+    if (this.exactMode) {
+      const fps = asset.fps || 30;
+      const exactFrameDelta = 1 / fps;
+      this.currentFrameIndex = Math.min(
+        Math.floor(this.currentTime / exactFrameDelta),
+        asset.frames.length - 1,
+      );
+    }
+
+    this.callbacks.onFrame?.(frame, this.currentTime, this.currentClip, this.currentFrameIndex);
   }
 
   private processNext(): void {
@@ -313,7 +370,7 @@ export class PlaybackEngine {
       const prevClip = this.currentClip;
       const next = this.queue[0];
       this.queue = this.queue.slice(1);
-      const total = this.queue.length + 1;
+      this.sequenceIndex = Math.min(this.sequenceIndex + 1, Math.max(this.sequence.length - 1, 0));
 
       if (prevClip && this.blendConfig.enabled) {
         this.blending = true;
@@ -331,7 +388,7 @@ export class PlaybackEngine {
       this.currentTime = 0;
       this.currentFrameIndex = 0;
       this.isPlaying = true;
-      this.callbacks.onGestureChange?.(next.gesture, 0, total);
+      this.callbacks.onGestureChange?.(next.gesture, this.sequenceIndex, this.sequence.length);
     } else {
       this.isPlaying = false;
       this.stopLoop();
@@ -344,6 +401,7 @@ export class PlaybackEngine {
     this.stopLoop();
     this.currentClip = null;
     this.queue = [];
+    this.sequence = [];
     this.callbacks = {};
     this.previousFrame = null;
   }

@@ -1,15 +1,19 @@
 import { HeroSection } from "@/components/landing/HeroSection";
-import { FeaturesSection } from "@/components/landing/FeaturesSection";
-import { HowItWorksSection } from "@/components/landing/HowItWorksSection";
-import { CtaSection } from "@/components/landing/CtaSection";
+import { FeatureJourneySection } from "@/components/landing/FeatureJourneySection";
+import { InteractiveShowcaseSection } from "@/components/landing/InteractiveShowcaseSection";
+import { AccessibilitySection } from "@/components/landing/AccessibilitySection";
+import { ResearchPipelineSection } from "@/components/landing/ResearchPipelineSection";
+import { StatsSection } from "@/components/landing/StatsSection";
 
 export default function HomePage() {
   return (
-    <main className="flex-grow bg-[#FDF8F0] min-h-screen">
+    <main className="min-h-screen flex-grow bg-senyalita-warm">
       <HeroSection />
-      <FeaturesSection />
-      <HowItWorksSection />
-      <CtaSection />
+      <FeatureJourneySection />
+      <InteractiveShowcaseSection />
+      <AccessibilitySection />
+      <ResearchPipelineSection />
+      <StatsSection />
     </main>
   );
 }

@@ -127,6 +127,9 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
 
       const processed = processExtractedFrames(rawSequence.frames, Math.round(rawSequence.sourceFps), {
         targetFps: 30, label: "UNTITLED", smoothMotion: true, repairMissing: true, source: "animation-studio-extraction",
+        video: videoMeta.url,
+        imageWidth: vid.videoWidth || undefined,
+        imageHeight: vid.videoHeight || undefined,
       });
 
       const processingTime = Date.now() - startTimeRef.current;

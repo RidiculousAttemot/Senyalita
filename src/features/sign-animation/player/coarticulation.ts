@@ -109,7 +109,10 @@ export class CoarticulationEngine {
           });
         }
       }
-      blendedLandmarks.push({ landmarks: blended });
+      blendedLandmarks.push({
+        landmarks: blended,
+        side: frame.landmarks[h]?.side ?? this.transitionFrame.landmarks[h]?.side,
+      });
     }
 
     const blendedPose = this.blendBodyPose(

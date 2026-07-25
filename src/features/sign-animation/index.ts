@@ -13,7 +13,7 @@ export type { SignAnimationPlayerProps } from "./player/SignAnimationPlayer";
 export { CoarticulationEngine } from "./player";
 export { GestureTimingOptimizer } from "./player";
 export { PerformanceOptimizer } from "./player";
-export { useAnimationClip, useAnimationQueue } from "./hooks/useAnimationClip";
+export { useAnimationClip, useAnimationQueue, globalLoader } from "./hooks/useAnimationClip";
 export { NonManualController } from "./engine/nonManualFeatures";
 export {
   TransitionEngine, NaturalTimingEngine, FingerspellingEngine,
@@ -43,3 +43,5 @@ export {
 
 export { drawFullPose, drawStylizedFace, drawAllHands, drawFullHand } from "./renderer/renderUtils";
 export type { RenderStyle } from "./renderer/renderUtils";
+export { validateLandmarkAccuracy, printValidationReport } from "./validation/landmarkValidation";
+export type { LandmarkValidationResult, ValidationSummary } from "./validation/landmarkValidation";
