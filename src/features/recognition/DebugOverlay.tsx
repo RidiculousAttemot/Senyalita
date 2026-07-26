@@ -6,6 +6,8 @@ import { RecognitionState } from "./types";
 type Props = {
   recognitionState: RecognitionState;
   mediapipeFps: number;
+  /** Rate landmarks enter the buffer; must sit near 30 to match training. */
+  captureFps?: number;
   inferenceTimeMs: number;
   bufferLength: number;
   bufferCap: number;
@@ -15,6 +17,7 @@ type Props = {
 export const DebugOverlay = ({
   recognitionState,
   mediapipeFps,
+  captureFps = 0,
   inferenceTimeMs,
   bufferLength,
   bufferCap,
@@ -82,6 +85,13 @@ export const DebugOverlay = ({
           <tr>
             <td style={{ color: "#aaa" }}>MediaPipe FPS</td>
             <td style={{ textAlign: "right" }}>{mediapipeFps}</td>
+          </tr>
+          <tr>
+            <td style={{ color: "#aaa" }}>Capture FPS</td>
+            {/* Amber when the buffer is being fed at a rate training never saw. */}
+            <td style={{ textAlign: "right", color: captureFps > 0 && Math.abs(captureFps - 30) > 4 ? "#fb0" : undefined }}>
+              {captureFps} <span style={{ color: "#666" }}>/ 30</span>
+            </td>
           </tr>
           <tr>
             <td style={{ color: "#aaa" }}>Inference FPS</td>

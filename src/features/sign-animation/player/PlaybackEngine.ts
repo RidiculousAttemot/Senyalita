@@ -151,9 +151,12 @@ export class PlaybackEngine {
     this.startLoop();
   }
 
-  seekToClip(index: number): void {
+  seekToClip(index: number, timeSeconds = 0): void {
     if (this.sequence.length === 0) return;
     this.loadSequence(this.sequence, index);
+    if (timeSeconds > 0) {
+      this.currentTime = Math.max(0, Math.min(timeSeconds, this.durationSec()));
+    }
   }
 
   queueClip(clip: AnimationClip): void {
@@ -326,7 +329,9 @@ export class PlaybackEngine {
 
     let frame = this.getFrameAtTime(asset, this.currentTime);
 
-    if (this.blending && this.previousFrame && this.blendConfig.enabled) {
+    // Exact mode must emit the extracted frame verbatim — a cross-clip blend
+    // would synthesise poses the signer never made.
+    if (!this.exactMode && this.blending && this.previousFrame && this.blendConfig.enabled) {
       this.blendTime += effectiveDelta;
       const bt = Math.min(1, this.blendTime / this.blendConfig.duration);
       const eased = bt * bt * (3 - 2 * bt);
@@ -372,7 +377,7 @@ export class PlaybackEngine {
       this.queue = this.queue.slice(1);
       this.sequenceIndex = Math.min(this.sequenceIndex + 1, Math.max(this.sequence.length - 1, 0));
 
-      if (prevClip && this.blendConfig.enabled) {
+      if (prevClip && this.blendConfig.enabled && !this.exactMode) {
         this.blending = true;
         this.blendTime = 0;
         this.previousFrame = this.getFrameAtTime(

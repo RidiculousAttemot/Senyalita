@@ -3,16 +3,29 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ChevronLeft, ChevronRight, Maximize2, Minimize2, Pause, Play,
-  Repeat, RotateCcw,
+  ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, Pause, Play,
+  Repeat, RotateCcw, Sparkles,
 } from "lucide-react";
 import { SignAnimationPlayer } from "@/features/sign-animation/player/SignAnimationPlayer";
 import type {
   PlaybackProgress, SignAnimationPlayerHandle,
 } from "@/features/sign-animation/player/SignAnimationPlayer";
-import type { AnimationClip } from "@/features/sign-animation/types";
+import type { AnimationClip, ViewMode } from "@/features/sign-animation/types";
 
-const SPEEDS = [0.5, 0.75, 1, 1.5, 2];
+const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
+const VIEW_MODES: { value: ViewMode; label: string; hint: string }[] = [
+  { value: "human", label: "Human", hint: "Original recording" },
+  { value: "skeleton", label: "Skeleton", hint: "Extracted landmarks" },
+  { value: "split", label: "Split", hint: "Recording and landmarks together" },
+  { value: "overlay", label: "Overlay", hint: "Landmarks drawn on the recording" },
+];
+
+const MODE_LABEL: Record<ViewMode, string> = {
+  human: "Human", skeleton: "Skeleton", split: "Split", overlay: "Overlay",
+};
+
+const STAGE_BACKGROUND = "#F1F5F9";
 
 interface SignStageViewerProps {
   clips: AnimationClip[];
@@ -29,7 +42,7 @@ export function SignStageViewer({
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<SignAnimationPlayerHandle | null>(null);
 
-  const [size, setSize] = useState({ width: 480, height: 560 });
+  const [size, setSize] = useState({ width: 640, height: 640 });
   const [index, setIndex] = useState(0);
   const [progress, setProgress] = useState<PlaybackProgress | null>(null);
   const [isPaused, setIsPaused] = useState(false);
@@ -37,6 +50,9 @@ export function SignStageViewer({
   const [speed, setSpeed] = useState(1);
   const [loop, setLoop] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("skeleton");
+  const [overlayOpacity, setOverlayOpacity] = useState(0.85);
+  const [showTrails, setShowTrails] = useState(false);
 
   useEffect(() => {
     const el = surfaceRef.current;
@@ -103,33 +119,61 @@ export function SignStageViewer({
   }, [clips.length]);
 
   const toggleFullscreen = useCallback(() => {
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
-    } else {
-      stageRef.current?.requestFullscreen?.();
-    }
+    if (document.fullscreenElement) document.exitFullscreen();
+    else stageRef.current?.requestFullscreen?.();
   }, []);
+
+  /** Saves the current stage frame, so a sign can go straight into a slide. */
+  const downloadFrame = useCallback(() => {
+    const canvas = stageRef.current?.querySelector("canvas");
+    if (!canvas) return;
+    const link = document.createElement("a");
+    link.download = `${clips[index]?.gesture ?? "sign"}-frame.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  }, [clips, index]);
 
   const hasClips = clips.length > 0;
   const current = hasClips ? clips[Math.min(index, clips.length - 1)] : null;
-  const next = hasClips ? clips[index + 1] : null;
   const clipProgress = progress && progress.clipDuration > 0
     ? Math.min(1, progress.clipTime / progress.clipDuration)
     : 0;
-  const overallProgress = hasClips
-    ? Math.min(100, ((index + clipProgress) / clips.length) * 100)
-    : 0;
   const totalDuration = clips.reduce((sum, c) => sum + c.asset.duration, 0) / 1000;
+
+  const frameTotal = clips.reduce((sum, c) => sum + c.asset.totalFrames, 0);
+  const framesBefore = clips.slice(0, index).reduce((sum, c) => sum + c.asset.totalFrames, 0);
+  const secondsBefore = clips.slice(0, index).reduce((sum, c) => sum + c.asset.duration, 0) / 1000;
+  const localFrame = current
+    ? Math.min(current.asset.totalFrames - 1, Math.round((progress?.clipTime ?? 0) * current.asset.fps))
+    : 0;
+  const frameNumber = hasClips ? framesBefore + localFrame + 1 : 0;
+  const elapsedSeconds = secondsBefore + (progress?.clipTime ?? 0);
+
+  const scrubToFrame = useCallback((globalFrame: number) => {
+    let remaining = globalFrame;
+    for (let i = 0; i < clips.length; i++) {
+      const count = clips[i].asset.totalFrames;
+      if (remaining < count || i === clips.length - 1) {
+        playerRef.current?.seekTo(i, Math.max(0, Math.min(count - 1, remaining)) / clips[i].asset.fps);
+        setIndex(i);
+        setFinished(false);
+        return;
+      }
+      remaining -= count;
+    }
+  }, [clips]);
 
   return (
     <div className="flex flex-col gap-3">
+      {/* Fixed height at every breakpoint: switching view mode must never
+          reflow the page around it. Content scales inside instead. */}
       <div
         ref={stageRef}
-        className="relative overflow-hidden rounded-3xl border border-fsl-border bg-fsl-sunken shadow-[0_20px_50px_-30px_rgba(70,45,28,0.7)]"
+        className="group relative h-[420px] overflow-hidden rounded-[28px] border border-senyalita-border bg-white shadow-[0_24px_60px_-32px_rgba(15,23,42,0.45)] sm:h-[560px] lg:h-[650px] xl:h-[720px]"
       >
-        <div ref={surfaceRef} className="relative aspect-[4/5] w-full sm:aspect-square lg:aspect-[4/5]">
+        <div ref={surfaceRef} className="absolute inset-0">
           {hasClips && (
-            <div className="absolute inset-0 [&_canvas]:h-full [&_canvas]:w-full [&>div]:h-full [&>div]:gap-0">
+            <div className="absolute inset-0 [&>div]:h-full [&>div]:w-full [&>div]:gap-0">
               <SignAnimationPlayer
                 key={sequenceKey}
                 ref={playerRef}
@@ -139,8 +183,11 @@ export function SignStageViewer({
                 speed={speed}
                 loop={loop}
                 isStreaming={isStreaming}
+                viewMode={viewMode}
+                overlayOpacity={overlayOpacity}
+                showTrails={showTrails}
                 showControls={false}
-                backgroundColor="#FBF4EA"
+                backgroundColor={STAGE_BACKGROUND}
                 onGestureChange={handleGestureChange}
                 onProgress={handleProgress}
                 onComplete={handleComplete}
@@ -148,104 +195,145 @@ export function SignStageViewer({
             </div>
           )}
 
-          <AnimatePresence>
-            {loading && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-fsl-sunken/85 backdrop-blur-[2px]"
-              >
-                <div className="h-20 w-20 animate-breathe-slow rounded-full bg-fsl-coral-soft" />
-                <p className="text-[13px] font-medium text-fsl-muted">Preparing sign sequence…</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
+          <AnimatePresence>{loading && <LoadingStage />}</AnimatePresence>
           {!hasClips && !loading && <EmptyStage />}
+        </div>
 
-          {hasClips && (
-            <>
-              <div className="pointer-events-none absolute left-4 top-4 flex flex-col gap-1.5">
-                <motion.div
-                  key={current?.gesture}
-                  initial={{ opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="inline-flex w-fit items-center gap-2 rounded-lg bg-fsl-ink/85 px-3 py-1.5 backdrop-blur-sm"
-                >
-                  <span className="font-mono text-sm font-bold tracking-wide text-white">
-                    {current?.gesture}
-                  </span>
-                  {current && fingerspelledGlosses.has(current.gesture) && (
-                    <span className="rounded bg-white/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
-                      spelled
+        {hasClips && (
+          <>
+            <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-white/95 via-white/70 to-transparent p-4">
+              <div className="flex flex-col gap-1.5">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={current?.gesture}
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 6 }}
+                    transition={{ duration: 0.2 }}
+                    className="flex items-center gap-2"
+                  >
+                    <span className="font-display text-xl font-bold tracking-tight text-senyalita-dark">
+                      {current?.gesture}
                     </span>
-                  )}
-                </motion.div>
-                {next && (
-                  <span className="w-fit rounded-md bg-white/70 px-2 py-1 font-mono text-[11px] text-fsl-muted backdrop-blur-sm">
-                    next · {next.gesture}
+                    {current && fingerspelledGlosses.has(current.gesture) && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                        spelled
+                      </span>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+                {clips.length > 1 && (
+                  <span className="text-[11px] font-medium tabular-nums text-senyalita-muted">
+                    Sign {index + 1} of {clips.length}
                   </span>
                 )}
               </div>
 
-              <dl className="pointer-events-none absolute right-4 top-4 space-y-1 text-right">
-                <StatChip label="sign" value={`${index + 1}/${clips.length}`} />
-                <StatChip label="fps" value={`${progress?.fps ?? current?.asset.fps ?? 0}`} />
-                <StatChip label="total" value={`${totalDuration.toFixed(1)}s`} />
+              <dl className="flex shrink-0 gap-4 text-right">
+                <MetaStat label="Duration" value={`${totalDuration.toFixed(1)}s`} />
+                <MetaStat label="FPS" value={`${current?.asset.fps ?? 30}`} />
+                <MetaStat label="Mode" value={MODE_LABEL[viewMode]} />
               </dl>
-            </>
-          )}
-        </div>
+            </div>
 
-        {hasClips && (
-          <div className="absolute inset-x-0 bottom-0 h-1 bg-fsl-border/50">
-            <motion.div
-              className="h-full bg-fsl-coral"
-              animate={{ width: `${overallProgress}%` }}
-              transition={{ duration: 0.08, ease: "linear" }}
-            />
-          </div>
+            <div className="absolute inset-x-0 bottom-4 flex justify-center px-4">
+              <ViewModeSwitch value={viewMode} onChange={setViewMode} />
+            </div>
+
+            <AnimatePresence>
+              {viewMode === "overlay" && (
+                <motion.label
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  className="absolute bottom-20 left-1/2 flex -translate-x-1/2 items-center gap-2.5 rounded-full border border-white/70 bg-white/80 px-4 py-2 shadow-lg backdrop-blur-md"
+                >
+                  <span className="text-[11px] font-semibold text-senyalita-muted">Skeleton</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={Math.round(overlayOpacity * 100)}
+                    onChange={(e) => setOverlayOpacity(Number(e.target.value) / 100)}
+                    aria-label="Skeleton opacity"
+                    className="h-1 w-28 cursor-pointer accent-senyalita-primary"
+                  />
+                  <span className="w-9 text-right text-[11px] font-semibold tabular-nums text-senyalita-dark">
+                    {Math.round(overlayOpacity * 100)}%
+                  </span>
+                </motion.label>
+              )}
+            </AnimatePresence>
+          </>
         )}
       </div>
 
-      <div className="flex items-center gap-2 rounded-2xl border border-fsl-border bg-fsl-surface px-3 py-2.5">
-        <IconButton label="Previous sign" onClick={() => jumpTo(index - 1)} disabled={!hasClips || index === 0}>
-          <ChevronLeft className="h-4 w-4" />
-        </IconButton>
-        <IconButton label="Restart" onClick={restart} disabled={!hasClips}>
-          <RotateCcw className="h-4 w-4" />
-        </IconButton>
-        <button
-          type="button"
-          onClick={togglePlay}
+      <div className="rounded-[22px] border border-senyalita-border bg-white/80 p-4 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.5)] backdrop-blur-xl">
+        <div className="mb-2 flex items-baseline justify-between text-[11px] font-medium tabular-nums text-senyalita-muted">
+          <span>{formatTime(elapsedSeconds)}</span>
+          <span>−{formatTime(Math.max(0, totalDuration - elapsedSeconds))}</span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={Math.max(0, frameTotal - 1)}
+          value={Math.max(0, frameNumber - 1)}
+          onChange={(e) => scrubToFrame(Number(e.target.value))}
           disabled={!hasClips}
-          aria-label={isPaused || finished ? "Play" : "Pause"}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-fsl-coral text-white shadow-[0_6px_16px_-8px_rgba(216,105,74,0.9)] transition-colors hover:bg-fsl-coral-dark disabled:bg-fsl-faint disabled:shadow-none"
-        >
-          {isPaused || finished ? <Play className="ml-0.5 h-5 w-5" /> : <Pause className="h-5 w-5" />}
-        </button>
-        <IconButton label="Next sign" onClick={() => jumpTo(index + 1)} disabled={!hasClips || index >= clips.length - 1}>
-          <ChevronRight className="h-4 w-4" />
-        </IconButton>
+          aria-label="Seek through the sign sequence"
+          className="h-1.5 w-full cursor-pointer accent-senyalita-primary disabled:cursor-not-allowed disabled:opacity-40"
+        />
 
-        <div className="ml-auto flex items-center gap-1.5">
-          <label className="sr-only" htmlFor="playback-speed">Playback speed</label>
-          <select
-            id="playback-speed"
-            value={speed}
-            onChange={(e) => setSpeed(Number(e.target.value))}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <IconButton label="Previous sign" onClick={() => jumpTo(index - 1)} disabled={!hasClips || index === 0}>
+            <ChevronLeft className="h-4 w-4" />
+          </IconButton>
+          <IconButton label="Restart" onClick={restart} disabled={!hasClips}>
+            <RotateCcw className="h-4 w-4" />
+          </IconButton>
+          <motion.button
+            type="button"
+            onClick={togglePlay}
             disabled={!hasClips}
-            className="h-8 rounded-lg border border-fsl-border bg-fsl-raised px-1.5 text-xs font-medium tabular-nums text-fsl-body outline-none focus-visible:ring-2 focus-visible:ring-fsl-coral/40 disabled:opacity-40"
+            whileTap={{ scale: 0.94 }}
+            aria-label={isPaused || finished ? "Play" : "Pause"}
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-senyalita-primary text-white shadow-lg shadow-senyalita-primary/30 transition-all hover:shadow-xl hover:shadow-senyalita-primary/40 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary disabled:bg-slate-300 disabled:shadow-none"
           >
-            {SPEEDS.map((s) => <option key={s} value={s}>{s}×</option>)}
-          </select>
-          <IconButton label="Loop sequence" onClick={() => setLoop((v) => !v)} disabled={!hasClips} active={loop}>
-            <Repeat className="h-4 w-4" />
+            {isPaused || finished ? <Play className="ml-0.5 h-6 w-6" /> : <Pause className="h-6 w-6" />}
+          </motion.button>
+          <IconButton label="Next sign" onClick={() => jumpTo(index + 1)} disabled={!hasClips || index >= clips.length - 1}>
+            <ChevronRight className="h-4 w-4" />
           </IconButton>
-          <IconButton label={isFullscreen ? "Exit fullscreen" : "Fullscreen"} onClick={toggleFullscreen} disabled={!hasClips}>
-            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </IconButton>
+
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+            <label className="sr-only" htmlFor="playback-speed">Playback speed</label>
+            <select
+              id="playback-speed"
+              value={speed}
+              onChange={(e) => setSpeed(Number(e.target.value))}
+              disabled={!hasClips}
+              className="h-9 rounded-xl border border-senyalita-border bg-white px-2 text-xs font-semibold tabular-nums text-senyalita-dark outline-none transition-colors hover:border-senyalita-primary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-senyalita-primary disabled:opacity-40"
+            >
+              {SPEEDS.map((s) => <option key={s} value={s}>{s}×</option>)}
+            </select>
+            <IconButton
+              label="Motion trail"
+              onClick={() => setShowTrails((v) => !v)}
+              disabled={!hasClips || viewMode === "human"}
+              active={showTrails}
+            >
+              <Sparkles className="h-4 w-4" />
+            </IconButton>
+            <IconButton label="Loop sequence" onClick={() => setLoop((v) => !v)} disabled={!hasClips} active={loop}>
+              <Repeat className="h-4 w-4" />
+            </IconButton>
+            <IconButton label="Download frame" onClick={downloadFrame} disabled={!hasClips || viewMode === "human"}>
+              <Download className="h-4 w-4" />
+            </IconButton>
+            <IconButton label={isFullscreen ? "Exit fullscreen" : "Fullscreen"} onClick={toggleFullscreen} disabled={!hasClips}>
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </IconButton>
+          </div>
         </div>
       </div>
 
@@ -263,11 +351,49 @@ export function SignStageViewer({
   );
 }
 
-function StatChip({ label, value }: { label: string; value: string }) {
+function ViewModeSwitch({ value, onChange }: { value: ViewMode; onChange: (v: ViewMode) => void }) {
   return (
-    <div className="flex items-baseline justify-end gap-1.5 rounded-md bg-white/70 px-2 py-0.5 backdrop-blur-sm">
-      <dt className="text-[9px] uppercase tracking-wider text-fsl-faint">{label}</dt>
-      <dd className="font-mono text-[11px] font-semibold tabular-nums text-fsl-body">{value}</dd>
+    <div
+      role="radiogroup"
+      aria-label="Viewer mode"
+      className="flex gap-0.5 rounded-full border border-white/70 bg-white/75 p-1 shadow-lg shadow-slate-900/10 backdrop-blur-xl"
+    >
+      {VIEW_MODES.map((mode) => {
+        const selected = value === mode.value;
+        return (
+          <button
+            key={mode.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            title={mode.hint}
+            onClick={() => onChange(mode.value)}
+            className={`relative rounded-full px-4 py-1.5 text-xs font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary ${
+              selected ? "text-white" : "text-senyalita-muted hover:text-senyalita-dark"
+            }`}
+          >
+            {selected && (
+              // Shared layoutId slides the pill between options instead of
+              // snapping, which is what makes the control feel native.
+              <motion.span
+                layoutId="view-mode-pill"
+                transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                className="absolute inset-0 rounded-full bg-senyalita-primary shadow-sm"
+              />
+            )}
+            <span className="relative">{mode.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function MetaStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-[9px] font-semibold uppercase tracking-[0.12em] text-senyalita-muted">{label}</dt>
+      <dd className="text-[13px] font-bold tabular-nums text-senyalita-dark">{value}</dd>
     </div>
   );
 }
@@ -289,10 +415,10 @@ function IconButton({
       aria-label={label}
       aria-pressed={active}
       title={label}
-      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-y-0 disabled:hover:shadow-none ${
         active
-          ? "border-fsl-coral bg-fsl-coral-soft text-fsl-coral-dark"
-          : "border-fsl-border bg-fsl-raised text-fsl-body hover:border-fsl-border-strong hover:bg-fsl-sunken"
+          ? "border-senyalita-primary/30 bg-senyalita-primary/10 text-senyalita-primary shadow-sm"
+          : "border-senyalita-border bg-white text-senyalita-muted hover:-translate-y-0.5 hover:border-senyalita-primary/30 hover:text-senyalita-dark hover:shadow-md"
       }`}
     >
       {children}
@@ -311,7 +437,7 @@ function MotionTimeline({
   onSelect: (i: number) => void;
 }) {
   return (
-    <section aria-label="Motion timeline" className="rounded-2xl border border-fsl-border bg-fsl-surface p-3">
+    <section aria-label="Sign sequence" className="rounded-[22px] border border-senyalita-border bg-white/80 p-3 backdrop-blur-xl">
       <div className="flex gap-1.5 overflow-x-auto pb-1">
         {clips.map((clip, i) => {
           const done = finished || i < index;
@@ -324,27 +450,27 @@ function MotionTimeline({
               onClick={() => onSelect(i)}
               aria-current={active ? "step" : undefined}
               style={{ flexGrow: clip.asset.duration }}
-              className={`group relative min-w-[68px] shrink-0 overflow-hidden rounded-lg border px-2 py-1.5 text-left transition-colors ${
+              className={`group/chip relative min-w-[76px] shrink-0 overflow-hidden rounded-xl border px-2.5 py-2 text-left transition-all duration-150 hover:-translate-y-0.5 ${
                 active
-                  ? "border-fsl-coral bg-fsl-coral-soft"
+                  ? "border-senyalita-primary/40 bg-senyalita-primary/10"
                   : done
-                    ? "border-fsl-success/30 bg-fsl-success-soft"
-                    : "border-fsl-border bg-fsl-raised hover:border-fsl-border-strong"
+                    ? "border-senyalita-accent/30 bg-senyalita-accent/10"
+                    : "border-senyalita-border bg-white hover:border-senyalita-primary/30"
               }`}
             >
               <span
                 aria-hidden="true"
-                className={`absolute inset-y-0 left-0 transition-[width] duration-100 ${active ? "bg-fsl-coral/15" : "bg-transparent"}`}
+                className={`absolute inset-y-0 left-0 transition-[width] duration-100 ${active ? "bg-senyalita-primary/15" : "bg-transparent"}`}
                 style={{ width: `${fill * 100}%` }}
               />
               <span className={`relative block truncate font-mono text-[11px] font-bold ${
-                active ? "text-fsl-coral-dark" : done ? "text-fsl-success" : "text-fsl-muted"
+                active ? "text-senyalita-primary" : done ? "text-senyalita-accent" : "text-senyalita-muted"
               }`}>
                 {clip.gesture}
               </span>
-              <span className="relative block text-[9px] tabular-nums text-fsl-faint">
+              <span className="relative block text-[9px] tabular-nums text-senyalita-muted/70">
                 {(clip.asset.duration / 1000).toFixed(1)}s
-                {fingerspelledGlosses.has(clip.gesture) && " · FS"}
+                {fingerspelledGlosses.has(clip.gesture) && " · spelled"}
               </span>
             </button>
           );
@@ -354,25 +480,105 @@ function MotionTimeline({
   );
 }
 
+const LOADING_STAGES = [
+  "Preparing translation…",
+  "Extracting landmarks…",
+  "Loading animation…",
+  "Almost ready…",
+];
+
+function LoadingStage() {
+  const [stage, setStage] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setStage((s) => Math.min(s + 1, LOADING_STAGES.length - 1)), 900);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-white/80 backdrop-blur-sm"
+    >
+      <SkeletonPlaceholder />
+      <div className="w-56 space-y-2.5 text-center">
+        <AnimatePresence mode="wait">
+          <motion.p
+            key={stage}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.2 }}
+            className="text-[13px] font-semibold text-senyalita-dark"
+          >
+            {LOADING_STAGES[stage]}
+          </motion.p>
+        </AnimatePresence>
+        <div className="h-1.5 overflow-hidden rounded-full bg-senyalita-border">
+          <motion.div
+            className="h-full w-1/3 rounded-full bg-senyalita-primary"
+            animate={{ x: ["-110%", "320%"] }}
+            transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+          />
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/** Stand-in figure so the stage is never blank while assets are fetched. */
+function SkeletonPlaceholder() {
+  return (
+    <svg width="104" height="130" viewBox="0 0 96 120" aria-hidden="true" className="animate-breathe-slow">
+      <g stroke="#CBD5E1" strokeWidth="3.5" strokeLinecap="round" fill="none">
+        <circle cx="48" cy="22" r="14" />
+        <line x1="48" y1="36" x2="48" y2="52" />
+        <line x1="24" y1="58" x2="72" y2="58" />
+        <line x1="24" y1="58" x2="18" y2="86" />
+        <line x1="72" y1="58" x2="78" y2="86" />
+        <line x1="30" y1="106" x2="24" y2="58" />
+        <line x1="66" y1="106" x2="72" y2="58" />
+      </g>
+      <g fill="#93C5FD">
+        <circle cx="18" cy="86" r="5.5" />
+        <circle cx="78" cy="86" r="5.5" />
+      </g>
+    </svg>
+  );
+}
+
 function EmptyStage() {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
-      <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-fsl-coral-soft text-3xl" aria-hidden="true">
+      <motion.div
+        animate={{ y: [0, -10, 0] }}
+        transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
+        className="mb-7 flex h-24 w-24 items-center justify-center rounded-3xl bg-gradient-to-br from-senyalita-primary/10 to-senyalita-accent/10 text-5xl"
+        aria-hidden="true"
+      >
         🤟
-      </div>
-      <h3 className="mb-1.5 text-lg font-semibold text-fsl-ink">
-        Translate text into Filipino Sign Language
+      </motion.div>
+      <h3 className="mb-2 font-display text-2xl font-bold tracking-tight text-senyalita-dark">
+        Translate to Filipino Sign Language
       </h3>
-      <p className="mb-6 max-w-[280px] text-[14px] leading-relaxed text-fsl-muted">
-        Type a sentence above to begin. The signing preview renders locally in your browser.
+      <p className="mb-7 max-w-[320px] text-[15px] leading-relaxed text-senyalita-muted">
+        Type a sentence and press Translate. The generated animation will appear here.
       </p>
-      <ul className="flex flex-wrap justify-center gap-1.5">
-        {["Letters", "Numbers", "Words", "Common phrases", "Fingerspelling"].map((item) => (
-          <li key={item} className="rounded-full border border-fsl-border bg-fsl-surface px-2.5 py-1 text-[11px] font-medium text-fsl-muted">
+      <ul className="flex flex-wrap justify-center gap-2">
+        {["Letters", "Numbers", "Words", "Phrases", "Fingerspelling"].map((item) => (
+          <li key={item} className="rounded-full border border-senyalita-border bg-white px-3 py-1 text-[11px] font-medium text-senyalita-muted">
             {item}
           </li>
         ))}
       </ul>
     </div>
   );
+}
+
+function formatTime(seconds: number): string {
+  const total = Math.max(0, seconds);
+  const mins = Math.floor(total / 60);
+  const secs = Math.floor(total % 60);
+  return `${mins}:${String(secs).padStart(2, "0")}`;
 }

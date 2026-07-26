@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion, useInView } from "framer-motion";
+import { motion, useInView, useReducedMotion } from "framer-motion";
 import { Radio } from "lucide-react";
 
 interface StatDef {
@@ -23,10 +23,17 @@ const stats: StatDef[] = [
 function AnimatedStat({ stat }: { stat: StatDef }) {
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true, margin: "-40px" });
+  const prefersReducedMotion = useReducedMotion();
   const [value, setValue] = useState(0);
 
   useEffect(() => {
     if (!inView) return;
+    // Counting up is the whole point of the effect — with reduced motion we
+    // just show the final figure rather than animating to it.
+    if (prefersReducedMotion) {
+      setValue(stat.target);
+      return;
+    }
     const duration = 1200;
     const start = performance.now();
     let frame: number;
@@ -40,7 +47,7 @@ function AnimatedStat({ stat }: { stat: StatDef }) {
 
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [inView, stat.target]);
+  }, [inView, stat.target, prefersReducedMotion]);
 
   return (
     <span ref={ref}>
@@ -52,6 +59,9 @@ function AnimatedStat({ stat }: { stat: StatDef }) {
 }
 
 export function StatsSection() {
+  const prefersReducedMotion = useReducedMotion();
+  const rise = prefersReducedMotion ? false : { opacity: 0, y: 20 };
+
   return (
     <section className="bg-senyalita-warm px-6 py-24 md:py-28">
       <div className="mx-auto max-w-7xl">
@@ -66,10 +76,10 @@ export function StatsSection() {
           {stats.map((stat, i) => (
             <motion.div
               key={stat.label}
-              initial={{ opacity: 0, y: 20 }}
+              initial={rise}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-60px" }}
-              transition={{ duration: 0.45, delay: (i % 3) * 0.08 }}
+              transition={{ duration: 0.45, delay: prefersReducedMotion ? 0 : (i % 3) * 0.08 }}
               className="rounded-2xl border border-senyalita-border bg-white p-7 text-center shadow-sm shadow-senyalita-dark/5"
             >
               <p className="font-display text-4xl font-bold tracking-tight text-senyalita-dark">
@@ -80,10 +90,10 @@ export function StatsSection() {
           ))}
 
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={rise}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-60px" }}
-            transition={{ duration: 0.45, delay: 0.4 }}
+            transition={{ duration: 0.45, delay: prefersReducedMotion ? 0 : 0.4 }}
             className="flex flex-col items-center justify-center rounded-2xl border border-senyalita-primary/20 bg-gradient-to-br from-senyalita-primary to-senyalita-secondary p-7 text-center text-white shadow-lg shadow-senyalita-primary/20"
           >
             <Radio className="h-6 w-6 animate-pulse-soft" />

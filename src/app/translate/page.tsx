@@ -36,8 +36,9 @@ export default function TranslatePage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#FDF8F0] overflow-hidden">
-      <main className="flex-grow max-w-[1400px] mx-auto px-4 md:px-6 pt-5 pb-12">
+    // Shares the landing page's warm slate canvas so the two read as one product.
+    <div className="min-h-screen overflow-hidden bg-senyalita-warm">
+      <main className="mx-auto max-w-[1440px] flex-grow px-4 pb-14 pt-6 md:px-8">
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="w-full">
           <TabsContent value="sign-to-text" className="mt-0 focus-visible:ring-0 focus-visible:outline-none">
             <SignToTextInterface />

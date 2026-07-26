@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState, useCallback, memo, forwardRef, useI
 import { PlaybackEngine } from "./PlaybackEngine";
 import { AdvancedCanvasRenderer } from "../renderer/AdvancedCanvasRenderer";
 import type { AdvancedRendererOptions } from "../renderer/AdvancedCanvasRenderer";
-import { ExactLandmarkRenderer } from "../renderer/ExactLandmarkRenderer";
+import { ExactLandmarkRenderer, computeClipBounds } from "../renderer/ExactLandmarkRenderer";
 import type { ExactRendererOptions } from "../renderer/ExactLandmarkRenderer";
 import { AnimationLoader } from "../loader/AnimationLoader";
 import { CoarticulationEngine } from "./coarticulation";
@@ -15,10 +15,13 @@ import { TransitionEngine } from "./TransitionEngine";
 import { FingerspellingEngine } from "./FingerspellingEngine";
 import { SmartAnimationResolver } from "./SmartAnimationResolver";
 import { AnimationCache, PlaybackAnalytics } from "./AnimationCache";
-import type { AnimationClip, PlaybackState, AvatarTheme, GestureAnimationAsset, AnimationInspectorData } from "../types";
+import type { AnimationClip, PlaybackState, AvatarTheme, GestureAnimationAsset, AnimationInspectorData, ViewMode } from "../types";
 import { AVATAR_THEMES } from "../types";
 
-export type ViewMode = "human" | "skeleton" | "split";
+export type { ViewMode } from "../types";
+
+/** View modes drawn from extracted landmarks rather than the avatar renderer. */
+const LANDMARK_MODES = new Set<ViewMode>(["skeleton", "split", "overlay"]);
 
 export interface SignAnimationPlayerHandle {
   play: () => void;
@@ -27,6 +30,8 @@ export interface SignAnimationPlayerHandle {
   reset: () => void;
   stop: () => void;
   seekToClip: (index: number) => void;
+  /** Jump to a position inside a specific clip, in seconds. */
+  seekTo: (clipIndex: number, timeSeconds: number) => void;
   getPlayState: () => PlaybackState;
   setViewMode: (mode: ViewMode) => void;
 }
@@ -52,6 +57,10 @@ interface SignAnimationPlayerProps {
   highContrast?: boolean;
   backgroundColor?: string;
   viewMode?: ViewMode;
+  /** Skeleton opacity in overlay mode, 0-1. */
+  overlayOpacity?: number;
+  /** Fading path behind the hands, for reading movement direction. */
+  showTrails?: boolean;
   showDebug?: boolean;
   isStreaming?: boolean;
   onComplete?: () => void;
@@ -74,6 +83,8 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
   highContrast = false,
   backgroundColor,
   viewMode = "skeleton",
+  overlayOpacity = 0.85,
+  showTrails = false,
   showDebug = false,
   isStreaming = false,
   onComplete,
@@ -116,6 +127,31 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
   const [totalFrames, setTotalFrames] = useState(0);
 
   const currentAssetRef = useRef<GestureAnimationAsset | null>(null);
+  // onFrame is installed once, so mutable props it reads must go through refs.
+  const viewModeRef = useRef(viewMode);
+  viewModeRef.current = viewMode;
+  const [currentAsset, setCurrentAsset] = useState<GestureAnimationAsset | null>(null);
+  const [driftFrames, setDriftFrames] = useState(0);
+  const driftFramesRef = useRef(0);
+  driftFramesRef.current = driftFrames;
+  // Follows the clip actually playing, so a multi-sign sequence swaps to each
+  // sign's own recording instead of pinning the first one.
+  const currentClipAsset = currentAsset ?? clips[0]?.asset;
+  const videoSrc = currentClipAsset?.video;
+  // Split view gives the skeleton a half-width square panel; the drawing
+  // buffer has to match that box or the figure renders stretched.
+  let renderWidth = width;
+  let renderHeight = height;
+  if (viewMode === "split") {
+    // Each pane is half-width by full-height; a square buffer would letterbox
+    // the skeleton into a fraction of its pane while the video filled its own.
+    renderWidth = Math.max(1, Math.floor(width / 2));
+    renderHeight = height;
+  } else if (viewMode === "overlay" && currentClipAsset?.imageWidth && currentClipAsset?.imageHeight) {
+    // Give the canvas the recording's own aspect so `object-fit: contain`
+    // letterboxes both layers identically and the landmarks land on the signer.
+    renderHeight = Math.max(1, Math.round((width * currentClipAsset.imageHeight) / currentClipAsset.imageWidth));
+  }
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -180,7 +216,10 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
               total: st.queueLength,
               fps: clip.asset.fps,
             });
-            currentAssetRef.current = clip.asset;
+            if (currentAssetRef.current !== clip.asset) {
+              currentAssetRef.current = clip.asset;
+              setCurrentAsset(clip.asset);
+            }
             if (totalFrames !== clip.asset.totalFrames) {
               setTotalFrames(clip.asset.totalFrames);
             }
@@ -188,13 +227,47 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
 
           const gestureLabel = clip?.gesture ?? currentGestureRef.current;
 
-          if (viewMode === "skeleton" || viewMode === "split") {
+          // Hold the recording on the same instant as the landmark frame.
+          // Sync by time, not frame number: extraction resamples to a fixed
+          // fps, so the source video's own frame numbering does not match.
+          const video = videoRef.current;
+          let videoTime: number | null = null;
+          if (video && video.readyState >= 1) {
+            // Trimming removed the signer's lead-in from the landmarks but not
+            // from the recording, so the video is offset to the same instant.
+            const offset = clip?.asset.sourceOffsetSeconds ?? 0;
+            videoTime = video.currentTime;
+            const delta = videoTime - (time + offset);
+            // Let the element run at its own rate and only correct real drift;
+            // seeking every frame would re-decode constantly. Only resume while
+            // the engine itself is running, so a finished or paused sequence
+            // cannot leave the recording rolling on.
+            if (video.paused && playStateRef.current.isPlaying && !playStateRef.current.isPaused) {
+              video.play().catch(() => { /* autoplay refusal is non-fatal */ });
+            }
+            if (Math.abs(delta) > 0.08) {
+              video.currentTime = time + offset;
+            }
+            const fpsForDrift = clip?.asset.fps || 30;
+            setDriftFrames(Math.round(delta * fpsForDrift));
+          }
+
+          if (LANDMARK_MODES.has(viewModeRef.current)) {
             if (exactRendererRef.current && clip?.asset) {
               const asset = clip.asset;
               if (asset.imageWidth && asset.imageHeight) {
                 exactRendererRef.current.setImageDimensions(asset.imageWidth, asset.imageHeight);
               }
-              exactRendererRef.current.render(frame, frameIndex ?? 0, asset.totalFrames);
+              // Overlay must share the video's contain layout to stay
+              // registered with it; the other modes fit the signer to the stage.
+              exactRendererRef.current.setFitBounds(
+                viewModeRef.current === "overlay" ? null : computeClipBounds(asset),
+              );
+              exactRendererRef.current.setDrift(driftFramesRef.current);
+              exactRendererRef.current.render(frame, frameIndex ?? 0, asset.totalFrames, {
+                clipTime: time,
+                videoTime,
+              });
             }
           } else {
             let processedFrame = frame;
@@ -262,8 +335,14 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
       },
       onComplete: () => {},
       onQueueComplete: () => {
+        // Nothing else stops the <video>, so it would run past the trimmed
+        // sign into the footage of the signer relaxing.
+        videoRef.current?.pause();
+        // currentTime is deliberately left at the end: zeroing it rewinds the
+        // paired video while the canvas still shows the final frame, so Human
+        // and Overlay would display a different instant than the landmarks.
         setPlayState((prev) => ({
-          ...prev, isPlaying: false, isPaused: false, currentTime: 0,
+          ...prev, isPlaying: false, isPaused: false,
         }));
         if (streamingRef.current) {
           pendingCompletionRef.current = true;
@@ -286,19 +365,71 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
       cacheRef.current = null;
       analyticsRef.current = null;
     };
+    // Mount-only on purpose. These deps are applied by the dedicated effects
+    // below (setOptions / setSize / setSpeed); listing them here would tear
+    // down and rebuild the renderers and engine on every resize or prop
+    // change, discarding the sequence mid-playback.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
+    // Both renderers share one canvas, so only the active one may resize it:
+    // assigning canvas.width resets the bitmap, and the inactive renderer has
+    // no frame to repaint, so it would blank what the active one just drew.
+    if (LANDMARK_MODES.has(viewMode)) {
+      exactRendererRef.current?.setBackgroundColor(
+        // Overlay draws on top of the recording, so it must not paint a base.
+        viewMode === "overlay"
+          ? "transparent"
+          : backgroundColor ?? (highContrast ? "#000000" : "#FBF4EA"),
+      );
+      exactRendererRef.current?.setSize(renderWidth, renderHeight);
+      return;
+    }
     advancedRendererRef.current?.setOptions({
-      width, height, theme, showLabels, showNonManual, highContrast,
+      width: renderWidth, height: renderHeight, theme, showLabels, showNonManual, highContrast,
       backgroundColor: backgroundColor ?? (highContrast ? "#000000" : "#FBF4EA"),
     });
-    exactRendererRef.current?.setSize(width, height);
-  }, [width, height, theme, showLabels, showNonManual, highContrast, backgroundColor]);
+  }, [renderWidth, renderHeight, theme, showLabels, showNonManual, highContrast, backgroundColor, viewMode]);
 
   useEffect(() => {
-    engineRef.current?.setExactMode(viewMode === "skeleton" || viewMode === "split");
+    engineRef.current?.setExactMode(LANDMARK_MODES.has(viewMode));
   }, [viewMode]);
+
+  useEffect(() => {
+    exactRendererRef.current?.setShowTrails(showTrails);
+  }, [showTrails]);
+
+  // Each view mode renders its own canvas element, so the renderers have to be
+  // re-pointed at the live one and repainted — otherwise switching mode after
+  // playback has finished shows an empty stage.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    if (LANDMARK_MODES.has(viewMode)) {
+      exactRendererRef.current?.attach(canvas);
+      exactRendererRef.current?.setSize(renderWidth, renderHeight);
+    } else {
+      advancedRendererRef.current?.attach(canvas);
+      advancedRendererRef.current?.setOptions({ width: renderWidth, height: renderHeight });
+    }
+  }, [viewMode, renderWidth, renderHeight]);
+
+  // A video revealed part-way through a sequence starts at zero, so line it up
+  // with the landmark playhead and match the engine's play/pause state.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const state = playStateRef.current;
+    video.currentTime = state.currentTime + (currentClipAsset?.sourceOffsetSeconds ?? 0);
+    if (state.isPlaying && !state.isPaused) {
+      video.play().catch(() => { /* autoplay refusal is non-fatal */ });
+    } else {
+      video.pause();
+    }
+    // The offset belongs in the deps: two clips can share one recording while
+    // starting at different points in it, which would otherwise seek stale.
+  }, [viewMode, videoSrc, currentClipAsset?.sourceOffsetSeconds]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -421,6 +552,16 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
         videoRef.current.play();
       }
     },
+    seekTo: (clipIndex: number, timeSeconds: number) => {
+      engineRef.current?.seekToClip(clipIndex, timeSeconds);
+      nonManualRef.current?.reset();
+      coarticulationRef.current?.reset();
+      setPlayState((prev) => ({ ...prev, isPaused: false, isPlaying: true }));
+      const video = videoRef.current;
+      if (video) {
+        video.currentTime = timeSeconds + (currentAssetRef.current?.sourceOffsetSeconds ?? 0);
+      }
+    },
     getPlayState: () => playStateRef.current,
     setViewMode: (mode: ViewMode) => {
       // View mode is controlled via props
@@ -431,70 +572,74 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
     ? Math.min(100, (playState.currentTime / playState.duration) * 100) : 0;
   const clipCount = clips.length;
 
-  const asset = clips[0]?.asset;
-  const videoSrc = asset?.video;
+  const asset = currentClipAsset;
 
   const renderView = () => {
     const bgColor = backgroundColor ?? (highContrast ? "#000000" : "#FBF4EA");
-    const canvasStyle = { borderRadius: 8, maxWidth: "100%", background: bgColor };
+    // `contain` inside a fully-sized box: the recording always fits, never
+    // overflows and never crops the signer's hands. Letterbox bars are fine.
+    const fillBox: React.CSSProperties = {
+      position: "absolute", inset: 0, width: "100%", height: "100%",
+      objectFit: "contain", borderRadius: 8, background: bgColor,
+    };
+    const videoProps = { muted: true, playsInline: true, preload: "auto" as const };
 
     if (viewMode === "human") {
-      if (!videoSrc) {
-        return (
-          <canvas ref={canvasRef} width={width} height={height} style={canvasStyle} />
-        );
-      }
       return (
-        <video
-          ref={videoRef}
-          src={videoSrc}
-          width={width}
-          height={height}
-          style={{ borderRadius: 8, maxWidth: "100%", background: bgColor }}
-          onTimeUpdate={() => {
-            if (videoRef.current && engineRef.current) {
-              const st = engineRef.current.getState();
-              if (Math.abs(videoRef.current.currentTime - st.currentTime) > 0.1) {
-                engineRef.current.getState(); 
-              }
-            }
-          }}
-        />
+        <div style={{ position: "relative", width: "100%", height: "100%" }}>
+          {videoSrc
+            ? <video ref={videoRef} src={videoSrc} {...videoProps} style={fillBox} />
+            : <canvas ref={canvasRef} width={renderWidth} height={renderHeight} style={fillBox} />}
+        </div>
+      );
+    }
+
+    if (viewMode === "overlay") {
+      return (
+        <div style={{ position: "relative", width: "100%", height: "100%" }}>
+          {videoSrc && <video ref={videoRef} src={videoSrc} {...videoProps} style={fillBox} />}
+          <canvas
+            ref={canvasRef}
+            width={renderWidth}
+            height={renderHeight}
+            style={{ ...fillBox, background: "transparent", opacity: overlayOpacity, pointerEvents: "none" }}
+          />
+        </div>
       );
     }
 
     if (viewMode === "split") {
+      // Labels sit low so the stage's top bar cannot clip them.
+      const paneLabel: React.CSSProperties = {
+        position: "absolute", left: "50%", bottom: 56, transform: "translateX(-50%)",
+        fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase",
+        color: "#475569", background: "rgba(255,255,255,0.82)", backdropFilter: "blur(6px)",
+        padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", pointerEvents: "none",
+      };
+      const pane: React.CSSProperties = { position: "relative", flex: 1, minWidth: 0, height: "100%" };
       return (
-        <div style={{ display: "flex", gap: 8, width: "100%", justifyContent: "center" }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4, textAlign: "center", textTransform: "uppercase" }}>
-              Human
-            </div>
-            {videoSrc ? (
-              <video
-                ref={videoRef}
-                src={videoSrc}
-                style={{ width: "100%", aspectRatio: "1", borderRadius: 8, background: bgColor, objectFit: "contain" }}
-              />
-            ) : (
-              <canvas width={width / 2} height={height} style={{ width: "100%", aspectRatio: "1", borderRadius: 8, background: bgColor }} />
-            )}
+        <div style={{ display: "flex", gap: 6, width: "100%", height: "100%" }}>
+          <div style={pane}>
+            {videoSrc && <video ref={videoRef} src={videoSrc} {...videoProps} style={fillBox} />}
+            <span style={paneLabel}>Human</span>
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4, textAlign: "center", textTransform: "uppercase" }}>
-              Skeleton
-            </div>
-            <canvas ref={canvasRef} width={width / 2} height={height} style={canvasStyle} />
+          <div style={pane}>
+            <canvas ref={canvasRef} width={renderWidth} height={renderHeight} style={fillBox} />
+            <span style={paneLabel}>Skeleton</span>
           </div>
         </div>
       );
     }
 
-    return <canvas ref={canvasRef} width={width} height={height} style={canvasStyle} />;
+    return (
+      <div style={{ position: "relative", width: "100%", height: "100%" }}>
+        <canvas ref={canvasRef} width={renderWidth} height={renderHeight} style={fillBox} />
+      </div>
+    );
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, width: "100%", height: "100%" }}>
       {renderView()}
       {showControls && (
         <div style={{ display: "flex", gap: 8, alignItems: "center", width: "100%", maxWidth: width }}>

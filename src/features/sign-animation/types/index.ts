@@ -58,6 +58,15 @@ export interface GestureAnimationAsset {
   /** Original video dimensions for pixel-space rendering */
   imageWidth?: number;
   imageHeight?: number;
+  /** Seconds into `video` where this (trimmed) asset's first frame sits. */
+  sourceOffsetSeconds?: number;
+  /** Present when idle lead-in/trail-off was removed from the capture. */
+  trim?: {
+    originalTotalFrames: number;
+    startFrame: number;
+    endFrame: number;
+    method: string;
+  };
   metadata: {
     signerId?: string;
     source?: string;
@@ -94,7 +103,7 @@ export interface PlaybackState {
 }
 
 export type AvatarTheme = "minimal" | "skeleton" | "flat" | "avatar2d";
-export type ViewMode = "human" | "skeleton" | "split";
+export type ViewMode = "human" | "skeleton" | "split" | "overlay";
 
 export interface AvatarThemeConfig {
   id: AvatarTheme;

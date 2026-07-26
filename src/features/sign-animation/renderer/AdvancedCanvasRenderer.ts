@@ -180,6 +180,19 @@ export class AdvancedCanvasRenderer {
     this.options.height = height;
   }
 
+  /**
+   * Re-points the renderer at a different canvas. Switching view mode swaps
+   * the JSX branch, so the element this was constructed with gets detached and
+   * anything drawn into it is invisible.
+   */
+  attach(canvas: HTMLCanvasElement): void {
+    if (this.canvas === canvas) return;
+    this.canvas = canvas;
+    this.ctx = canvas.getContext("2d")!;
+    this.setSize(this.options.width, this.options.height);
+    if (this.lastFrame) this.render(this.lastFrame, this.lastExtra);
+  }
+
   setTheme(theme: AvatarTheme): void {
     this.options.theme = theme;
   }

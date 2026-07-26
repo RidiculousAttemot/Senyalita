@@ -1,8 +1,9 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { ScanLine, Languages, Layers3, BookOpen, Database, Settings, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SpotlightCard } from "./SpotlightCard";
 
 interface Feature {
   icon: LucideIcon;
@@ -44,6 +45,8 @@ const features: Feature[] = [
 ];
 
 export function FeatureJourneySection() {
+  const prefersReducedMotion = useReducedMotion();
+
   return (
     <section id="features" className="scroll-mt-20 bg-senyalita-surface px-6 py-24 md:py-28">
       <div className="mx-auto max-w-7xl">
@@ -63,23 +66,26 @@ export function FeatureJourneySection() {
           {features.map((feature, i) => (
             <motion.div
               key={feature.title}
-              initial={{ opacity: 0, y: 24 }}
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-60px" }}
-              transition={{ duration: 0.5, delay: (i % 3) * 0.08 }}
-              className={cn(
-                "group relative overflow-hidden rounded-2xl border border-senyalita-border bg-white p-7",
-                "transition-all duration-300 hover:-translate-y-1 hover:border-senyalita-primary/25 hover:shadow-xl hover:shadow-senyalita-primary/8",
-              )}
+              transition={{ duration: 0.5, delay: prefersReducedMotion ? 0 : (i % 3) * 0.08 }}
             >
-              <span className="absolute right-5 top-5 font-display text-3xl font-bold text-senyalita-border transition-colors group-hover:text-senyalita-primary/15">
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-senyalita-primary/10 to-senyalita-secondary/10 text-senyalita-primary transition-transform duration-300 group-hover:scale-110">
-                <feature.icon className="h-6 w-6" strokeWidth={2} />
-              </div>
-              <h3 className="mt-5 text-lg font-semibold text-senyalita-dark">{feature.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-senyalita-muted">{feature.description}</p>
+              <SpotlightCard
+                className={cn(
+                  "group h-full rounded-2xl border border-senyalita-border bg-white p-7",
+                  "transition-all duration-300 hover:-translate-y-1 hover:border-senyalita-primary/25 hover:shadow-xl hover:shadow-senyalita-primary/10",
+                )}
+              >
+                <span className="absolute right-5 top-5 font-display text-3xl font-bold text-senyalita-border transition-colors group-hover:text-senyalita-primary/15">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-senyalita-primary/10 to-senyalita-secondary/10 text-senyalita-primary transition-transform duration-300 group-hover:scale-110">
+                  <feature.icon className="h-6 w-6" strokeWidth={2} />
+                </div>
+                <h3 className="mt-5 text-lg font-semibold text-senyalita-dark">{feature.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-senyalita-muted">{feature.description}</p>
+              </SpotlightCard>
             </motion.div>
           ))}
         </div>

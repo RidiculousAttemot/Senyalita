@@ -82,12 +82,20 @@ describe("normalizeFrameSequence", () => {
 
 describe("createGestureAnimationAsset", () => {
   it("creates a versioned asset with repaired, FPS-normalized frames", () => {
-    const asset = createGestureAnimationAsset({
-      label: "HELLO",
-      frames: [
+    // Normalisation is the caller's step, not the factory's — both production
+    // call sites (landmarkProcessor, VideoUploadTab) normalise first and then
+    // construct. Mirroring that here keeps the test on the real contract.
+    const normalized = normalizeFrameSequence(
+      [
         { timestamp: 0, landmarks: [{ landmarks: [{ x: 0.1, y: 0.1, z: 0 }] }] },
         { timestamp: 100, landmarks: [{ landmarks: [{ x: 0.9, y: 0.9, z: 0 }] }] },
       ],
+      20,
+    );
+
+    const asset = createGestureAnimationAsset({
+      label: "HELLO",
+      frames: normalized,
       fps: 20,
       source: "landmark-video-extraction",
     });
@@ -95,7 +103,9 @@ describe("createGestureAnimationAsset", () => {
     expect(asset).toMatchObject({
       label: "HELLO",
       fps: 20,
-      duration: 0.1,
+      // Milliseconds: every consumer divides by 1000, and the animation-assets
+      // API persists this straight into `duration_ms`.
+      duration: 100,
       totalFrames: 3,
       metadata: { source: "landmark-video-extraction", version: 1 },
     });

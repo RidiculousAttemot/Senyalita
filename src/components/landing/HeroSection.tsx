@@ -1,12 +1,15 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { ArrowRight, PlayCircle } from "lucide-react";
 import { LandmarkField } from "./LandmarkField";
 import { RecognitionSequence } from "./RecognitionSequence";
 
 export function HeroSection() {
+  const prefersReducedMotion = useReducedMotion();
+  const rise = (y: number) => (prefersReducedMotion ? false : { opacity: 0, y });
+
   return (
     <section id="hero" className="relative overflow-hidden bg-senyalita-warm px-6 pb-20 pt-16 md:pb-28 md:pt-20 scroll-mt-16">
       <LandmarkField
@@ -19,7 +22,7 @@ export function HeroSection() {
       <div className="relative mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10">
         <div>
           <motion.div
-            initial={{ opacity: 0, y: 12 }}
+            initial={rise(12)}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
             className="inline-flex items-center gap-2 rounded-full border border-senyalita-primary/20 bg-white px-4 py-1.5 text-sm font-medium text-senyalita-primary shadow-sm"
@@ -29,7 +32,7 @@ export function HeroSection() {
           </motion.div>
 
           <motion.h1
-            initial={{ opacity: 0, y: 16 }}
+            initial={rise(16)}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.08 }}
             className="mt-6 font-display text-4xl font-bold leading-[1.08] tracking-tight text-senyalita-dark sm:text-5xl lg:text-6xl"
@@ -43,7 +46,7 @@ export function HeroSection() {
           </motion.h1>
 
           <motion.p
-            initial={{ opacity: 0, y: 16 }}
+            initial={rise(16)}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.16 }}
             className="mt-6 max-w-xl text-lg leading-relaxed text-senyalita-muted"
@@ -54,7 +57,7 @@ export function HeroSection() {
           </motion.p>
 
           <motion.div
-            initial={{ opacity: 0, y: 16 }}
+            initial={rise(16)}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.24 }}
             className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center"
@@ -76,7 +79,7 @@ export function HeroSection() {
           </motion.div>
 
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={prefersReducedMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.35 }}
             className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-senyalita-muted"
@@ -92,7 +95,7 @@ export function HeroSection() {
         </div>
 
         <motion.div
-          initial={{ opacity: 0, scale: 0.94 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.94 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.6, delay: 0.2 }}
           className="flex justify-center lg:justify-end"

@@ -1,5 +1,8 @@
 # Build stage
-FROM node:20-alpine AS builder
+# Keep in step with .nvmrc and package.json "engines". Node 20 does not
+# satisfy puppeteer@25 (>=22.12.0); Node 24 breaks Next 14.2.5's bundled
+# webpack hasher.
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -15,7 +18,7 @@ COPY . .
 RUN npm run build
 
 # Runtime stage
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 

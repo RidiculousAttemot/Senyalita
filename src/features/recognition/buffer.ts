@@ -1,9 +1,30 @@
 import { normalizeLandmarks } from "./normalize";
 
-const SEQUENCE_LENGTH = 45;
-const FEATURE_DIMENSION = 126;
-const TEMPORAL_STEPS = 35;
-const MINIMUM_FRAMES = 5;
+/**
+ * Runtime must mirror the training pipeline or the model sees a distribution
+ * it was never fitted on. Training (scripts/build-unified-dataset-v4.mjs)
+ * pads or truncates each clip to a 120-frame window, then the model consumes
+ * 35 frames drawn at fixed indices from that window
+ * (models/fsl_unified/bilstm_v4/config.json →
+ * architecture.recurrentLayers[0].temporalFrameIndices).
+ *
+ * The previous 45-frame rolling window with evenly-spaced sampling compressed
+ * a ~4 second gesture into ~1.5 seconds of captured motion.
+ */
+export const SEQUENCE_LENGTH = 120;
+export const FEATURE_DIMENSION = 126;
+export const TEMPORAL_STEPS = 35;
+
+/**
+ * Verbatim from bilstm_v4 config. `temporalFrameIndices.test.ts` asserts this
+ * still matches the model config, so retraining cannot silently desync them.
+ */
+export const TEMPORAL_FRAME_INDICES = [
+  0, 4, 7, 11, 14, 18, 21, 25, 28, 32, 35, 39, 42, 46, 49, 53, 56, 60,
+  63, 67, 70, 74, 77, 81, 84, 88, 91, 95, 98, 102, 105, 109, 112, 116, 119,
+] as const;
+
+export const MINIMUM_FRAMES = 5;
 const EARLY_MIN_FRAMES = 8;
 const EARLY_HIGH_CONFIDENCE = 0.85;
 
@@ -36,27 +57,31 @@ export class SequenceBuffer {
     return this.frames.length;
   }
 
+  /**
+   * Reads the trained indices out of a 120-slot window whose leading slots hold
+   * the captured frames and whose tail is zero — the same layout training used
+   * when it padded short clips.
+   */
+  private sampleAtTrainedIndices(): Float32Array {
+    const sampled = new Float32Array(TEMPORAL_STEPS * FEATURE_DIMENSION);
+
+    for (let step = 0; step < TEMPORAL_STEPS; step += 1) {
+      const sourceIndex = TEMPORAL_FRAME_INDICES[step];
+      const frame = this.frames[sourceIndex];
+      // Past the captured frames the slot stays zero, matching the tail
+      // padding applied to short training clips.
+      if (!frame) continue;
+      sampled.set(frame, step * FEATURE_DIMENSION);
+    }
+
+    return sampled;
+  }
+
   sampleTemporal(): Float32Array | null {
     if (this.frames.length < MINIMUM_FRAMES) {
       return null;
     }
-
-    const available = Math.min(this.frames.length, SEQUENCE_LENGTH);
-    const recent = this.frames.slice(-available);
-    const sampled = new Float32Array(TEMPORAL_STEPS * FEATURE_DIMENSION);
-
-    for (let step = 0; step < TEMPORAL_STEPS; step += 1) {
-      const frameIndex = Math.round(
-        (step * (available - 1)) / (TEMPORAL_STEPS - 1)
-      );
-      const frame = recent[frameIndex];
-      const destOffset = step * FEATURE_DIMENSION;
-      for (let j = 0; j < FEATURE_DIMENSION; j += 1) {
-        sampled[destOffset + j] = frame[j];
-      }
-    }
-
-    return sampled;
+    return this.sampleAtTrainedIndices();
   }
 
   adaptiveSample(highConfidenceThreshold = EARLY_HIGH_CONFIDENCE): {
@@ -77,21 +102,12 @@ export class SequenceBuffer {
       };
     }
 
-    const available = Math.min(this.frames.length, SEQUENCE_LENGTH);
-    const recent = this.frames.slice(-available);
-    const sampled = new Float32Array(TEMPORAL_STEPS * FEATURE_DIMENSION);
-
-    for (let step = 0; step < TEMPORAL_STEPS; step += 1) {
-      const frameIndex = Math.round(
-        (step * (available - 1)) / (TEMPORAL_STEPS - 1)
-      );
-      const frame = recent[frameIndex];
-      const destOffset = step * FEATURE_DIMENSION;
-      for (let j = 0; j < FEATURE_DIMENSION; j += 1) {
-        sampled[destOffset + j] = frame[j];
-      }
-    }
-
-    return { sample: sampled, usedEarly: available < SEQUENCE_LENGTH, frameCount: available };
+    // Same layout either way; "early" only reports that the window is not yet
+    // full, so callers can weight a prediction made on partial evidence.
+    return {
+      sample: this.sampleAtTrainedIndices(),
+      usedEarly: this.frames.length < SEQUENCE_LENGTH,
+      frameCount: this.frames.length,
+    };
   }
 }

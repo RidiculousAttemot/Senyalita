@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { RecognitionState, RealPredictionResult, RecognitionCategory } from "./types";
 import { InferenceResult } from "./model";
-import { SequenceBuffer, HandData } from "./buffer";
+import { SequenceBuffer, SEQUENCE_LENGTH, MINIMUM_FRAMES, HandData } from "./buffer";
 import { PredictionSmoother } from "./smoothing";
 import { MotionDetector, MotionState } from "./motionDetection";
 import { translateResult, getRecognitionCategory } from "./translation";
@@ -248,8 +248,10 @@ export const useRecognition = (
     appendFrame,
     resetRecognition,
     bufferLength,
-    bufferCap: 30,
-    minimumFrames: 5,
+    // Sourced from the buffer so diagnostics cannot drift from it again —
+    // this reported 30 while the buffer actually held 45.
+    bufferCap: SEQUENCE_LENGTH,
+    minimumFrames: MINIMUM_FRAMES,
     inferenceTimeMs,
     frozenPrediction,
     motionState,

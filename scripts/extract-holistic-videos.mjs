@@ -28,10 +28,17 @@ const extractFrames = (videoPath, frameDir) => {
   return new Promise((resolve, reject) => {
     ensureDir(frameDir);
     const cmd = `"${FFMPEG}" -i "${videoPath}" -q:v 2 -vf "fps=${TARGET_FPS}" "${path.join(frameDir, "frame_%04d.png")}"`;
-    exec(cmd, { timeout: 120000 }, (error) => {
+    exec(cmd, { timeout: 120000 }, (error, _stdout, stderr) => {
       if (error) { try { fs.rmSync(frameDir, { recursive: true }); } catch {} return reject(error); }
       const files = fs.readdirSync(frameDir).filter(f => f.endsWith(".png")).sort();
-      resolve(files);
+      // Landmarks come back normalised; the source dimensions are what let
+      // playback restore true pixel-space proportions later.
+      const dims = /Video:.*?,\s*(\d{2,5})x(\d{2,5})/.exec(stderr ?? "");
+      resolve({
+        files,
+        imageWidth: dims ? Number(dims[1]) : null,
+        imageHeight: dims ? Number(dims[2]) : null,
+      });
     });
   });
 };
@@ -167,7 +174,7 @@ const main = async () => {
     console.log(`\n[${i + 1}/${videos.length}] ${v.label}/${v.file}`);
 
     try {
-      const frameFiles = await extractFrames(v.videoPath, frameDir);
+      const { files: frameFiles, imageWidth, imageHeight } = await extractFrames(v.videoPath, frameDir);
       if (frameFiles.length === 0) { console.log("    No frames"); stats.fail++; continue; }
       if (frameFiles.length > MAX_FRAMES) {
         console.log(`    ${frameFiles.length} frames (truncated to ${MAX_FRAMES})`);
@@ -226,6 +233,9 @@ const main = async () => {
         duration: lastTs - firstTs,
         totalFrames: animFrames.length,
         frames: animFrames,
+        video: `/api/videos/${encodeURIComponent(v.label)}/${encodeURIComponent(v.file)}`,
+        imageWidth,
+        imageHeight,
         metadata: {
           sourceFile: v.file,
           source: "user-video-extraction",

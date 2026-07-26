@@ -1,21 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useScroll, useSpring } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SenyalitaMark } from "./SenyalitaMark";
+import { useScrollSpy } from "./useScrollSpy";
 
 const GITHUB_URL = "https://github.com/RidiculousAttemot/SignLangVisual";
 
 const navLinks = [
-  { name: "Home", href: "#hero" },
-  { name: "Features", href: "#features" },
-  { name: "Recognition", href: "#recognition" },
-  { name: "Translate", href: "#showcase" },
-  { name: "Research", href: "#research" },
-  { name: "About", href: "#accessibility" },
+  { name: "Home", href: "#hero", id: "hero" },
+  { name: "Features", href: "#features", id: "features" },
+  { name: "Recognition", href: "#recognition", id: "recognition" },
+  { name: "Translate", href: "#showcase", id: "showcase" },
+  { name: "Research", href: "#research", id: "research" },
+  { name: "About", href: "#accessibility", id: "accessibility" },
 ];
 
 function GithubGlyph({ className }: { className?: string }) {
@@ -29,6 +30,12 @@ function GithubGlyph({ className }: { className?: string }) {
 export function LandingNav() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const sectionIds = useMemo(() => navLinks.map((l) => l.id), []);
+  const activeId = useScrollSpy(sectionIds);
+
+  const { scrollYProgress } = useScroll();
+  const progress = useSpring(scrollYProgress, { stiffness: 220, damping: 40, restDelta: 0.001 });
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -62,15 +69,29 @@ export function LandingNav() {
         </Link>
 
         <nav aria-label="Primary" className="hidden items-center gap-7 lg:flex">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="text-sm font-medium text-senyalita-muted transition-colors hover:text-senyalita-primary"
-            >
-              {link.name}
-            </Link>
-          ))}
+          {navLinks.map((link) => {
+            const isActive = activeId === link.id;
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={isActive ? "true" : undefined}
+                className={cn(
+                  "relative py-1 text-sm font-medium transition-colors",
+                  isActive ? "text-senyalita-primary" : "text-senyalita-muted hover:text-senyalita-primary",
+                )}
+              >
+                {link.name}
+                {isActive && (
+                  <motion.span
+                    layoutId="nav-active-underline"
+                    transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                    className="absolute -bottom-0.5 left-0 right-0 h-0.5 rounded-full bg-senyalita-primary"
+                  />
+                )}
+              </Link>
+            );
+          })}
           <a
             href={GITHUB_URL}
             target="_blank"
@@ -117,7 +138,13 @@ export function LandingNav() {
                   key={link.href}
                   href={link.href}
                   onClick={() => setMobileOpen(false)}
-                  className="rounded-lg px-3 py-2.5 text-sm font-medium text-senyalita-text hover:bg-senyalita-warm"
+                  aria-current={activeId === link.id ? "true" : undefined}
+                  className={cn(
+                    "rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-senyalita-warm",
+                    activeId === link.id
+                      ? "bg-senyalita-primary/5 text-senyalita-primary"
+                      : "text-senyalita-text",
+                  )}
                 >
                   {link.name}
                 </Link>
@@ -140,6 +167,12 @@ export function LandingNav() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <motion.div
+        aria-hidden="true"
+        style={{ scaleX: progress }}
+        className="h-0.5 origin-left bg-gradient-to-r from-senyalita-primary to-senyalita-accent"
+      />
     </header>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useReducedMotion } from "framer-motion";
 
 interface LandmarkFieldProps {
   className?: string;
@@ -23,6 +24,8 @@ function mulberry32(seed: number) {
  * backdrop. Pure CSS/SVG, no canvas — cheap enough to sit behind hero text.
  */
 export function LandmarkField({ className, density = 26, seed = 7 }: LandmarkFieldProps) {
+  const prefersReducedMotion = useReducedMotion();
+
   const nodes = useMemo(() => {
     const rand = mulberry32(seed);
     return Array.from({ length: density }, (_, i) => ({
@@ -64,8 +67,8 @@ export function LandmarkField({ className, density = 26, seed = 7 }: LandmarkFie
           strokeOpacity="0.35"
           pathLength={1}
           strokeDasharray={1}
-          className="animate-draw-line"
-          style={{ animationDelay: `${delay * 0.4}s` }}
+          className={prefersReducedMotion ? undefined : "animate-draw-line"}
+          style={prefersReducedMotion ? undefined : { animationDelay: `${delay * 0.4}s` }}
         />
       ))}
       {nodes.map((n) => (
@@ -75,8 +78,8 @@ export function LandmarkField({ className, density = 26, seed = 7 }: LandmarkFie
           cy={n.y}
           r={n.r * 0.35}
           fill="currentColor"
-          className="animate-pulse-soft"
-          style={{ animationDelay: `${n.delay}s`, animationDuration: `${n.duration}s` }}
+          className={prefersReducedMotion ? undefined : "animate-pulse-soft"}
+          style={prefersReducedMotion ? undefined : { animationDelay: `${n.delay}s`, animationDuration: `${n.duration}s` }}
         />
       ))}
     </svg>

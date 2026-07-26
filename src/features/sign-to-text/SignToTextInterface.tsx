@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { formatTranscriptCommitShortcut, isTranscriptCommitShortcut } from "./commitShortcut";
 import { createFrameRateTracker } from "./cameraFrameRate";
 import { HAND_CAPTURE_CONSTRAINTS, HAND_LANDMARKER_OPTIONS } from "./handCaptureProfile";
+import { SuggestionPanel, useLetterSuggestions } from "@/features/suggestions";
 
 const HAND_CONNECTIONS: Array<[number, number]> = [
   [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8],
@@ -23,6 +24,12 @@ const HAND_CONNECTIONS: Array<[number, number]> = [
 const HAND_LANDMARKER_MODEL_URL = process.env.NEXT_PUBLIC_MEDIAPIPE_HAND_MODEL_URL
   ?? "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task";
 const MEDIAPIPE_WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
+
+/** 30fps — the rate training clips were extracted at. */
+const CAPTURE_TARGET_FPS = 30;
+// A small tolerance stops a camera running at a nominal 30fps from having
+// every other frame rejected by jitter.
+const CAPTURE_INTERVAL_MS = 1000 / CAPTURE_TARGET_FPS - 2;
 
 type Status = "waiting" | "starting" | "active" | "no-hand" | "error";
 
@@ -56,7 +63,11 @@ export function SignToTextInterface() {
   const [status, setStatus] = useState<Status>("waiting");
   const [errorMessage, setErrorMessage] = useState("");
   const [mediapipeFps, setMediapipeFps] = useState(0);
+  // Rate landmarks actually enter the recognition buffer, which is what has to
+  // match training — distinct from the MediaPipe detection rate above.
+  const [captureFps, setCaptureFps] = useState(0);
   const [outputText, setOutputText] = useState("");
+  const suggestions = useLetterSuggestions();
   const [showDebug, setShowDebug] = useState(false);
   const [speakEnabled, setSpeakEnabled] = useState(true);
   const [commitShortcut, setCommitShortcut] = useState("Space");
@@ -73,15 +84,34 @@ export function SignToTextInterface() {
     setTelemetrySessionToken(new CommunicationProfileManager().getToken());
   }, []);
 
+  const speak = useCallback((text: string) => {
+    if (!speakEnabled) return;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+  }, [speakEnabled]);
+
+  // Committing a sign feeds the spelling buffer as well as the transcript;
+  // recognition itself is untouched.
   const commitPrediction = useCallback(() => {
     if (!currentPrediction) return;
     const display = translateLabel(currentPrediction.label);
     setOutputText((previousText) => previousText + display);
-    if (speakEnabled) {
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(new SpeechSynthesisUtterance(display));
-    }
-  }, [currentPrediction, speakEnabled]);
+    suggestions.appendLabel(currentPrediction.label);
+    speak(display);
+  }, [currentPrediction, speak, suggestions]);
+
+  /** Replaces the spelled run in the transcript with the chosen word. */
+  const acceptSuggestion = useCallback((phrase: string) => {
+    const spelled = suggestions.letters;
+    suggestions.accept(phrase);
+    setOutputText((previousText) => {
+      const trimmed = previousText.toUpperCase().endsWith(spelled)
+        ? previousText.slice(0, previousText.length - spelled.length)
+        : previousText;
+      return `${trimmed}${phrase} `;
+    });
+    speak(phrase);
+  }, [speak, suggestions]);
 
   useEffect(() => {
     const handleCommitShortcut = (event: KeyboardEvent) => {
@@ -92,11 +122,17 @@ export function SignToTextInterface() {
         return;
       }
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement) return;
+      // Enter accepts the top suggestion, matching how phone keyboards behave.
+      if (event.key === "Enter" && suggestions.topSuggestion) {
+        event.preventDefault();
+        acceptSuggestion(suggestions.topSuggestion.phrase);
+        return;
+      }
       if (isTranscriptCommitShortcut(event, commitShortcut)) { event.preventDefault(); commitPrediction(); }
     };
     window.addEventListener("keydown", handleCommitShortcut);
     return () => window.removeEventListener("keydown", handleCommitShortcut);
-  }, [capturingShortcut, commitPrediction, commitShortcut]);
+  }, [acceptSuggestion, capturingShortcut, commitPrediction, commitShortcut, suggestions.topSuggestion]);
 
   const clearCameraResources = useCallback(() => {
     if (animationFrameRef.current !== null) {
@@ -148,7 +184,13 @@ export function SignToTextInterface() {
       }
       handLandmarkerRef.current = handLandmarker;
       let lastVideoTime = -1;
+      // Landmarks are appended on a fixed ~30Hz cadence to match the rate the
+      // training clips were extracted at (scripts/extract-holistic-videos.mjs
+      // uses ffmpeg fps=30). A 60fps camera would otherwise pack twice the
+      // frames into the model's 120-frame window and halve its real duration.
+      let lastAppendTime = -Infinity;
       const fpsTracker = createFrameRateTracker(performance.now());
+      const captureTracker = createFrameRateTracker(performance.now());
       const drawLandmarks = () => {
         if (cameraRunIdRef.current !== runId || !videoRef.current || videoRef.current.paused || videoRef.current.ended) return;
         const video = videoRef.current;
@@ -160,10 +202,17 @@ export function SignToTextInterface() {
           if (measuredFps > 0) setMediapipeFps(measuredFps);
           const leftIndex = results.handedness.findIndex((handedness) => handedness[0]?.categoryName?.toLowerCase() === "left");
           const rightIndex = results.handedness.findIndex((handedness) => handedness[0]?.categoryName?.toLowerCase() === "right");
-          appendFrame(
-            leftIndex >= 0 ? { landmarks: results.landmarks[leftIndex] } : null,
-            rightIndex >= 0 ? { landmarks: results.landmarks[rightIndex] } : null,
-          );
+          // Rendering below still runs on every camera frame; only the
+          // recognition buffer is throttled, keeping the two decoupled.
+          if (frameTimestamp - lastAppendTime >= CAPTURE_INTERVAL_MS) {
+            lastAppendTime = frameTimestamp;
+            appendFrame(
+              leftIndex >= 0 ? { landmarks: results.landmarks[leftIndex] } : null,
+              rightIndex >= 0 ? { landmarks: results.landmarks[rightIndex] } : null,
+            );
+            const captureFps = captureTracker.record(frameTimestamp);
+            if (captureFps > 0) setCaptureFps(captureFps);
+          }
           setStatus(results.landmarks.length > 0 ? "active" : "no-hand");
           const canvas = landmarkCanvasRef.current;
           const context = canvas?.getContext("2d");
@@ -282,7 +331,7 @@ export function SignToTextInterface() {
           </AnimatePresence>
         </div>
         {showDebug && <div className="mt-3 overflow-hidden rounded-xl border border-stone-200">
-          <DebugOverlay recognitionState={recognition.state} mediapipeFps={mediapipeFps} inferenceTimeMs={recognition.inferenceTimeMs} bufferLength={recognition.bufferLength} bufferCap={recognition.bufferCap} minimumFrames={recognition.minimumFrames} />
+          <DebugOverlay recognitionState={recognition.state} mediapipeFps={mediapipeFps} captureFps={captureFps} inferenceTimeMs={recognition.inferenceTimeMs} bufferLength={recognition.bufferLength} bufferCap={recognition.bufferCap} minimumFrames={recognition.minimumFrames} />
           <div className="border-t border-stone-200 bg-stone-50 p-3">
             <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-stone-400">Camera debug</p>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-stone-600">
@@ -311,6 +360,14 @@ export function SignToTextInterface() {
       <motion.aside className="flex flex-col gap-4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.15 }}>
         <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_8px_20px_rgba(69,45,28,0.06)]"><h2 className="mb-2 font-display text-base font-bold text-stone-800">For FSL signers</h2><p className="text-sm leading-5 text-stone-600">Keep your hands centered in the camera frame. Hold a sign briefly, then pause before the next sign for clearer recognition.</p></section>
         <section className="rounded-2xl border border-[#efd48c] bg-[#fffaf0] p-5"><div className="flex gap-3"><Info className="mt-0.5 h-4 w-4 shrink-0 text-[#c88733]" /><div><h2 className="mb-1 text-xs font-bold text-[#a86624]">Filipino Sign Language</h2><p className="text-xs leading-5 text-[#a86624]">Recognition uses local hand landmarks and runs directly in your browser.</p></div></div></section>
+        <SuggestionPanel
+          letters={suggestions.letters}
+          suggestions={suggestions.suggestions}
+          onAccept={acceptSuggestion}
+          onBackspace={suggestions.backspace}
+          onClear={suggestions.clear}
+        />
+
         <section className="min-h-[150px] rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_8px_20px_rgba(69,45,28,0.06)]"><h2 className="mb-3 text-sm font-semibold text-stone-800">Live transcript</h2><p className="line-clamp-4 text-sm leading-6 text-stone-400">{outputText || "Recognized signs will appear here..."}</p></section>
         <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_8px_20px_rgba(69,45,28,0.06)]"><h2 className="mb-4 text-[10px] font-bold uppercase tracking-[0.12em] text-stone-400">Supported characters</h2><p className="mb-2 text-[10px] font-semibold uppercase text-stone-400">Letters</p><div className="mb-4 flex flex-wrap gap-1.5">{"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((letter) => <span key={letter} className="flex h-5 w-5 items-center justify-center rounded bg-[#fff3ee] text-[10px] font-bold text-[#ab654d]">{letter}</span>)}</div><p className="mb-2 text-[10px] font-semibold uppercase text-stone-400">Numbers</p><div className="flex flex-wrap gap-1.5">{"0123456789".split("").map((number) => <span key={number} className="flex h-5 w-5 items-center justify-center rounded bg-stone-100 text-[10px] font-bold text-stone-600">{number}</span>)}</div></section>
       </motion.aside>
