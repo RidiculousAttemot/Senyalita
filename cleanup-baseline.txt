@@ -1,0 +1,128 @@
+==========================================================
+CLEANUP BASELINE
+commit : 20fa89da
+branch : cleanup/final-architecture
+node   : v24.16.0
+date   : 2026-07-27T18:20:00+08:00
+==========================================================
+
+### repo size (excluding node_modules, .next, .git) ###
+total: 72G
+src/:      3.0M
+scripts/:  1.6M
+src files: 395
+scripts:   134
+api routes:14
+admin pages:30
+feature dirs:25
+deps:      22
+devDeps:   17
+
+### npm run typecheck ###
+EXIT=0  DURATION=10s
+
+### npm run lint ###
+./src/app/conversation/page.tsx
+179:6  Warning: React Hook useEffect has a missing dependency: 'fetchContextReplies'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/presentation/page.tsx
+207:6  Warning: React Hook useEffect has a missing dependency: 'mode'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/admin/AdminDataTable.tsx
+78:15  Warning: The attribute aria-sort is not supported by the role button. This role is implicit on the element button.  jsx-a11y/role-supports-aria-props
+83:15  Warning: The attribute aria-sort is not supported by the role button. This role is implicit on the element button.  jsx-a11y/role-supports-aria-props
+88:15  Warning: The attribute aria-sort is not supported by the role button. This role is implicit on the element button.  jsx-a11y/role-supports-aria-props
+93:15  Warning: The attribute aria-sort is not supported by the role button. This role is implicit on the element button.  jsx-a11y/role-supports-aria-props
+98:15  Warning: The attribute aria-sort is not supported by the role button. This role is implicit on the element button.  jsx-a11y/role-supports-aria-props
+
+./src/components/admin/AnimationStudio/VideoUploadTab.tsx
+301:6  Warning: React Hook useEffect has missing dependencies: 'stopHolistic' and 'stopWebcam'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+425:6  Warning: React Hook useCallback has a missing dependency: 'stopRecording'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+503:6  Warning: React Hook useCallback has a missing dependency: 'processFile'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+512:6  Warning: React Hook useCallback has a missing dependency: 'processFile'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+538:6  Warning: React Hook useCallback has a missing dependency: 'analyzeVideo'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+591:6  Warning: React Hook useCallback has a missing dependency: 'stopWebcam'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/features/sign-animation/hooks/useAnimationClip.ts
+110:6  Warning: React Hook useEffect has a missing dependency: 'gestureLabels'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules
+EXIT=0  DURATION=7s
+
+### npm test ###
+
+ RUN  v4.1.8 C:/Arwin/Thesis/SignLangVisual
+
+
+ Test Files  48 passed (48)
+      Tests  850 passed (850)
+   Start at  18:20:38
+   Duration  16.96s (transform 9.50s, setup 2.50s, import 22.86s, tests 10.15s, environment 151.32s)
+
+EXIT=0  DURATION=20s
+
+### npm run build ###
+├ ƒ /admin/animation-dataset                        6.83 kB        94.8 kB
+├ ƒ /admin/animation-inspector                      4.15 kB         107 kB
+├ ƒ /admin/animation-library                        6.29 kB        94.2 kB
+├ ƒ /admin/animation-studio                         36.5 kB         404 kB
+├ ƒ /admin/audits                                   165 B          88.1 kB
+├ ƒ /admin/audits/logs                              165 B          88.1 kB
+├ ƒ /admin/capture                                  984 B          95.7 kB
+├ ƒ /admin/collection                               984 B          95.7 kB
+├ ƒ /admin/dataset                                  4.96 kB         158 kB
+├ ƒ /admin/experiment-tracking                      3.22 kB        91.2 kB
+├ ƒ /admin/hard-case-dataset                        3.35 kB        91.3 kB
+├ ƒ /admin/login                                    897 B          88.8 kB
+├ ƒ /admin/logout                                   0 B                0 B
+├ ƒ /admin/model-comparison                         3.41 kB        91.3 kB
+├ ƒ /admin/model-health                             165 B          88.1 kB
+├ ƒ /admin/models                                   984 B          95.7 kB
+├ ƒ /admin/models/training                          165 B          88.1 kB
+├ ƒ /admin/monitoring                               959 B          88.9 kB
+├ ƒ /admin/notifications                            3.53 kB        91.5 kB
+├ ƒ /admin/playback-analytics                       7.03 kB          95 kB
+├ ƒ /admin/recognition-analysis                     165 B          88.1 kB
+├ ƒ /admin/review                                   2.74 kB         156 kB
+├ ƒ /admin/system                                   959 B          88.9 kB
+├ ƒ /admin/training                                 984 B          95.7 kB
+├ ƒ /admin/translation-debug                        2.49 kB         111 kB
+├ ƒ /admin/translation-evaluation                   1.69 kB         110 kB
+├ ƒ /admin/users                                    165 B          88.1 kB
+├ ƒ /api/admin/active-learning                      0 B                0 B
+├ ƒ /api/admin/animation-assets                     0 B                0 B
+├ ƒ /api/admin/animation-assets/[versionId]/action  0 B                0 B
+├ ƒ /api/admin/animation-assets/upload              0 B                0 B
+├ ƒ /api/admin/health                               0 B                0 B
+├ ƒ /api/ai/replies                                 0 B                0 B
+├ ƒ /api/animations/[gloss]                         0 B                0 B
+├ ƒ /api/assets/dataset                             0 B                0 B
+├ ƒ /api/collection                                 0 B                0 B
+├ ƒ /api/feedback                                   0 B                0 B
+├ ƒ /api/predictions/correct                        0 B                0 B
+├ ƒ /api/signers/register                           0 B                0 B
+├ ƒ /api/text-to-sign/log                           0 B                0 B
+├ ƒ /api/videos/[label]/[file]                      0 B                0 B
+├ ○ /conversation                                   15.2 kB         454 kB
+├ ƒ /conversation/[id]                              2.04 kB        96.8 kB
+├ ○ /evaluation                                     3.54 kB         436 kB
+├ ƒ /history                                        5.58 kB         159 kB
+├ ○ /learn                                          4.74 kB         444 kB
+├ ○ /presentation                                   7.55 kB         469 kB
+├ ○ /translate                                      18.6 kB         209 kB
+└ ○ /type-to-sign                                   6.78 kB         159 kB
++ First Load JS shared by all                       87.9 kB
+  ├ chunks/7023-1a8181301010e875.js                 31.7 kB
+  ├ chunks/fd9d1056-ac80162f7d201d07.js             53.6 kB
+  └ other shared chunks (total)                     2.61 kB
+
+
+ƒ Middleware                                        83.1 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+EXIT=0  BUILD_DURATION=431s
+
+### .next size ###
+18M
