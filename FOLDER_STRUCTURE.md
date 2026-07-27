@@ -1,118 +1,77 @@
 # Folder Structure
 
-This document explains the purpose, naming, and responsibility of each folder in the project. The layout follows a feature-based architecture to keep the system scalable and easy to explain in a thesis defense.
+Reflects the codebase after the final-architecture cleanup. The system has
+exactly two user-facing workflows: **Sign-to-Text** and **Text-to-Sign**.
 
-## Root
-- docs: thesis notes, diagrams, design decisions
-- public: static assets served by the web app (including sign video clips)
-- scripts: dataset prep, exports, and developer tooling
-- supabase: Supabase config and database migrations
-- tests: integration and e2e tests
-- middleware.ts: Next.js middleware for API and request handling
-- package.json: app scripts and dependencies
-- tsconfig.json: TypeScript configuration
-- next.config.mjs: Next.js configuration
-- next-env.d.ts: Next.js TypeScript declarations
-- .eslintrc.json: lint configuration
+```
+src/
+  app/                          Next.js App Router
+    page.tsx                    landing
+    translate/                  BOTH workflows, tab-switched
+    admin/
+      (auth)/login/
+      (dashboard)/              admin tools
+    api/
+      animations/[gloss]/       published landmark animations
+      assets/dataset/           dataset catalogue (admin)
+      admin/
+        animation-assets/       upload / list / approve / publish
+        health/                 backend diagnostics
+        active-learning/
+      videos/[label]/[file]/
+      ai/replies/  collection/  feedback/
+      predictions/correct/  signers/register/  text-to-sign/log/
 
-## src
-- app: Next.js routes, layouts, and API routes
-- features: feature modules (capture, landmarks, recognition, translation, speech, history)
-- shared: reusable UI, shared hooks, styles, and shared types (no business logic)
-- state: app-level state store
-- services: external integrations (Supabase, logging, analytics)
-- security: auth and access control helpers
-- config: environment and app configuration
-- utils: pure helper functions
+  features/
+    recognition/                on-device model, inference loop, smoothing
+    sign-to-text/               camera capture, landmark drawing, transcript
+    suggestions/                word prediction from spelled letters
+    ---
+    type-to-sign/               composer, stage viewer, progressive loading
+    translation-pipeline/       text -> animation-key dictionary lookup
+    fsl-translation/            gloss dictionary (also backs suggestions)
+    sign-animation/             playback engine, renderers, loader
+    animation/  gesture-mapping/
+    ---
+    ai-assist/                  gloss suggestion + asset QA for Animation Studio
+    active-learning/  profiles/
 
-## Feature Module Pattern
-Each feature folder can include:
-- components: feature UI only
-- hooks: feature-specific hooks
-- services: feature-specific adapters
-- utils: feature helpers
-- index.ts: feature public exports
+  server/
+    http/                       typed HTTP errors, rate limiting
+    services/                   animation resolution, dataset catalogue,
+                                publish-time validation
 
-## Folder Responsibilities (Detailed)
-### src/app
-Purpose: routing and page composition only. Avoid business logic here.
-Files: page.tsx, layout.tsx, and api/* route handlers.
-Landing page belongs in src/app and provides the public entry point.
+  components/                   ui/ primitives, layout, admin, landing
+  lib/                          supabase clients & queries, utils
 
-### src/features
-Purpose: domain logic and user flows. This is where the system behavior lives.
-Examples:
-- capture: webcam stream control
-- landmarks: MediaPipe setup and landmark extraction
-- recognition: model inference, smoothing, confidence thresholds
-- translation: label to text mapping
-- translation: label to text mapping with English/Tagalog output
-- suggestions: top-k output and confidence handling
-- speech: text-to-speech playback
-- reply: phrase selection and sign video playback
-- history: logs, export, dataset recording
+scripts/                        dataset + model pipeline (4 canonical, wired
+                                into package.json) plus research tools
+supabase/migrations/            41 migrations; history, never deleted
+datasets/  models/              gitignored, not recoverable from git
+public/models/fsl_unified/      TF.js model the browser loads
+```
 
-### src/shared
-Purpose: reusable UI and shared utilities with no domain logic.
-Avoid business logic here to keep features isolated.
+## The two workflows
 
-### src/state
-Purpose: global state for cross-feature UI or shared controls.
-Keep state minimal; prefer feature-local state when possible.
+**Sign-to-Text** — `app/translate` → `features/sign-to-text` →
+`features/recognition` (camera → MediaPipe hand landmarks → model → one
+letter) → `features/suggestions` (letter buffer → word predictions, using the
+dictionary from `fsl-translation`).
 
-### src/services
-Purpose: external integrations only (Supabase, analytics, logging).
-Keep thin, avoid domain rules.
-
-### src/security
-Purpose: authentication helpers, API route guards, and role checks.
-No feature-specific business logic.
-
-### src/config
-Purpose: env parsing and app configuration.
-Avoid direct process.env usage outside this folder.
-
-### src/utils
-Purpose: pure helper functions (formatting, math, timers).
-No feature-specific logic.
-
-## Naming Conventions
-- Files: kebab-case for routes, camelCase for utilities
-- React components: PascalCase
-- Hooks: useX.ts
-- Services: XService.ts
-- Feature exports: index.ts
-
-## Import Strategy
-- Use @/ alias pointing to src
-- Example: import { useRecognizer } from "@/features/recognition"
-- Avoid deep relative imports
-
-## AI/ML Placement
-- MediaPipe logic: src/features/landmarks
-- Model inference: src/features/recognition (CNN-LSTM)
-- Model files: public/models or src/features/recognition/models
-- Training scripts: scripts
-
-## Testing Structure
-- tests/integration: feature workflows
-- tests/e2e: camera and UI flows
-- tests/unit (optional): pure helpers
-
-## State Management
-- Zustand or React Context in src/state
-- Keep feature state local when possible
-
-## Environment and Config
-- src/config/env.ts: load and validate env vars
-- src/config/appConfig.ts: app-level settings
+**Text-to-Sign** — `app/translate` → `features/type-to-sign` →
+`features/translation-pipeline` (text → animation keys) →
+`features/sign-animation` loader → `/api/animations/[gloss]` → Supabase
+Storage. A word with no published sign is spelled out using one published
+alphabet animation per character.
 
 ## Notes
-- Empty folders include .gitkeep to preserve structure.
-- This structure is designed for scalability and clear thesis presentation.
 
-## Recommended Starting Point
-Build src/app (landing + camera) and src/features/landmarks first, then add src/features/recognition and backend services.
-
-## Current Focus
-Phase 1: frontend pipeline and landmark rendering.
+- `/translate` is the only public route besides `/`. `/type-to-sign` and
+  `/sign-to-text` are permanent redirects to it.
+- Supabase is the single source of truth for animation assets. The local
+  `datasets/processed/user_holistic_assets` path is a development-only
+  fallback behind `ANIMATION_LOCAL_FALLBACK`; those files are gitignored and
+  never deployed.
+- `middleware.ts` lives at `src/middleware.ts` (the duplicate at the repo root
+  was removed — it exported only a matcher, with no middleware function).
+- Anything removed in the cleanup is recoverable: `git show pre-cleanup:<path>`.

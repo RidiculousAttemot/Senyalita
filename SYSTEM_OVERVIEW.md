@@ -1,175 +1,106 @@
 # SignLangVisual System Overview
 
-> Status: reflects the shipping system as of Phase 48. For implementation-level
-> detail — exact constants, algorithms, and known documentation drift — see
-> [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md).
+> Status: reflects the system after the final-architecture cleanup. For the
+> user-facing flows see [SYSTEM_FLOW.md](SYSTEM_FLOW.md); for folder layout see
+> [FOLDER_STRUCTURE.md](FOLDER_STRUCTURE.md).
 
 ## Purpose
 
-Real-time Filipino Sign Language (FSL) translation on a single device. The system
-captures hand gestures through a webcam, recognizes the sign with a neural network
-running **in the browser**, and outputs readable text and spoken audio in English or
-Tagalog. It also works in reverse: typed text is translated into FSL gloss and played
-back as animated hand motion.
+An AI-assisted **Filipino Sign Language alphabet translation system**. It
+recognises fingerspelled letters from a webcam and builds words with a
+suggestion engine, and it plays typed text back as sign animations —
+fingerspelling anything the dictionary does not cover.
+
+Recognition runs **entirely in the browser**. Video never leaves the device.
+
+## Scope
+
+Supported:
+
+- Alphabet recognition (A–Z, 0–9), one character at a time
+- Word building with smart suggestions from a gloss dictionary
+- Text-to-sign playback of published animations
+- Automatic fingerspelling fallback for unknown words
+
+Not supported: sentence or phrase recognition, gloss prediction, continuous
+sign recognition, machine translation, grammar conversion, SignWriting,
+conversational AI.
 
 ## Two directions
 
-The system does two independent things that share only the landmark representation.
+They share only the landmark representation.
 
-**A — Sign to Text** (`/translate`, `/conversation`, `/presentation`)
-
-```
-User signs
-  → Webcam captures frames
-  → MediaPipe Hand Landmarker extracts 21 landmarks per hand
-  → Wrist-centering + max-absolute scaling → 126-feature vector
-  → 35-frame sequence sampled from a 120-frame window
-  → BiLSTM classifies into one of 131 FSL classes
-  → Temporal smoothing (majority vote + hysteresis)
-  → Text output + speech (Web Speech API, English or Tagalog)
-```
-
-**B — Text to Sign** (`/translate`, `/type-to-sign`)
+**A — Sign-to-Text** (`/translate`)
 
 ```
-User types text
-  → 9-stage translation pipeline (normalize → detect language → gloss →
-     FSL grammar reordering → unknown-word fallback → animation plan)
-  → Animation assets fetched per gloss (recorded landmark data, not video)
-  → Canvas playback of the signing avatar
+webcam frames
+  -> MediaPipe Hand Landmarker: 21 landmarks per hand, up to 2 hands
+  -> wrist-centring + max-absolute scaling -> 126-feature vector
+  -> buffered at a fixed ~30 Hz (matching training-clip extraction)
+  -> BiLSTM -> a single character
+  -> temporal smoothing (majority vote + hysteresis)
+  -> character appended to the word buffer
+  -> suggestion engine ranks candidate words
 ```
 
-## The algorithm
+**B — Text-to-Sign** (`/translate`)
 
-**A two-stage, landmark-based approach.**
+```
+typed text
+  -> dictionary lookup -> animation keys
+  -> GET /api/animations/[gloss] -> Supabase Storage (landmark JSON)
+  -> published sign?  yes -> play it
+                      no  -> fingerspell, one published alphabet
+                             animation per character
+  -> playback engine -> landmark renderer (skeleton / human / split / overlay)
+```
 
-1. **Feature extraction** — MediaPipe Hand Landmarker, a pretrained CNN from Google,
-   converts each camera frame into 21 3D landmarks per hand.
-2. **Sequence classification** — a **Bidirectional Long Short-Term Memory (BiLSTM)**
-   network, trained in this project, classifies a 35-frame landmark sequence.
-
-### Why two stages
-
-Separating detection from recognition means the recognition model never sees pixels —
-only a compact, normalized 126-number description of hand shape. This makes the model
-small enough to ship to the browser, invariant to lighting and background, and
-independent of where the signer stands in frame.
-
-### Why bidirectional
-
-Many signs are only distinguishable by where the hand *ends up*. A forward-only
-network reaching the middle of a gesture has not yet seen the ending. The backward
-pass has, so early frames are interpreted with knowledge of how the gesture resolves.
-The cost is that classification runs on a completed window rather than truly
-frame-by-frame — an accepted trade, since the window is ~4 seconds and inference runs
-every 100 ms.
-
-> **Note:** earlier drafts of this document described a "CNN-LSTM". That is incorrect.
-> The trained model contains **no convolutional layers** — the only CNN in the system
-> is MediaPipe's, which was not trained here.
-
-## The model
+## Model
 
 | | |
 |---|---|
-| Architecture | `Bidirectional(LSTM 48) → Dropout(0.25) → Dense(131, softmax)` |
-| Parameters | 79,907 |
-| Size | 312 KB (float32) |
-| Input | 35 timesteps × 126 features |
-| Output | 131 classes — 26 letters + 105 phrases, numbers, days, months, colors, food |
-| Training set | 14,217 samples, 7 signers |
-| Test accuracy | **94.86%** |
-| Macro F1 | **91.85%** |
-| Inference | ~8–12 ms, in-browser (TensorFlow.js) |
+| Architecture | BiLSTM, 35 temporal steps, 48 hidden units |
+| Classes | 131 (26 single characters + phrase classes) |
+| Served from | `public/models/fsl_unified/bilstm_tfjs/` (~320 KB) |
+| Training dataset | `datasets/processed/fsl_alphabet_kaggle_v2` (14,217 samples, 7 signers) |
+| Test accuracy | 94.86% |
 
-Served from `public/models/fsl_unified/bilstm_tfjs/`. Trained artifacts and metrics
-live in `models/fsl_unified/bilstm_v4/`.
+The deployed model retains its phrase classes; the **application scope** is
+alphabet recognition, so the UI treats predictions as single characters.
 
-## Where the AI is
+## Data architecture
 
-Two neural networks are involved in translation. Only one was built here.
-
-| Component | Origin | Role |
-|---|---|---|
-| MediaPipe Hand Landmarker | Google, pretrained | Finds hands, outputs landmarks |
-| **BiLSTM classifier** | **This project** | Recognizes which sign is being made |
-| `gpt-4o-mini` (optional) | External API | Suggests conversational replies *after* recognition |
-
-The language model is **not part of the translation path**. Without an API key the
-system falls back to a rule-based reply dictionary and translation is unaffected.
-
-Modules named `analytics/`, `active-learning/`, and `ai-assist/` are deterministic
-heuristics and classical statistics — keyword matching, threshold comparison, K-Means.
-They are not neural networks.
-
-## Stack
-
-| Layer | Choice |
-|---|---|
-| Frontend | Next.js 14 (App Router), TypeScript |
-| Hand tracking | `@mediapipe/tasks-vision` — Hand Landmarker (WASM) |
-| Inference | TensorFlow.js |
-| Training | Pure JavaScript — no Python ML framework, no GPU |
-| Backend | Next.js API Routes (serverless on Vercel) |
-| Database / auth | Supabase (PostgreSQL + Auth + Storage) |
-| Speech | Web Speech API (browser built-in) |
-| Rendering | HTML5 Canvas 2D |
-| Hosting | Vercel |
-
-**Node 22 is required** (`>=22.12.0 <24.0.0`). Node 24 breaks the Next 14.2.5 build.
-See [README.md](README.md).
-
-## Why this architecture
-
-- **Runs in the browser with no inference server** — the model is 312 KB, so it ships
-  as a static asset instead of requiring a hosted GPU.
-- **No video ever leaves the device.** Recognition is entirely client-side. This is a
-  privacy property that falls out of the architecture rather than being added on.
-- **Low latency** — ~165 ms end to end, with no network round trip in the loop.
-- **Free-tier deployable** — Vercel and Supabase free tiers are sufficient.
-
-## Communication model
-
-The system is designed for two-way conversation between a signing user and a hearing
-user on one shared device:
-
-- The signing user signs; the system displays and speaks the translation.
-- The hearing user replies by typing or picking a suggested phrase; the system
-  renders that reply back as animated FSL.
-
-Suggested replies come from the optional language model when configured, and from a
-rule-based dictionary otherwise.
-
-## Codebase structure
+**Supabase is the single source of truth for animation assets.**
 
 ```
-src/app/          Next.js routes (39 pages) and API routes (13)
-src/components/   shared UI, landing page, admin components
-src/features/     the system, organized by domain:
-                    recognition/          sign→text core
-                    sign-to-text/         camera + MediaPipe wiring
-                    translation-pipeline/ text→sign, 9 stages
-                    fsl-translation/      gloss engine, grammar, dictionary
-                    sign-animation/       playback and canvas rendering
-                    type-to-sign/         text→sign UI
-                    analytics/            admin-side offline analysis
-src/lib/          Supabase client, queries, TTS, utilities
-scripts/          dataset building, training, export (128 files)
-models/           trained weights and metrics
-public/models/    what the browser downloads
-supabase/         37 migrations
+admin uploads video
+  -> landmarks extracted in-browser (MediaPipe Holistic)
+  -> validated
+  -> landmark JSON -> animation-landmarks bucket
+  -> source video   -> animation-source-videos bucket
+  -> rows in animation_assets / animation_asset_versions
+  -> published -> immediately served to Text-to-Sign
 ```
 
-## Access model
+37 glosses (A–Z, 0–10) are published. `/api/animations/[gloss]` reports its
+source in an `X-Animation-Source` header (`published` or `local-development`)
+so the two can never be confused silently.
 
-No end-user accounts. `/translate`, `/conversation`, `/learn`, `/history`,
-`/presentation`, `/type-to-sign` and `/evaluation` are public and require no login.
-Supabase Auth guards `/admin/*` only, enforced by Row-Level Security.
+A local filesystem fallback exists for development only, behind
+`ANIMATION_LOCAL_FALLBACK`. Those files are gitignored and never deployed, so
+production reads exclusively from Supabase.
 
 ## Security
 
-- Supabase Auth for admin authentication; role stored in auth metadata
-- Row-Level Security policies on all admin-accessible tables
-- Server-side validation on API routes
-- Secrets via environment variables — service-role key is server-only
-- No personal data collected; sessions are anonymous tokens
+- Admin identity from `app_metadata.role`, never `user_metadata` (which is
+  user-editable and unsafe for authorization)
+- `public.is_admin()` is `SECURITY DEFINER` with a pinned `search_path`
+- RLS on every animation table; anonymous callers get zero rows
+- Private storage buckets; server-side access uses the service role
+- Admin API routes guarded by `requireAdmin()`, returning typed 401/403 and
+  never leaking database error text
+
+## Stack
+
+Next.js 14 (App Router) · React 18 · TypeScript · Tailwind v4 ·
+TensorFlow.js · MediaPipe Tasks Vision · Supabase (Postgres, Auth, Storage)
