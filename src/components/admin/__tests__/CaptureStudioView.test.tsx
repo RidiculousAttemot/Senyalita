@@ -15,7 +15,20 @@ describe("CaptureStudioView", () => {
 
     expect(screen.getByRole("heading", { name: "Capture studio" })).toBeTruthy();
     expect(screen.getByText("Recording workspace unavailable")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /import assets/i }).getAttribute("href")).toBe("/admin/gesture-library/import");
     expect(screen.queryByRole("link", { name: /start recording/i })).toBeNull();
+  });
+
+  /**
+   * This previously asserted href="/admin/gesture-library/import", a route
+   * that has never existed in the app — so the test was pinning a 404 in
+   * place. Both links now point at the Animation Studio, which is the real
+   * upload -> extract -> publish workspace.
+   */
+  it("links asset import at a route that actually exists", () => {
+    render(<CaptureStudioView />);
+
+    for (const name of [/import assets/i, /open import workspace/i]) {
+      expect(screen.getByRole("link", { name }).getAttribute("href")).toBe("/admin/animation-studio");
+    }
   });
 });

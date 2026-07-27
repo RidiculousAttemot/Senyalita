@@ -151,3 +151,41 @@ test.describe("routing", () => {
     expect(res.headers()["x-animation-source"]).toBe("published");
   });
 });
+
+test.describe("Sign-to-Text", () => {
+  /**
+   * The camera itself cannot be exercised headlessly, so this covers
+   * everything up to the capture boundary: the tab mounts, the on-device
+   * model is reachable, and the word-building UI is present.
+   */
+  test("mounts and can reach the on-device model", async ({ page, request }) => {
+    await page.goto(`${BASE}/translate`);
+    await page.getByRole("button", { name: /sign\s*→\s*text/i }).click();
+
+    // Wait on panel content, not the header's own "Start camera" button --
+    // that one appears the instant the mode flips, so asserting on it passes
+    // while SignToTextInterface (a next/dynamic import) is still compiling.
+    await expect(page.getByRole("heading", { name: /spelled letters/i }))
+      .toBeVisible({ timeout: 60_000 });
+    await expect(page.getByRole("heading", { name: /transcript/i }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: /supported characters/i })).toBeVisible();
+
+    // Recognition is on-device: these must be served, not proxied.
+    for (const file of ["model.json", "labels.json", "weights.bin"]) {
+      const res = await request.get(`${BASE}/models/fsl_unified/bilstm_tfjs/${file}`);
+      expect(res.status(), `${file} must be reachable`).toBe(200);
+    }
+  });
+
+  test("model exposes the full alphabet", async ({ request }) => {
+    const res = await request.get(`${BASE}/models/fsl_unified/bilstm_tfjs/labels.json`);
+    const body = await res.json();
+    const labels: string[] = Array.isArray(body) ? body : body.labels;
+    const single = labels.filter((l) => /^[a-z0-9]$/i.test(l));
+    // 26 letters must all be present; the model also carries phrase classes,
+    // which the alphabet-scoped UI simply does not surface.
+    for (const letter of "abcdefghijklmnopqrstuvwxyz") {
+      expect(single.map((s) => s.toLowerCase())).toContain(letter);
+    }
+  });
+});

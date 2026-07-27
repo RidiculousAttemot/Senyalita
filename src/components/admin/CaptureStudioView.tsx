@@ -13,7 +13,10 @@ export function CaptureStudioView() {
           </p>
         </div>
         <div className="admin-dashboard-actions">
-          <Link className="admin-action-button admin-action-button-primary" href="/admin/gesture-library/import"><FileUp size={16} aria-hidden="true" />Import assets</Link>
+          {/* /admin/gesture-library/import has never existed — this link 404'd.
+              The Animation Studio is the real upload -> extract -> publish
+              workspace, so both links here point at it. */}
+          <Link className="admin-action-button admin-action-button-primary" href="/admin/animation-studio"><FileUp size={16} aria-hidden="true" />Import assets</Link>
         </div>
       </header>
 
@@ -31,7 +34,7 @@ export function CaptureStudioView() {
           <p className="admin-overline">Available now</p>
           <h2>Import assets</h2>
           <p>Register video files and reference data from the existing gesture-library import workflow.</p>
-          <Link className="admin-inline-link" href="/admin/gesture-library/import">Open import workspace <ArrowRight size={15} aria-hidden="true" /></Link>
+          <Link className="admin-inline-link" href="/admin/animation-studio">Open import workspace <ArrowRight size={15} aria-hidden="true" /></Link>
         </article>
 
         <article className="admin-panel admin-studio-card">
