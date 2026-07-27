@@ -42,18 +42,59 @@ export function TypeToSignInterface() {
   const unsupportedRef = useRef<string[]>([]);
   const usedFallbackRef = useRef<boolean[]>([]);
 
-  const resolveFallback = useCallback((item: AnimationPlanItem, index: number): AnimationClip[] | null => {
+  /**
+   * A word with no published sign is fingerspelled from the published
+   * alphabet: one recorded animation per character.
+   *
+   * Previously this synthesised poses with FingerspellingEngine. Those assets
+   * carry a single hand and a stub pose with no face mesh, which the landmark
+   * renderer skips entirely — the sequence reported a duration but drew
+   * nothing. Every A-Z and 0-9 sign is published, so the recorded animations
+   * are used instead and the fallback renders like any other sign.
+   *
+   * The synthesised engine is still the last resort for a character with no
+   * published animation, so the sequence never silently loses a word.
+   */
+  const resolveFallback = useCallback(async (
+    item: AnimationPlanItem,
+    index: number,
+  ): Promise<AnimationClip[] | null> => {
     const engine = fingerspellingRef.current;
     // Grammar rules can expand one word into a multi-word gloss
     // ("KUMUSTA" -> "HOW ARE YOU"), so spell each word separately.
     const words = item.gloss.split(/\s+/).filter((w) => engine.isFingerspellable(w));
     if (words.length === 0) return null;
+
+    const stamp = Date.now();
+    const clips: AnimationClip[] = [];
+
+    for (const word of words) {
+      // Letters and digits only: punctuation has no sign and would 404.
+      const characters = word.toUpperCase().replace(/[^A-Z0-9]/g, "").split("");
+
+      for (const [ci, character] of characters.entries()) {
+        const published = await globalLoader.load(character);
+        if (published) {
+          clips.push({
+            id: `spell-${character}-${index}-${ci}-${stamp}`,
+            gesture: character,
+            asset: published,
+          });
+          continue;
+        }
+        // No recorded animation for this character — synthesise it rather
+        // than drop it, so the word still spells out in full.
+        clips.push({
+          id: `spell-synth-${character}-${index}-${ci}-${stamp}`,
+          gesture: character,
+          asset: engine.generateFingerspellingAsset(character),
+        });
+      }
+    }
+
+    if (clips.length === 0) return null;
     usedFallbackRef.current[index] = true;
-    return words.map((word, wi) => ({
-      id: `spell-${word}-${index}-${wi}-${Date.now()}`,
-      gesture: word,
-      asset: engine.generateFingerspellingAsset(word),
-    }));
+    return clips;
   }, []);
 
   const onPipelineResult = useCallback((result: TranslationPipelineResult) => {

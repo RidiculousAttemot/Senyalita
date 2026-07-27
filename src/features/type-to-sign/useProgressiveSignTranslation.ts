@@ -25,9 +25,14 @@ export interface UseProgressiveSignTranslationOptions {
    * published asset for (or that the pipeline already flagged
    * fallbackUsed) — e.g. fingerspelling, which can expand one gloss into
    * several letter clips. Return null/[] to drop the word from the
-   * sequence, matching each surface's own existing fallback behavior. Runs
-   * synchronously. */
-  resolveFallback?: (item: AnimationPlanItem, index: number) => AnimationClip | AnimationClip[] | null;
+   * sequence, matching each surface's own existing fallback behavior.
+   *
+   * May be async: fingerspelling loads one published alphabet animation per
+   * letter, so the fallback itself performs network work. */
+  resolveFallback?: (
+    item: AnimationPlanItem,
+    index: number,
+  ) => AnimationClip | AnimationClip[] | null | Promise<AnimationClip | AnimationClip[] | null>;
   /** Fired once per submission with the raw pipeline result, before any
    * asset loading starts — for callers that log analytics off it. */
   onPipelineResult?: (result: TranslationPipelineResult, inputText: string) => void;
@@ -97,7 +102,7 @@ export function useProgressiveSignTranslation(options: UseProgressiveSignTransla
           return [{ id: `anim-${item.animationKey}-${index}-${Date.now()}`, gesture: item.gloss, asset }];
         }
       }
-      const fallback = optionsRef.current.resolveFallback?.(item, index) ?? null;
+      const fallback = (await optionsRef.current.resolveFallback?.(item, index)) ?? null;
       if (!fallback) return [];
       fallbackWords.push(item.gloss);
       return Array.isArray(fallback) ? fallback : [fallback];
