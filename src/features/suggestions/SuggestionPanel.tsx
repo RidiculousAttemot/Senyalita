@@ -27,10 +27,10 @@ export function SuggestionPanel({
   return (
     <section
       aria-labelledby="suggestion-heading"
-      className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_8px_20px_rgba(69,45,28,0.06)]"
+      className="rounded-[22px] border border-senyalita-border bg-white/70 p-5 backdrop-blur-xl"
     >
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 id="suggestion-heading" className="text-sm font-semibold text-stone-800">
+        <h2 id="suggestion-heading" className="text-[11px] font-bold uppercase tracking-[0.14em] text-senyalita-muted">
           Spelled letters
         </h2>
         <div className="flex items-center gap-1">
@@ -39,7 +39,7 @@ export function SuggestionPanel({
             onClick={onBackspace}
             disabled={letters.length === 0}
             aria-label="Delete last letter"
-            className="flex h-7 w-7 items-center justify-center rounded-lg border border-stone-200 text-stone-500 transition-colors hover:bg-stone-50 hover:text-stone-800 disabled:opacity-35"
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-senyalita-border text-senyalita-muted transition-all duration-150 hover:border-senyalita-primary/40 hover:bg-senyalita-primary/5 hover:text-senyalita-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary disabled:opacity-35 disabled:hover:border-senyalita-border disabled:hover:bg-transparent"
           >
             <Delete className="h-3.5 w-3.5" />
           </button>
@@ -48,7 +48,7 @@ export function SuggestionPanel({
             onClick={onClear}
             disabled={letters.length === 0}
             aria-label="Clear spelled letters"
-            className="flex h-7 w-7 items-center justify-center rounded-lg border border-stone-200 text-stone-500 transition-colors hover:bg-stone-50 hover:text-stone-800 disabled:opacity-35"
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-senyalita-border text-senyalita-muted transition-all duration-150 hover:border-senyalita-primary/40 hover:bg-senyalita-primary/5 hover:text-senyalita-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary disabled:opacity-35 disabled:hover:border-senyalita-border disabled:hover:bg-transparent"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -57,7 +57,7 @@ export function SuggestionPanel({
 
       <div
         aria-live="polite"
-        className="flex min-h-[44px] flex-wrap items-center gap-1.5 rounded-xl border border-dashed border-stone-200 bg-stone-50/60 px-3 py-2"
+        className="flex min-h-[44px] flex-wrap items-center gap-1.5 rounded-2xl border border-dashed border-senyalita-border bg-senyalita-warm/70 px-3 py-2"
       >
         <AnimatePresence initial={false}>
           {letters.split("").map((letter, index) => (
@@ -67,14 +67,14 @@ export function SuggestionPanel({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.7 }}
               transition={{ duration: 0.16 }}
-              className="flex h-7 w-7 items-center justify-center rounded-md bg-white font-mono text-sm font-bold text-stone-700 shadow-sm"
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-senyalita-border bg-white font-mono text-sm font-bold text-senyalita-dark shadow-sm"
             >
               {letter}
             </motion.span>
           ))}
         </AnimatePresence>
         {letters.length === 0 && (
-          <span className="text-xs text-stone-400">
+          <span className="text-xs text-senyalita-muted">
             Sign letters to spell a word — suggestions appear here.
           </span>
         )}
@@ -89,25 +89,25 @@ export function SuggestionPanel({
             exit={{ opacity: 0, y: -6 }}
             className="mt-4"
           >
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-senyalita-muted">
               Did you mean
             </p>
             <button
               type="button"
               onClick={() => onAccept(top.phrase)}
-              className="group flex w-full items-center justify-between gap-3 rounded-xl border border-[#d88567]/40 bg-[#fdf5f3] px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-[#d88567] hover:shadow-md"
+              className="group flex w-full items-center justify-between gap-3 rounded-2xl border border-senyalita-primary/30 bg-senyalita-primary/5 px-4 py-3 text-left transition-all duration-150 hover:-translate-y-0.5 hover:border-senyalita-primary hover:bg-senyalita-primary/10 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary"
             >
               <span className="flex items-center gap-2">
-                <Check className="h-4 w-4 shrink-0 text-[#bc6d53]" />
-                <span className="font-mono text-base font-bold tracking-wide text-stone-800">
+                <Check className="h-4 w-4 shrink-0 text-senyalita-primary" />
+                <span className="font-mono text-base font-bold tracking-wide text-senyalita-dark">
                   {top.phrase}
                 </span>
               </span>
               <span className="flex shrink-0 items-center gap-2">
-                <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+                <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-senyalita-muted">
                   {KIND_LABEL[top.kind]}
                 </span>
-                <CornerDownLeft className="h-3.5 w-3.5 text-stone-400 transition-transform group-hover:translate-x-0.5" />
+                <CornerDownLeft className="h-3.5 w-3.5 text-senyalita-muted transition-transform group-hover:translate-x-0.5" />
               </span>
             </button>
           </motion.div>
@@ -116,7 +116,7 @@ export function SuggestionPanel({
 
       {rest.length > 0 && (
         <div className="mt-3">
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-senyalita-muted">
             Other suggestions
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -128,7 +128,7 @@ export function SuggestionPanel({
                 title={`${KIND_LABEL[suggestion.kind]}${
                   suggestion.distance ? ` · ${suggestion.distance} letter correction` : ""
                 }`}
-                className="rounded-full border border-stone-200 bg-white px-3 py-1.5 font-mono text-xs font-semibold text-stone-600 transition-all hover:-translate-y-0.5 hover:border-[#d88567] hover:bg-[#fdf5f3] hover:text-[#bc6d53]"
+                className="rounded-full border border-senyalita-border bg-white px-3 py-1.5 font-mono text-xs font-semibold text-senyalita-muted transition-all duration-150 hover:-translate-y-0.5 hover:border-senyalita-primary/40 hover:bg-senyalita-primary/5 hover:text-senyalita-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary"
               >
                 {suggestion.phrase}
               </button>
@@ -138,7 +138,7 @@ export function SuggestionPanel({
       )}
 
       {letters.length >= 2 && suggestions.length === 0 && (
-        <p className="mt-3 text-xs text-stone-400">
+        <p className="mt-3 text-xs text-senyalita-muted">
           No match yet — keep signing, or add the letters directly.
         </p>
       )}

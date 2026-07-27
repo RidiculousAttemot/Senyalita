@@ -1,4 +1,10 @@
 -- Private, versioned landmark animation assets for Type-to-Sign.
+--
+-- Fully idempotent: safe to run any number of times. This repository has no
+-- migration ledger table, so a migration cannot assume it has run exactly
+-- once — `create table if not exists` alone is not enough, because
+-- `alter table ... add constraint` and `create policy` both fail on a second
+-- run. Each of those is guarded below.
 
 create table if not exists public.animation_assets (
   id uuid primary key default gen_random_uuid(),
@@ -28,9 +34,19 @@ create table if not exists public.animation_asset_versions (
   unique (asset_id, version)
 );
 
-alter table public.animation_assets
-  add constraint animation_assets_published_version_fkey
-  foreign key (published_version_id) references public.animation_asset_versions(id) on delete set null;
+-- Postgres has no `add constraint if not exists`; check the catalogue first.
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'animation_assets_published_version_fkey'
+      and conrelid = 'public.animation_assets'::regclass
+  ) then
+    alter table public.animation_assets
+      add constraint animation_assets_published_version_fkey
+      foreign key (published_version_id) references public.animation_asset_versions(id) on delete set null;
+  end if;
+end $$;
 
 create unique index if not exists animation_asset_versions_one_published_per_asset
   on public.animation_asset_versions(asset_id) where status = 'published';
@@ -62,21 +78,25 @@ alter table public.animation_asset_versions enable row level security;
 alter table public.animation_asset_reviews enable row level security;
 alter table public.animation_processing_jobs enable row level security;
 
+-- `create policy` has no IF NOT EXISTS; drop-then-create keeps this re-runnable.
+drop policy if exists "admin manages animation assets" on public.animation_assets;
 create policy "admin manages animation assets" on public.animation_assets for all using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists "admin manages animation asset versions" on public.animation_asset_versions;
 create policy "admin manages animation asset versions" on public.animation_asset_versions for all using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists "admin manages animation asset reviews" on public.animation_asset_reviews;
 create policy "admin manages animation asset reviews" on public.animation_asset_reviews for all using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists "admin manages animation processing jobs" on public.animation_processing_jobs;
 create policy "admin manages animation processing jobs" on public.animation_processing_jobs for all using (public.is_admin()) with check (public.is_admin());
 
-insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values
-  ('animation-source-videos', 'animation-source-videos', false, 104857600, array['video/mp4', 'video/webm', 'video/quicktime']),
-  ('animation-landmarks', 'animation-landmarks', false, 52428800, array['application/json'])
-on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
-
-create policy "admin manages animation source videos" on storage.objects for all
-  using (bucket_id = 'animation-source-videos' and public.is_admin())
-  with check (bucket_id = 'animation-source-videos' and public.is_admin());
-
-create policy "admin manages animation landmarks" on storage.objects for all
-  using (bucket_id = 'animation-landmarks' and public.is_admin())
-  with check (bucket_id = 'animation-landmarks' and public.is_admin());
+-- Storage buckets and their policies live in 0039, deliberately.
+--
+-- `storage.objects` is owned by `supabase_storage_admin`, not `postgres`, so
+-- `create policy ... on storage.objects` can fail with a permission error
+-- depending on how the SQL is run. The Supabase SQL Editor executes a script
+-- as a single transaction, so one such failure rolls back every statement
+-- above it — including these tables, which then makes 0038 fail with
+-- 42P01 (relation does not exist). Keeping the storage DDL in its own file
+-- means a storage permission problem can no longer discard the schema.

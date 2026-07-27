@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 const shimmerClass =
-  "relative overflow-hidden bg-fsl-sunken before:absolute before:inset-0 before:-translate-x-full before:animate-shimmer before:bg-gradient-to-r before:from-transparent before:via-white/60 before:to-transparent";
+  "relative overflow-hidden bg-senyalita-border/60 before:absolute before:inset-0 before:-translate-x-full before:animate-shimmer before:bg-gradient-to-r before:from-transparent before:via-white/70 before:to-transparent";
 
 export function Skeleton({ className }: { className?: string }) {
   return <div className={cn(shimmerClass, "rounded-md", className)} />;

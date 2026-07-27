@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/queries/profiles";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
+import { BadRequestError, toErrorResponse } from "@/server/http/errors";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,13 +19,13 @@ export async function POST(request: NextRequest) {
     const gloss = typeof rawGloss === "string" ? rawGloss.trim().toUpperCase() : "";
 
     if (!(file instanceof Blob) || !gloss) {
-      return NextResponse.json({ error: "A source video and canonical gloss are required." }, { status: 400 });
+      throw new BadRequestError("A source video and canonical gloss are required.");
     }
     if (file.size > MAX_BYTES) {
-      return NextResponse.json({ error: "Source videos must be 100 MB or smaller." }, { status: 400 });
+      throw new BadRequestError("Source videos must be 100 MB or smaller.");
     }
     if (!ALLOWED_MIME_TYPES.has(file.type)) {
-      return NextResponse.json({ error: "Only MP4, WebM, and MOV source videos are supported." }, { status: 400 });
+      throw new BadRequestError("Only MP4, WebM, and MOV source videos are supported.");
     }
 
     const supabase = createSupabaseServiceClient();
@@ -76,9 +77,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ assetId: asset.id, versionId: version.id, version: version.version });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unable to upload the private source video." },
-      { status: 403 },
-    );
+    return toErrorResponse(error, "POST /api/admin/animation-assets/upload");
   }
 }

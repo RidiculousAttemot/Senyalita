@@ -1,88 +1,175 @@
 # SignLangVisual System Overview
 
+> Status: reflects the shipping system as of Phase 48. For implementation-level
+> detail — exact constants, algorithms, and known documentation drift — see
+> [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md).
+
 ## Purpose
-Real-time Filipino Sign Language (FSL) translation on a single device. The system captures hand gestures, recognizes the sign using AI, and outputs readable text and audio speech in English or Tagalog.
 
-## Core Pipeline
-User performs sign
--> Webcam captures input
--> Hand detection + preprocessing
--> Landmark extraction (MediaPipe Hands)
--> Gesture recognition model (CNN-LSTM)
--> Text output + audio speech (English or Tagalog)
+Real-time Filipino Sign Language (FSL) translation on a single device. The system
+captures hand gestures through a webcam, recognizes the sign with a neural network
+running **in the browser**, and outputs readable text and spoken audio in English or
+Tagalog. It also works in reverse: typed text is translated into FSL gloss and played
+back as animated hand motion.
 
-## System Scope
-- Single-device, real-time translation
-- Web-based interface
-- Dynamic sign support planned (sequence-based)
-- Public landing page with optional login
-- Two-way communication via sign video playback
+## Two directions
 
-## Recommended Web Stack (Free-Friendly)
-- Frontend: Next.js (TypeScript)
-- CV + AI (client-side): MediaPipe Hands + TensorFlow.js
-- Backend/API: Next.js API Routes (same project)
-- Database: Supabase (free tier)
-- Hosting: Vercel (free tier)
+The system does two independent things that share only the landmark representation.
 
-## API Usage
-- REST API: app data, logs, and user actions
-- WebSocket API: low-latency UI updates during recognition
-- Text-to-Speech API: converts translated text into speech output
+**A — Sign to Text** (`/translate`, `/conversation`, `/presentation`)
 
-## Why This Stack
-- Runs in the browser with no server GPU
-- Fast, real-time webcam processing
-- Simple to deploy and share
-- Free tiers available for hosting and database
+```
+User signs
+  → Webcam captures frames
+  → MediaPipe Hand Landmarker extracts 21 landmarks per hand
+  → Wrist-centering + max-absolute scaling → 126-feature vector
+  → 35-frame sequence sampled from a 120-frame window
+  → BiLSTM classifies into one of 131 FSL classes
+  → Temporal smoothing (majority vote + hysteresis)
+  → Text output + speech (Web Speech API, English or Tagalog)
+```
 
-## Devstart Plan
-1. Create a Next.js (TypeScript) project.
-2. Build a webcam page using WebRTC getUserMedia.
-3. Integrate MediaPipe Hands and render landmarks on canvas.
-4. Add a placeholder classifier (rules or dummy output) to prove the pipeline.
-5. Display translated text in the UI.
-6. Connect Supabase for logging and user data.
-7. Later: replace placeholder classifier with CNN-LSTM for dynamic signs.
+**B — Text to Sign** (`/translate`, `/type-to-sign`)
 
-## Where to Begin
-Start in the frontend with the camera page and MediaPipe integration. The system depends on a stable real-time pipeline before backend features add value.
+```
+User types text
+  → 9-stage translation pipeline (normalize → detect language → gloss →
+     FSL grammar reordering → unknown-word fallback → animation plan)
+  → Animation assets fetched per gloss (recorded landmark data, not video)
+  → Canvas playback of the signing avatar
+```
 
-## Current Focus
-Phase 1: Frontend pipeline (camera, landmarks, and basic text output).
+## The algorithm
 
-## Codebase Structure
-- src/app: routes, layouts, and API endpoints
-- src/features: capture, landmarks, recognition, translation, speech, history
-- src/shared: reusable UI, hooks, styles, and shared types
-- src/state: global app state (lightweight)
-- src/services: external integrations (Supabase, logging)
-- src/security: auth, validation, and access control helpers
-- src/config: environment and app configuration
-- src/utils: pure helper utilities
+**A two-stage, landmark-based approach.**
 
-## User Roles
-- Guest user: uses live translation without login
-- Registered user: saves history and preferences
-- Admin: manages datasets and monitors system health
+1. **Feature extraction** — MediaPipe Hand Landmarker, a pretrained CNN from Google,
+   converts each camera frame into 21 3D landmarks per hand.
+2. **Sequence classification** — a **Bidirectional Long Short-Term Memory (BiLSTM)**
+   network, trained in this project, classifies a 35-frame landmark sequence.
 
-## Security Approach
-- Supabase Auth for user authentication
+### Why two stages
+
+Separating detection from recognition means the recognition model never sees pixels —
+only a compact, normalized 126-number description of hand shape. This makes the model
+small enough to ship to the browser, invariant to lighting and background, and
+independent of where the signer stands in frame.
+
+### Why bidirectional
+
+Many signs are only distinguishable by where the hand *ends up*. A forward-only
+network reaching the middle of a gesture has not yet seen the ending. The backward
+pass has, so early frames are interpreted with knowledge of how the gesture resolves.
+The cost is that classification runs on a completed window rather than truly
+frame-by-frame — an accepted trade, since the window is ~4 seconds and inference runs
+every 100 ms.
+
+> **Note:** earlier drafts of this document described a "CNN-LSTM". That is incorrect.
+> The trained model contains **no convolutional layers** — the only CNN in the system
+> is MediaPipe's, which was not trained here.
+
+## The model
+
+| | |
+|---|---|
+| Architecture | `Bidirectional(LSTM 48) → Dropout(0.25) → Dense(131, softmax)` |
+| Parameters | 79,907 |
+| Size | 312 KB (float32) |
+| Input | 35 timesteps × 126 features |
+| Output | 131 classes — 26 letters + 105 phrases, numbers, days, months, colors, food |
+| Training set | 14,217 samples, 7 signers |
+| Test accuracy | **94.86%** |
+| Macro F1 | **91.85%** |
+| Inference | ~8–12 ms, in-browser (TensorFlow.js) |
+
+Served from `public/models/fsl_unified/bilstm_tfjs/`. Trained artifacts and metrics
+live in `models/fsl_unified/bilstm_v4/`.
+
+## Where the AI is
+
+Two neural networks are involved in translation. Only one was built here.
+
+| Component | Origin | Role |
+|---|---|---|
+| MediaPipe Hand Landmarker | Google, pretrained | Finds hands, outputs landmarks |
+| **BiLSTM classifier** | **This project** | Recognizes which sign is being made |
+| `gpt-4o-mini` (optional) | External API | Suggests conversational replies *after* recognition |
+
+The language model is **not part of the translation path**. Without an API key the
+system falls back to a rule-based reply dictionary and translation is unaffected.
+
+Modules named `analytics/`, `active-learning/`, and `ai-assist/` are deterministic
+heuristics and classical statistics — keyword matching, threshold comparison, K-Means.
+They are not neural networks.
+
+## Stack
+
+| Layer | Choice |
+|---|---|
+| Frontend | Next.js 14 (App Router), TypeScript |
+| Hand tracking | `@mediapipe/tasks-vision` — Hand Landmarker (WASM) |
+| Inference | TensorFlow.js |
+| Training | Pure JavaScript — no Python ML framework, no GPU |
+| Backend | Next.js API Routes (serverless on Vercel) |
+| Database / auth | Supabase (PostgreSQL + Auth + Storage) |
+| Speech | Web Speech API (browser built-in) |
+| Rendering | HTML5 Canvas 2D |
+| Hosting | Vercel |
+
+**Node 22 is required** (`>=22.12.0 <24.0.0`). Node 24 breaks the Next 14.2.5 build.
+See [README.md](README.md).
+
+## Why this architecture
+
+- **Runs in the browser with no inference server** — the model is 312 KB, so it ships
+  as a static asset instead of requiring a hosted GPU.
+- **No video ever leaves the device.** Recognition is entirely client-side. This is a
+  privacy property that falls out of the architecture rather than being added on.
+- **Low latency** — ~165 ms end to end, with no network round trip in the loop.
+- **Free-tier deployable** — Vercel and Supabase free tiers are sufficient.
+
+## Communication model
+
+The system is designed for two-way conversation between a signing user and a hearing
+user on one shared device:
+
+- The signing user signs; the system displays and speaks the translation.
+- The hearing user replies by typing or picking a suggested phrase; the system
+  renders that reply back as animated FSL.
+
+Suggested replies come from the optional language model when configured, and from a
+rule-based dictionary otherwise.
+
+## Codebase structure
+
+```
+src/app/          Next.js routes (39 pages) and API routes (13)
+src/components/   shared UI, landing page, admin components
+src/features/     the system, organized by domain:
+                    recognition/          sign→text core
+                    sign-to-text/         camera + MediaPipe wiring
+                    translation-pipeline/ text→sign, 9 stages
+                    fsl-translation/      gloss engine, grammar, dictionary
+                    sign-animation/       playback and canvas rendering
+                    type-to-sign/         text→sign UI
+                    analytics/            admin-side offline analysis
+src/lib/          Supabase client, queries, TTS, utilities
+scripts/          dataset building, training, export (128 files)
+models/           trained weights and metrics
+public/models/    what the browser downloads
+supabase/         37 migrations
+```
+
+## Access model
+
+No end-user accounts. `/translate`, `/conversation`, `/learn`, `/history`,
+`/presentation`, `/type-to-sign` and `/evaluation` are public and require no login.
+Supabase Auth guards `/admin/*` only, enforced by Row-Level Security.
+
+## Security
+
+- Supabase Auth for admin authentication; role stored in auth metadata
+- Row-Level Security policies on all admin-accessible tables
 - Server-side validation on API routes
-- Role-based access for admin operations
-- Environment-based secrets in config
-
-## AI Placement
-The AI model sits between landmark extraction and text output. MediaPipe Hands provides landmarks, then a local CNN-LSTM predicts the gesture class from landmark sequences and outputs text with confidence and optional smoothing.
-
-## AI Capabilities
-- Primary recognition from landmark sequences
-- Top-k suggestion outputs based on confidence
-- Confidence thresholding and retry prompts
-- Reply phrase suggestions mapped from recognized text
-
-## Two-Way Communication (Reply Flow)
-After receiving translated text, the user can respond by selecting a phrase that plays a short sign video clip (for example, "thank you"). Reply clips are uploaded by the admin and appear as suggested responses. The user can also type a custom reply, which shows a translated video button if a matching clip exists.
-
-## Two-Stage Algorithm Rationale
-We use a two-stage pipeline: MediaPipe Hands extracts reliable hand landmarks, and a CNN-LSTM performs the recognition. This separation improves speed and stability while still capturing both spatial hand shape and temporal motion, which is critical for dynamic signs.
+- Secrets via environment variables — service-role key is server-only
+- No personal data collected; sessions are anonymous tokens

@@ -15,7 +15,8 @@ export default defineConfig({
       "src/features/**/__tests__/**/*.test.tsx",
       "src/components/**/__tests__/**/*.test.tsx",
       "src/lib/__tests__/**/*.test.ts",
-      "src/lib/supabase/**/__tests__/**/*.test.ts"
+      "src/lib/supabase/**/__tests__/**/*.test.ts",
+      "src/server/**/__tests__/**/*.test.ts"
     ],
     exclude: ["node_modules", ".next", "dist"],
     globals: true,

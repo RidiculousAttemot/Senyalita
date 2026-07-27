@@ -36,7 +36,10 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      // Generic to the caller, detailed in the server log — Postgres errors
+      // disclose table and constraint names.
+      console.error("[api] POST /api/signers/register upsert failed:", error);
+      return NextResponse.json({ error: "Unable to register this signer." }, { status: 500 });
     }
 
     return NextResponse.json({ signer: data }, { status: 201 });

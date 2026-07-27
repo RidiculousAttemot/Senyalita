@@ -1,74 +1,67 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
+import { requireAdmin } from "@/lib/supabase/queries/profiles";
+import { toErrorResponse } from "@/server/http/errors";
+import {
+  getDatasetAsset,
+  isVersionStatus,
+  listDatasetAssets,
+  type DatasetListOptions,
+} from "@/server/services/datasetCatalog";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const DATASET_DIR = path.join(process.cwd(), "datasets", "processed", "user_holistic_assets");
-
-interface AssetSummary {
-  label: string;
-  file: string;
-  filePath: string;
-  frameCount: number;
-  duration: number;
-}
+const SORTS = new Set(["gloss", "version", "created", "frames", "duration"]);
 
 export async function GET(req: NextRequest) {
   try {
-    const label = req.nextUrl.searchParams.get("label");
-    const file = req.nextUrl.searchParams.get("file");
+    // This endpoint exposes version statuses, quality scores and storage paths,
+    // so it is admin-only. It is consumed from the already admin-gated
+    // Animation Dataset Manager, whose fetch carries the session cookie.
+    await requireAdmin();
 
+    const params = req.nextUrl.searchParams;
+    const label = params.get("label");
+    const file = params.get("file");
+
+    // Single asset: stream the stored landmark JSON, byte-identical to what
+    // Skeleton Preview / PlaybackEngine / the renderers already parse.
     if (label && file) {
-      const safeLabel = path.basename(label);
-      const safeFile = path.basename(file);
-      const filePath = path.join(DATASET_DIR, safeLabel, safeFile);
-
-      if (!filePath.startsWith(DATASET_DIR) || !fs.existsSync(filePath)) {
-        return NextResponse.json({ error: "Asset not found" }, { status: 404 });
-      }
-
-      const content = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-      return NextResponse.json(content, {
-        headers: { "Cache-Control": "public, max-age=300" },
+      const { asset, status } = await getDatasetAsset(label, file);
+      const published = status === "published";
+      return NextResponse.json(asset, {
+        headers: {
+          // A published version is immutable — publishing again creates a new
+          // version rather than mutating this one. Drafts must never be cached,
+          // or the preview goes stale the moment the asset is re-extracted.
+          "Cache-Control": published
+            ? "private, max-age=3600, immutable"
+            : "no-store",
+          "X-Asset-Status": status,
+        },
       });
     }
 
-    if (!fs.existsSync(DATASET_DIR)) {
-      return NextResponse.json({ assets: [], labels: [] });
-    }
+    const sortParam = params.get("sort");
+    const statusParam = params.get("status");
+    const options: DatasetListOptions = {
+      search: params.get("search")?.trim() || undefined,
+      language: params.get("language") || undefined,
+      status: statusParam && isVersionStatus(statusParam) ? statusParam : undefined,
+      sort: sortParam && SORTS.has(sortParam) ? (sortParam as DatasetListOptions["sort"]) : undefined,
+      order: params.get("order") === "asc" ? "asc" : "desc",
+      limit: params.get("limit") ? Number(params.get("limit")) : undefined,
+      offset: params.get("offset") ? Number(params.get("offset")) : undefined,
+    };
 
-    const labels: string[] = [];
-    const assets: AssetSummary[] = [];
-    const entries = fs.readdirSync(DATASET_DIR, { withFileTypes: true });
+    const result = await listDatasetAssets(options);
 
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const lbl = entry.name;
-      labels.push(lbl);
-      const labelDir = path.join(DATASET_DIR, lbl);
-      const files = fs.readdirSync(labelDir).filter(f => f.endsWith("_asset.json"));
-
-      for (const fl of files) {
-        const fp = path.join(labelDir, fl);
-        try {
-          const content = JSON.parse(fs.readFileSync(fp, "utf-8"));
-          assets.push({
-            label: lbl,
-            file: fl,
-            filePath: path.relative(DATASET_DIR, fp),
-            frameCount: content.totalFrames ?? content.frames?.length ?? 0,
-            duration: content.duration ?? 0,
-          });
-        } catch {
-          assets.push({ label: lbl, file: fl, filePath: path.relative(DATASET_DIR, fp), frameCount: 0, duration: 0 });
-        }
-      }
-    }
-
-    return NextResponse.json({ labels: labels.sort(), assets });
+    // Metadata only — no landmark payloads are read here, so listing stays
+    // cheap regardless of how large the corpus grows.
+    return NextResponse.json(result, {
+      headers: { "Cache-Control": "private, max-age=30" },
+    });
   } catch (error) {
-    return NextResponse.json({ error: "Failed to list assets" }, { status: 500 });
+    return toErrorResponse(error, "GET /api/assets/dataset");
   }
 }

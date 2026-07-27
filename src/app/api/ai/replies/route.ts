@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimit, rateLimitHeaders } from "@/server/http/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -13,10 +14,54 @@ type ReplyResponse = {
   model: string;
 };
 
+// This endpoint is deliberately public — it powers the conversation view for
+// unauthenticated users — but each call spends money at an upstream LLM and
+// interpolates caller-supplied text into a prompt. The caps below bound both
+// the spend and the injection surface.
+const MAX_GESTURE_CHARS = 80;
+const MAX_HISTORY_MESSAGES = 12;
+const MAX_MESSAGE_CHARS = 300;
+const RATE_LIMIT = { limit: 20, windowMs: 60_000, bucket: "ai-replies" };
+
+/**
+ * Strips characters that let caller text escape its line in the prompt.
+ * Newlines are the important one: without this, a "gesture" containing
+ * "\n\nIgnore previous instructions" reads as a new prompt directive.
+ */
+function sanitisePromptText(value: unknown, maxChars: number): string {
+  if (typeof value !== "string") return "";
+  return value
+    .replace(/\s+/g, " ")   // collapses newlines, tabs, line separators
+    .replace(/[`]/g, "")
+    .trim()
+    .slice(0, maxChars);
+}
+
 export async function POST(request: NextRequest) {
   try {
+    const limit = rateLimit(request, RATE_LIMIT);
+    if (!limit.allowed) {
+      // Degrade rather than fail: the caller still gets usable replies, and no
+      // upstream request is made.
+      return NextResponse.json(
+        { replies: generateFallbackReplies("", "en"), model: "rate-limited" },
+        { status: 429, headers: rateLimitHeaders(limit) },
+      );
+    }
+
     const body: ReplyRequest = await request.json();
-    const { gesture, conversationHistory = [], language = "en" } = body;
+    const language: "en" | "tl" = body?.language === "tl" ? "tl" : "en";
+    const gesture = sanitisePromptText(body?.gesture, MAX_GESTURE_CHARS);
+    const conversationHistory = Array.isArray(body?.conversationHistory)
+      ? body.conversationHistory.slice(-MAX_HISTORY_MESSAGES)
+      : [];
+
+    if (!gesture) {
+      return NextResponse.json(
+        { error: "A gesture label is required." },
+        { status: 400, headers: rateLimitHeaders(limit) },
+      );
+    }
 
     const apiKey = process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY;
     const baseUrl = process.env.AI_API_BASE_URL || "https://api.openai.com/v1";
@@ -24,12 +69,12 @@ export async function POST(request: NextRequest) {
     if (!apiKey) {
       return NextResponse.json(
         { replies: generateFallbackReplies(gesture, language), model: "rule-based" },
-        { status: 200 }
+        { status: 200, headers: rateLimitHeaders(limit) }
       );
     }
 
     const historyText = conversationHistory
-      .map((m) => `${m.sender === "signer" ? (language === "tl" ? "Bingi" : "Signer") : language === "tl" ? "Tagatugon" : "Responder"}: ${m.text}`)
+      .map((m) => `${m.sender === "signer" ? (language === "tl" ? "Bingi" : "Signer") : language === "tl" ? "Tagatugon" : "Responder"}: ${sanitisePromptText(m.text, MAX_MESSAGE_CHARS)}`)
       .join("\n");
 
     const systemPrompt = language === "tl"
@@ -73,11 +118,14 @@ export async function POST(request: NextRequest) {
     if (replies.length === 0) {
       return NextResponse.json(
         { replies: generateFallbackReplies(gesture, language), model: "rule-based-empty" },
-        { status: 200 }
+        { status: 200, headers: rateLimitHeaders(limit) }
       );
     }
 
-    return NextResponse.json({ replies, model: "gpt-4o-mini" });
+    return NextResponse.json(
+      { replies, model: "gpt-4o-mini" },
+      { headers: rateLimitHeaders(limit) },
+    );
   } catch (error) {
     console.error("AI reply error:", error);
     return NextResponse.json(

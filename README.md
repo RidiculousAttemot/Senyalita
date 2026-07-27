@@ -28,6 +28,19 @@ settings, so set that to 22.x in the dashboard to match.
 If a build fails with a hashing error, that is a Node version mismatch. Deleting
 `.next` clears the symptom but not the cause.
 
+### Node 24 workarounds in `next.config.mjs`
+
+Two settings exist purely to keep builds working on Node 24. Both are safe to
+delete once everyone is on the pinned Node 22:
+
+| Setting | Failure it prevents |
+| --- | --- |
+| `output.hashFunction = 'sha256'` | `WasmHash._updateWithBuffer` crash — Next's bundled webpack routes hashing through a WASM implementation that breaks on Node 24. |
+| `cache = false` (production only) | `Cannot find module './<id>.js'` while collecting page data. The filesystem cache serialises through the same hasher and can emit a manifest referencing chunks it never wrote. Dev keeps its cache; the failure is build-only. |
+
+Disabling the production cache costs full-rebuild time on every build. That is a
+deliberate trade for a build that completes.
+
 ## Phase 1 Status
 Phase 1 is complete. It delivers the frontend camera pipeline with MediaPipe Hands landmark rendering, status indicators, language toggle, and text-to-speech for a placeholder transcript.
 

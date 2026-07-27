@@ -48,34 +48,52 @@ export function Header() {
   // On translation pages, show a specific back-to-home header
   if (pathname === "/translate" || pathname?.startsWith("/translate/")) {
     return (
-      <header className="sticky top-0 z-50 w-full border-b border-stone-200 bg-[#FDF8F0] px-4 py-3 md:px-12 md:py-[18px]">
-        <div className="grid w-full grid-cols-1 items-center gap-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:gap-0">
-          <Link href="/" className="group flex items-center gap-3 justify-self-center md:justify-self-start">
-            <span className="flex items-center gap-1.5 text-stone-500 hover:text-stone-900 transition-colors text-sm font-medium">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-              Home
+      <header className="sticky top-0 z-50 w-full border-b border-senyalita-border/70 bg-senyalita-warm/85 px-4 py-3 backdrop-blur-xl md:px-8 md:py-3.5">
+        <div className="mx-auto grid w-full max-w-[1440px] grid-cols-1 items-center gap-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:gap-0">
+          <Link
+            href="/"
+            className="group flex items-center gap-2.5 justify-self-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary md:justify-self-start"
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-full border border-senyalita-border bg-white text-senyalita-muted transition-all duration-150 group-hover:-translate-x-0.5 group-hover:border-senyalita-primary/40 group-hover:text-senyalita-primary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+              <span className="sr-only">Back to home</span>
             </span>
-            <div className="ml-1 flex h-8 w-8 items-center justify-center rounded-lg bg-gray-900">
-              <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-senyalita-primary shadow-lg shadow-senyalita-primary/25">
+              <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2v11z"/>
                 <circle cx="12" cy="13" r="4" fill="transparent" stroke="white" strokeWidth="2"/>
               </svg>
-            </div>
-            <span className="font-display text-[30px] font-bold leading-none text-gray-900">Senyalita</span>
+            </span>
+            <span className="font-display text-xl font-bold leading-none tracking-tight text-senyalita-dark">Senyalita</span>
           </Link>
 
-          <nav aria-label="Translation mode" className="grid h-14 w-[340px] grid-cols-2 gap-0 justify-self-center rounded-full border border-[#E5E7EB] bg-white p-1.5 shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
+          <nav
+            aria-label="Translation mode"
+            className="grid h-12 w-[320px] grid-cols-2 gap-1 justify-self-center rounded-full border border-senyalita-border bg-white/80 p-1 shadow-[0_12px_32px_-24px_rgba(15,23,42,0.6)] backdrop-blur-xl"
+          >
             <button
               type="button"
+              aria-pressed={translationMode === "type-to-sign"}
               onClick={() => selectTranslationMode("type-to-sign")}
-              className={cn("flex h-11 items-center justify-center gap-2 rounded-full text-sm font-semibold transition-colors", translationMode === "type-to-sign" ? "bg-[#FDF3EE] text-[#9F4F2D]" : "text-[#555] hover:bg-stone-50")}
+              className={cn(
+                "flex h-10 items-center justify-center gap-2 rounded-full text-sm font-semibold transition-all duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary",
+                translationMode === "type-to-sign"
+                  ? "bg-senyalita-primary text-white shadow-md shadow-senyalita-primary/30"
+                  : "text-senyalita-muted hover:bg-senyalita-primary/5 hover:text-senyalita-dark",
+              )}
             >
               <Keyboard className="h-4 w-4" /> Type &rarr; Sign
             </button>
             <button
               type="button"
+              aria-pressed={translationMode === "sign-to-text"}
               onClick={() => selectTranslationMode("sign-to-text")}
-              className={cn("flex h-11 items-center justify-center gap-2 rounded-full text-sm font-semibold transition-colors", translationMode === "sign-to-text" ? "bg-[#FDF3EE] text-[#9F4F2D]" : "text-[#555] hover:bg-stone-50")}
+              className={cn(
+                "flex h-10 items-center justify-center gap-2 rounded-full text-sm font-semibold transition-all duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary",
+                translationMode === "sign-to-text"
+                  ? "bg-senyalita-primary text-white shadow-md shadow-senyalita-primary/30"
+                  : "text-senyalita-muted hover:bg-senyalita-primary/5 hover:text-senyalita-dark",
+              )}
             >
               <Video className="h-4 w-4" /> Sign &rarr; Text
             </button>
@@ -86,9 +104,21 @@ export function Header() {
               <button
                 type="button"
                 onClick={() => window.dispatchEvent(new Event("senyalita:camera-toggle"))}
-                className="h-11 rounded-full border border-[#d88567] bg-transparent px-5 text-sm font-semibold text-[#a85e48] transition-colors hover:bg-[#fff3ee]"
+                className={cn(
+                  "inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold transition-all duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary",
+                  cameraActive
+                    ? "border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
+                    : "bg-senyalita-primary text-white shadow-lg shadow-senyalita-primary/25 hover:shadow-xl hover:shadow-senyalita-primary/35 hover:brightness-110",
+                )}
               >
-                {cameraActive ? "Stop Camera" : "Start Camera"}
+                <span
+                  className={cn(
+                    "h-2 w-2 rounded-full",
+                    cameraActive ? "animate-pulse bg-rose-500" : "bg-white/80",
+                  )}
+                  aria-hidden="true"
+                />
+                {cameraActive ? "Stop camera" : "Start camera"}
               </button>
             )}
           </div>

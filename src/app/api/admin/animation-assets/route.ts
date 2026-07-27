@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/queries/profiles";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
+import { toErrorResponse } from "@/server/http/errors";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -105,9 +106,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ assets: result, total: result.length });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Unable to list animation assets." },
-      { status: 403 },
-    );
+    return toErrorResponse(err, "GET /api/admin/animation-assets");
   }
 }

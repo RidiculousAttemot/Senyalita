@@ -42,7 +42,11 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (reviewError) {
-      return NextResponse.json({ error: reviewError.message }, { status: 500 });
+      // Log the driver message server-side; return a generic one. Postgres
+      // errors name tables, columns and constraints — internal schema detail
+      // that an unauthenticated caller should not receive.
+      console.error("[api] POST /api/collection review insert failed:", reviewError);
+      return NextResponse.json({ error: "Unable to record this submission." }, { status: 500 });
     }
 
     // Record session diversity metadata if provided

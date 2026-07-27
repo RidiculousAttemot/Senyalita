@@ -1480,6 +1480,10 @@ type Tables = {
       total_frames: number | null;
       duration_ms: number | null;
       quality_score: number | null;
+      // Added by 0038_animation_asset_metadata.sql
+      language: string;
+      thumbnail_path: string | null;
+      storage_bytes: number | null;
       extraction_metadata: Record<string, unknown>;
       created_by: string | null;
       approved_by: string | null;
@@ -1491,6 +1495,9 @@ type Tables = {
       id?: string;
       asset_id: string;
       version: number;
+      language?: string;
+      thumbnail_path?: string | null;
+      storage_bytes?: number | null;
       source_video_path?: string | null;
       landmark_json_path?: string | null;
       status?: "pending" | "processing" | "failed" | "ready" | "approved" | "published" | "archived";
@@ -1513,6 +1520,9 @@ type Tables = {
       total_frames?: number | null;
       duration_ms?: number | null;
       quality_score?: number | null;
+      language?: string;
+      thumbnail_path?: string | null;
+      storage_bytes?: number | null;
       extraction_metadata?: Record<string, unknown>;
       approved_by?: string | null;
       approved_at?: string | null;

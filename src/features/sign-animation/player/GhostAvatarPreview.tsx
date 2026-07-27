@@ -19,11 +19,11 @@ export function GhostAvatarPreview({ label, sublabel, className }: GhostAvatarPr
     <div className={className} role="status" aria-live="polite">
       <div className="flex h-full flex-col items-center justify-center gap-5">
         <div className="relative h-40 w-40 animate-breathe-slow">
-          <svg viewBox="0 0 100 100" className="h-full w-full text-fsl-navy/25" aria-hidden="true">
+          <svg viewBox="0 0 100 100" className="h-full w-full text-senyalita-dark/20" aria-hidden="true">
             <circle cx="50" cy="24" r="14" fill="currentColor" />
             <path d="M28 92 Q28 54 50 54 Q72 54 72 92 Z" fill="currentColor" />
           </svg>
-          <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full text-fsl-coral" aria-hidden="true">
+          <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full text-senyalita-primary" aria-hidden="true">
             {HAND_DOTS.map(([x, y, delay], i) => (
               <circle
                 key={i}
@@ -39,8 +39,8 @@ export function GhostAvatarPreview({ label, sublabel, className }: GhostAvatarPr
         </div>
 
         <div className="flex flex-col items-center gap-2">
-          <p className="text-sm font-medium text-fsl-muted">{label}</p>
-          {sublabel && <p className="text-xs text-fsl-muted/70">{sublabel}</p>}
+          <p className="text-sm font-medium text-senyalita-muted">{label}</p>
+          {sublabel && <p className="text-xs text-senyalita-muted/70">{sublabel}</p>}
           <Skeleton className="mt-1 h-1.5 w-32" />
         </div>
       </div>

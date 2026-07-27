@@ -4,16 +4,27 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { RealtimeMetrics, useRecognition, translateLabel } from "@/features/recognition";
 import { CommunicationProfileManager } from "@/features/profiles";
-import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Video, Zap, AlertTriangle, Loader2, Settings, Copy, X, Power, Info, Volume2 } from "lucide-react";
+import { Video, Zap, AlertTriangle, Settings, Copy, X, Power, Info, Volume2 } from "lucide-react";
 import { DebugOverlay } from "@/features/recognition/DebugOverlay";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { formatTranscriptCommitShortcut, isTranscriptCommitShortcut } from "./commitShortcut";
 import { createFrameRateTracker } from "./cameraFrameRate";
-import { HAND_CAPTURE_CONSTRAINTS, HAND_LANDMARKER_OPTIONS } from "./handCaptureProfile";
+import { HAND_CAPTURE_CONSTRAINTS, handLandmarkerOptionsFor, type DetectionSensitivity } from "./handCaptureProfile";
+import { CameraSettingsPanel, type CameraSettings } from "./CameraSettingsPanel";
 import { SuggestionPanel, useLetterSuggestions } from "@/features/suggestions";
+
+/** Amber reads clearly against skin tones, dim rooms and bright walls alike. */
+const SKELETON_STROKE = "rgba(245, 158, 11, 0.95)";
+const SKELETON_JOINT = "rgba(255, 237, 213, 0.98)";
+
+/** Normalised position of a tracked hand, for the HTML label layer. */
+interface HandOverlay {
+  handedness: "Left" | "Right";
+  x: number;
+  y: number;
+}
 
 const HAND_CONNECTIONS: Array<[number, number]> = [
   [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8],
@@ -30,20 +41,10 @@ const CAPTURE_TARGET_FPS = 30;
 // A small tolerance stops a camera running at a nominal 30fps from having
 // every other frame rejected by jitter.
 const CAPTURE_INTERVAL_MS = 1000 / CAPTURE_TARGET_FPS - 2;
+/** Hand-label badges only need to keep up with the eye, not the camera. */
+const OVERLAY_INTERVAL_MS = 100;
 
 type Status = "waiting" | "starting" | "active" | "no-hand" | "error";
-
-function StatusIndicator({ status }: { status: Status }) {
-  const statusConfig = {
-    waiting: { icon: <Power className="h-4 w-4" />, text: "Camera off", color: "text-stone-500" },
-    starting: { icon: <Loader2 className="h-4 w-4 animate-spin" />, text: "Starting camera", color: "text-blue-500" },
-    active: { icon: <Zap className="h-4 w-4" />, text: "Live recognition", color: "text-emerald-600" },
-    "no-hand": { icon: <AlertTriangle className="h-4 w-4" />, text: "No hand detected", color: "text-amber-600" },
-    error: { icon: <AlertTriangle className="h-4 w-4" />, text: "Camera error", color: "text-red-600" },
-  };
-  const { icon, text, color } = statusConfig[status];
-  return <div className={cn("flex items-center gap-1.5 text-xs font-semibold", color)}>{icon}<span>{text}</span></div>;
-}
 
 const cameraStatusLabel: Record<Status, string> = {
   waiting: "Camera off",
@@ -68,7 +69,24 @@ export function SignToTextInterface() {
   const [captureFps, setCaptureFps] = useState(0);
   const [outputText, setOutputText] = useState("");
   const suggestions = useLetterSuggestions();
-  const [showDebug, setShowDebug] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [handOverlays, setHandOverlays] = useState<HandOverlay[]>([]);
+  const [settings, setSettings] = useState<CameraSettings>({
+    mirrored: true,
+    showSkeleton: true,
+    showHandLabels: true,
+    showDetails: false,
+    sensitivity: "balanced",
+  });
+  // Settings are read inside the rAF draw loop, which closes over its initial
+  // values — a ref keeps that loop reading the live object without restarting
+  // the camera on every toggle.
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  // Sensitivity is compiled into the MediaPipe detector at creation, so the
+  // running camera keeps whatever it started with until it is restarted.
+  const activeSensitivityRef = useRef<DetectionSensitivity | null>(null);
+  const [activeSensitivity, setActiveSensitivity] = useState<DetectionSensitivity | null>(null);
   const [speakEnabled, setSpeakEnabled] = useState(true);
   const [commitShortcut, setCommitShortcut] = useState("Space");
   const [capturingShortcut, setCapturingShortcut] = useState(false);
@@ -166,18 +184,22 @@ export function SignToTextInterface() {
       await videoRef.current.play();
       const { HandLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
       const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL);
+      const sensitivity = settingsRef.current.sensitivity;
+      const landmarkerOptions = handLandmarkerOptionsFor(sensitivity);
       let handLandmarker;
       try {
         handLandmarker = await HandLandmarker.createFromOptions(vision, {
           baseOptions: { modelAssetPath: HAND_LANDMARKER_MODEL_URL, delegate: "GPU" },
-          ...HAND_LANDMARKER_OPTIONS,
+          ...landmarkerOptions,
         });
       } catch {
         handLandmarker = await HandLandmarker.createFromOptions(vision, {
           baseOptions: { modelAssetPath: HAND_LANDMARKER_MODEL_URL, delegate: "CPU" },
-          ...HAND_LANDMARKER_OPTIONS,
+          ...landmarkerOptions,
         });
       }
+      activeSensitivityRef.current = sensitivity;
+      setActiveSensitivity(sensitivity);
       if (cameraRunIdRef.current !== runId) {
         handLandmarker.close();
         return;
@@ -189,6 +211,7 @@ export function SignToTextInterface() {
       // uses ffmpeg fps=30). A 60fps camera would otherwise pack twice the
       // frames into the model's 120-frame window and halve its real duration.
       let lastAppendTime = -Infinity;
+      let lastOverlayTime = -Infinity;
       const fpsTracker = createFrameRateTracker(performance.now());
       const captureTracker = createFrameRateTracker(performance.now());
       const drawLandmarks = () => {
@@ -222,21 +245,49 @@ export function SignToTextInterface() {
               canvas.height = video.videoHeight;
             }
             context.clearRect(0, 0, canvas.width, canvas.height);
-            results.landmarks.forEach((hand) => {
-              HAND_CONNECTIONS.forEach(([start, end]) => {
-                context.beginPath();
-                context.moveTo(hand[start].x * canvas.width, hand[start].y * canvas.height);
-                context.lineTo(hand[end].x * canvas.width, hand[end].y * canvas.height);
-                context.strokeStyle = "rgba(46, 215, 132, 0.85)";
-                context.lineWidth = 2;
-                context.stroke();
+            if (settingsRef.current.showSkeleton) {
+              results.landmarks.forEach((hand) => {
+                context.strokeStyle = SKELETON_STROKE;
+                context.lineWidth = 3;
+                context.lineCap = "round";
+                context.lineJoin = "round";
+                HAND_CONNECTIONS.forEach(([start, end]) => {
+                  context.beginPath();
+                  context.moveTo(hand[start].x * canvas.width, hand[start].y * canvas.height);
+                  context.lineTo(hand[end].x * canvas.width, hand[end].y * canvas.height);
+                  context.stroke();
+                });
+                hand.forEach((point) => {
+                  context.beginPath();
+                  context.arc(point.x * canvas.width, point.y * canvas.height, 3.5, 0, 2 * Math.PI);
+                  context.fillStyle = SKELETON_JOINT;
+                  context.fill();
+                  context.strokeStyle = SKELETON_STROKE;
+                  context.lineWidth = 1.5;
+                  context.stroke();
+                });
               });
-              hand.forEach((point) => {
-                context.beginPath();
-                context.arc(point.x * canvas.width, point.y * canvas.height, 4, 0, 2 * Math.PI);
-                context.fillStyle = "rgba(255, 240, 232, 0.95)";
-                context.fill();
+            }
+          }
+
+          // Handedness badges live in HTML rather than on the canvas so they
+          // stay upright when the feed is mirrored, and so they can be styled
+          // with the rest of the UI. Throttled — 60Hz setState would thrash.
+          if (frameTimestamp - lastOverlayTime >= OVERLAY_INTERVAL_MS) {
+            lastOverlayTime = frameTimestamp;
+            const next: HandOverlay[] = [];
+            if (settingsRef.current.showSkeleton && settingsRef.current.showHandLabels) {
+              results.landmarks.forEach((hand, index) => {
+                const name = results.handedness[index]?.[0]?.categoryName;
+                if (name !== "Left" && name !== "Right") return;
+                // Landmark 0 is the wrist — anchors the badge below the hand.
+                const wrist = hand[0];
+                next.push({ handedness: name, x: wrist.x, y: wrist.y });
               });
+            }
+            setHandOverlays((prev) => {
+              if (prev.length === 0 && next.length === 0) return prev;
+              return next;
             });
           }
         }
@@ -268,6 +319,10 @@ export function SignToTextInterface() {
     setStatus("waiting");
     setErrorMessage("");
     setMediapipeFps(0);
+    setCaptureFps(0);
+    setHandOverlays([]);
+    activeSensitivityRef.current = null;
+    setActiveSensitivity(null);
     resetRecognition();
     window.dispatchEvent(new CustomEvent("senyalita:camera-state", { detail: false }));
   }, [clearCameraResources, resetRecognition]);
@@ -298,7 +353,7 @@ export function SignToTextInterface() {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-6 max-w-[1160px] mx-auto">
+    <div className="mx-auto grid max-w-[1440px] gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
       <RealtimeMetrics
         sessionId={null}
         userId={null}
@@ -309,57 +364,315 @@ export function SignToTextInterface() {
         isAiReply={false}
         inferenceTimeMs={recognition.inferenceTimeMs}
       />
-      <motion.div className="rounded-2xl border border-stone-200 bg-[#fffdfa] p-4 md:p-5 shadow-[0_10px_28px_rgba(69,45,28,0.08)]" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-        <div className="relative h-[380px] md:h-[500px] overflow-hidden rounded-xl bg-[#1d1a18]">
-          <video ref={videoRef} className="h-full w-full object-contain" playsInline autoPlay muted />
-          <canvas ref={landmarkCanvasRef} className="absolute inset-0 h-full w-full object-contain" />
-          <div className="absolute left-4 top-4 flex items-center gap-2">
-            <span className="rounded-lg bg-black/55 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">FSL Sign Language</span>
-            <span className="flex items-center gap-1.5 rounded-lg bg-black/55 px-2.5 py-1.5 text-xs font-semibold text-white backdrop-blur-sm"><span className={cn("h-2 w-2 rounded-full", status === "active" ? "animate-pulse bg-[#d88567]" : status === "error" ? "bg-red-400" : status === "no-hand" ? "bg-amber-400" : "bg-stone-500")} />{cameraStatusLabel[status]}{status === "active" && mediapipeFps > 0 ? ` ${mediapipeFps} fps` : ""}</span>
-          </div>
-          <div className="absolute right-4 top-4 flex items-center gap-2">
-            <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={() => setShowDebug(!showDebug)} className="h-9 w-9 rounded-lg bg-black/55 text-white hover:bg-black/70 hover:text-white"><Settings className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent><p>Toggle recognition details</p></TooltipContent></Tooltip></TooltipProvider>
-            {(status === "active" || status === "no-hand") && <Button onClick={stopCamera} size="sm" className="h-9 rounded-lg bg-white px-3 text-xs font-semibold text-stone-700 hover:bg-stone-100"><Power className="mr-1.5 h-3.5 w-3.5" />Stop</Button>}
-          </div>
-          {errorMessage && (
-            <div className="absolute bottom-4 left-4 right-4 rounded-lg bg-red-900/80 px-4 py-3 text-xs text-red-200 backdrop-blur-sm">
-              {errorMessage}
+
+      <motion.div
+        className="flex min-w-0 flex-col gap-4"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        {/* Camera stage */}
+        <section className="overflow-hidden rounded-[28px] border border-senyalita-border bg-white/80 shadow-[0_24px_60px_-40px_rgba(15,23,42,0.55)] backdrop-blur-xl">
+          <div className="relative h-[400px] overflow-hidden bg-senyalita-dark md:h-[560px]">
+            {/* Mirroring is an inline transform rather than a `-scale-x-*`
+                utility: under Tailwind v4 those drive the CSS `scale` property,
+                and pairing them with `transition-transform` (which in v4 also
+                transitions `scale`) leaves the flip stuck on when the class is
+                removed. An explicit transform flips deterministically, and a
+                mirror flip should snap rather than animate anyway. */}
+            <video
+              ref={videoRef}
+              className="h-full w-full object-contain"
+              style={{ transform: settings.mirrored ? "scaleX(-1)" : "none" }}
+              playsInline
+              autoPlay
+              muted
+            />
+            <canvas
+              ref={landmarkCanvasRef}
+              className="absolute inset-0 h-full w-full object-contain"
+              style={{ transform: settings.mirrored ? "scaleX(-1)" : "none" }}
+            />
+
+            {/* Handedness badges — outside the mirrored layers so text stays upright */}
+            {handOverlays.map((hand, index) => (
+              <span
+                key={`${hand.handedness}-${index}`}
+                className="pointer-events-none absolute -translate-x-1/2 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-lg"
+                style={{
+                  left: `${(settings.mirrored ? 1 - hand.x : hand.x) * 100}%`,
+                  top: `calc(${hand.y * 100}% + 12px)`,
+                }}
+              >
+                {hand.handedness}
+              </span>
+            ))}
+
+            <div className="absolute left-4 top-4 flex flex-wrap items-center gap-2">
+              <span
+                aria-live="polite"
+                className="flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-[11px] font-semibold text-white ring-1 ring-inset ring-white/15 backdrop-blur-md"
+              >
+                <span
+                  className={cn(
+                    "h-1.5 w-1.5 rounded-full",
+                    status === "active" ? "animate-pulse bg-senyalita-accent"
+                      : status === "error" ? "bg-rose-400"
+                      : status === "no-hand" ? "bg-amber-400"
+                      : "bg-slate-400",
+                  )}
+                  aria-hidden="true"
+                />
+                {status === "active" && mediapipeFps > 0
+                  ? <span className="tabular-nums">{mediapipeFps} FPS</span>
+                  : cameraStatusLabel[status]}
+              </span>
+              {status === "active" && (
+                <span className="hidden rounded-full bg-black/45 px-3 py-1.5 text-[11px] font-semibold text-white ring-1 ring-inset ring-white/15 backdrop-blur-md sm:inline-flex">
+                  {recognition.motionState === "gesturing" ? "Moving" : "Steady"}
+                </span>
+              )}
             </div>
-          )}
-          <AnimatePresence>
-            {status === "waiting" && <motion.div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1d1a18] px-6 text-center text-white" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><span className="mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-[#5b3025] text-[#efb39d]"><Video className="h-6 w-6" /></span><p className="max-w-md text-sm font-medium text-stone-200">Start the camera, then sign <span className="text-[#efb39d]">letters (A-Z) or numbers (0-9)</span> - hold each sign steady.</p><p className="mb-6 mt-2 text-xs text-stone-500">Hand tracking runs locally on your device.</p><Button onClick={startCamera} size="lg" className="rounded-lg bg-[#d88567] px-5 text-white hover:bg-[#bc6d53]"><Zap className="mr-2 h-4 w-4" />Start camera</Button></motion.div>}
-          </AnimatePresence>
-        </div>
-        {showDebug && <div className="mt-3 overflow-hidden rounded-xl border border-stone-200">
-          <DebugOverlay recognitionState={recognition.state} mediapipeFps={mediapipeFps} captureFps={captureFps} inferenceTimeMs={recognition.inferenceTimeMs} bufferLength={recognition.bufferLength} bufferCap={recognition.bufferCap} minimumFrames={recognition.minimumFrames} />
-          <div className="border-t border-stone-200 bg-stone-50 p-3">
-            <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-stone-400">Camera debug</p>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-stone-600">
-              <span>Camera: <strong>{cameraStreamRef.current ? "Ready" : "Off"}</strong></span>
-              <span>Permission: <strong>{navigator.permissions ? "API available" : "N/A"}</strong></span>
-              <span>MediaPipe: <strong>{handLandmarkerRef.current ? "Running" : "Stopped"}</strong></span>
-              <span>FPS: <strong>{mediapipeFps}</strong></span>
-              <span>Hands: <strong>{status === "active" ? "Detected" : status === "no-hand" ? "None" : "—"}</strong></span>
-              <span>Recognition: <strong>{recognition.state.stage}</strong></span>
-              <span>Prediction: <strong>{currentPrediction ? translateLabel(currentPrediction.label) : "—"}</strong></span>
-              <span>Confidence: <strong>{currentPrediction ? `${Math.round(currentPrediction.confidence * 100)}%` : "—"}</strong></span>
+
+            <div className="absolute right-4 top-4 z-20 flex items-center gap-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => setShowSettings((open) => !open)}
+                      aria-expanded={showSettings}
+                      aria-label="Camera settings"
+                      className={cn(
+                        "flex h-9 w-9 items-center justify-center rounded-full ring-1 ring-inset backdrop-blur-md transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white",
+                        showSettings
+                          ? "bg-white text-senyalita-dark ring-white"
+                          : "bg-black/45 text-white ring-white/15 hover:bg-black/60",
+                      )}
+                    >
+                      <Settings className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>Camera settings</p></TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              {(status === "active" || status === "no-hand") && (
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full bg-white px-3.5 text-xs font-semibold text-senyalita-dark shadow-sm transition-colors hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                >
+                  <Power className="h-3.5 w-3.5" />Stop
+                </button>
+              )}
+            </div>
+
+            <AnimatePresence>
+              {showSettings && (
+                <CameraSettingsPanel
+                  settings={settings}
+                  onChange={(key, value) => setSettings((prev) => ({ ...prev, [key]: value }))}
+                  mode={recognition.mode}
+                  onModeChange={recognition.setMode}
+                  sensitivityPending={activeSensitivity !== null && activeSensitivity !== settings.sensitivity}
+                  cameraActive={status === "active" || status === "no-hand"}
+                  onClose={() => setShowSettings(false)}
+                />
+              )}
+            </AnimatePresence>
+
+            {/* Detected sign — mirrors the reference readout */}
+            <AnimatePresence>
+              {currentPrediction && (status === "active" || status === "no-hand") && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                  transition={{ duration: 0.16 }}
+                  aria-live="polite"
+                  className="absolute bottom-4 right-4 min-w-[132px] overflow-hidden rounded-2xl bg-black/55 px-4 pb-3 pt-2.5 ring-1 ring-inset ring-white/15 backdrop-blur-md"
+                >
+                  <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-white/55">Detected</p>
+                  <p className="mt-0.5 font-display text-3xl font-bold leading-none text-white">
+                    {translateLabel(currentPrediction.label)}
+                  </p>
+                  <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-white/20">
+                    <motion.div
+                      className="h-full rounded-full bg-amber-400"
+                      initial={false}
+                      animate={{ width: `${Math.round(currentPrediction.confidence * 100)}%` }}
+                      transition={{ duration: 0.2 }}
+                    />
+                  </div>
+                  <p className="mt-1 text-[10px] font-semibold tabular-nums text-white/60">
+                    {Math.round(currentPrediction.confidence * 100)}% confident
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {errorMessage && (
+              <div role="alert" className="absolute bottom-4 left-4 right-4 flex items-start gap-2.5 rounded-2xl bg-rose-950/85 px-4 py-3 ring-1 ring-inset ring-rose-400/30 backdrop-blur-md">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-300" />
+                <p className="text-xs leading-snug text-rose-100">{errorMessage}</p>
+              </div>
+            )}
+
+            {/* Startup overlay — the detector download and WASM init take a
+                visible moment, and a frozen black frame reads as a failure. */}
+            <AnimatePresence>
+              {status === "starting" && (
+                <motion.div
+                  className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-senyalita-dark/70 px-6 text-center backdrop-blur-md"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span className="mb-5 flex h-12 w-12 items-center justify-center">
+                    <span className="h-9 w-9 animate-spin rounded-full border-[3px] border-white/20 border-t-amber-400" />
+                  </span>
+                  <p className="text-base font-semibold text-white">Loading translation engine…</p>
+                  <p className="mt-1.5 text-[13px] text-slate-300">
+                    Setting up hand tracking. This takes a moment.
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {status === "waiting" && (
+                <motion.div
+                  className="absolute inset-0 flex flex-col items-center justify-center bg-senyalita-dark px-6 text-center"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <span className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-senyalita-primary/15 text-senyalita-secondary ring-1 ring-inset ring-senyalita-primary/30">
+                    <Video className="h-7 w-7" />
+                  </span>
+                  <p className="max-w-md text-[15px] font-medium leading-relaxed text-slate-200">
+                    Start the camera, then sign{" "}
+                    <span className="font-semibold text-senyalita-secondary">letters (A–Z) or numbers (0–9)</span>
+                    {" "}— hold each sign steady.
+                  </p>
+                  <p className="mb-6 mt-2 text-xs text-slate-400">Hand tracking runs locally on your device.</p>
+                  <button
+                    type="button"
+                    onClick={startCamera}
+                    className="inline-flex h-11 items-center gap-2 rounded-full bg-senyalita-primary px-6 text-sm font-semibold text-white shadow-lg shadow-senyalita-primary/30 transition-all hover:shadow-xl hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                  >
+                    <Zap className="h-4 w-4" />Start camera
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Recognition bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-senyalita-border/70 bg-white/60 px-5 py-4">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-senyalita-muted">Recognition model</p>
+              <p className="mt-1 truncate text-sm font-semibold text-senyalita-dark">
+                {recognition.state.stage === "loading-model" ? "Loading on-device model"
+                  : recognition.state.stage === "error" ? recognition.state.message
+                  : currentPrediction ? `${translateLabel(currentPrediction.label)} · ${Math.round(currentPrediction.confidence * 100)}%`
+                  : "Waiting for a stable sign"}
+              </p>
+            </div>
+            <motion.button
+              type="button"
+              onClick={commitPrediction}
+              disabled={!currentPrediction}
+              whileTap={{ scale: 0.97 }}
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-senyalita-primary px-6 text-sm font-semibold text-white shadow-lg shadow-senyalita-primary/25 transition-all hover:shadow-xl hover:shadow-senyalita-primary/35 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary disabled:bg-slate-300 disabled:shadow-none sm:w-auto"
+            >
+              <Zap className="h-4 w-4" />Add detected sign
+            </motion.button>
+          </div>
+        </section>
+
+        {settings.showDetails && (
+          <div className="overflow-hidden rounded-[22px] border border-senyalita-border bg-white/70 backdrop-blur-xl">
+            <DebugOverlay recognitionState={recognition.state} mediapipeFps={mediapipeFps} captureFps={captureFps} inferenceTimeMs={recognition.inferenceTimeMs} bufferLength={recognition.bufferLength} bufferCap={recognition.bufferCap} minimumFrames={recognition.minimumFrames} />
+            <div className="border-t border-senyalita-border/70 bg-senyalita-warm/60 p-4">
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-senyalita-muted">Camera debug</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-senyalita-muted">
+                <span>Camera: <strong className="font-semibold text-senyalita-dark">{cameraStreamRef.current ? "Ready" : "Off"}</strong></span>
+                <span>Permission: <strong className="font-semibold text-senyalita-dark">{navigator.permissions ? "API available" : "N/A"}</strong></span>
+                <span>MediaPipe: <strong className="font-semibold text-senyalita-dark">{handLandmarkerRef.current ? "Running" : "Stopped"}</strong></span>
+                <span>FPS: <strong className="font-semibold tabular-nums text-senyalita-dark">{mediapipeFps}</strong></span>
+                <span>Hands: <strong className="font-semibold text-senyalita-dark">{status === "active" ? "Detected" : status === "no-hand" ? "None" : "—"}</strong></span>
+                <span>Recognition: <strong className="font-semibold text-senyalita-dark">{recognition.state.stage}</strong></span>
+                <span>Prediction: <strong className="font-semibold text-senyalita-dark">{currentPrediction ? translateLabel(currentPrediction.label) : "—"}</strong></span>
+                <span>Confidence: <strong className="font-semibold tabular-nums text-senyalita-dark">{currentPrediction ? `${Math.round(currentPrediction.confidence * 100)}%` : "—"}</strong></span>
+              </div>
             </div>
           </div>
-        </div>}
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50 px-4 py-3">
-          <div><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-400">Recognition model</p><p className="mt-1 text-sm font-semibold text-stone-700">{recognition.state.stage === "loading-model" ? "Loading on-device model" : recognition.state.stage === "error" ? recognition.state.message : currentPrediction ? `${translateLabel(currentPrediction.label)} (${Math.round(currentPrediction.confidence * 100)}%)` : "Waiting for a stable sign"}</p></div>
-          <Button onClick={commitPrediction} disabled={!currentPrediction} className="h-11 w-full rounded-md bg-[#d88567] px-4 text-white hover:bg-[#bc6d53] sm:w-auto"><Zap className="mr-2 h-4 w-4" />Add detected sign</Button>
-        </div>
-        <div className="mt-4 rounded-xl border border-stone-200 bg-white p-4">
-          <div className="mb-3 flex items-center justify-between gap-3"><span className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-400">Transcript</span><div className="hidden flex-wrap gap-2 md:flex"><Button onClick={() => setSpeakEnabled((enabled) => !enabled)} variant="outline" size="sm" className="h-8 rounded-md border-[#e7b9a8] px-2.5 text-xs text-[#a85e48] hover:bg-[#fff5f0]"><Volume2 className="mr-1 h-3 w-3" />Speak: {speakEnabled ? "on" : "off"}</Button><Button onClick={handleSpeak} variant="outline" size="sm" disabled={!outputText} className="h-8 rounded-md px-2.5 text-xs">Speak now</Button><Button onClick={commitPrediction} variant="outline" size="sm" disabled={!currentPrediction} className="h-8 rounded-md border-[#e7b9a8] px-2.5 text-xs text-[#a85e48] hover:bg-[#fff5f0]">[{formatTranscriptCommitShortcut(commitShortcut)}] Add sign</Button><Button onClick={() => setCapturingShortcut(true)} variant="outline" size="sm" className="h-8 rounded-md px-2.5 text-xs">{capturingShortcut ? "Press a key..." : "Set key"}</Button><Button onClick={handleSpace} variant="outline" size="sm" className="h-8 rounded-md px-2.5 text-xs">Add space</Button><Button onClick={handleBackspace} variant="outline" size="sm" disabled={!outputText} className="h-8 rounded-md px-2.5 text-xs">Backspace</Button><Button onClick={handleClear} variant="outline" size="sm" disabled={!outputText} className="h-8 rounded-md border-red-200 px-2.5 text-xs text-red-600 hover:bg-red-50">Clear</Button></div></div>
-          <Textarea value={outputText} readOnly className="min-h-[64px] resize-none border-0 bg-transparent p-0 text-base text-stone-700 shadow-none focus-visible:ring-0" placeholder="Detected signs appear here when you add them." />
-          <div className="mt-4 grid grid-cols-2 gap-2 md:hidden"><Button onClick={commitPrediction} disabled={!currentPrediction} className="h-11 bg-[#d88567] text-white hover:bg-[#bc6d53]"><Zap className="mr-2 h-4 w-4" />Add sign</Button><Button onClick={handleSpace} variant="outline" className="h-11">Add space</Button><Button onClick={handleBackspace} variant="outline" disabled={!outputText} className="h-11">Backspace</Button><Button onClick={handleClear} variant="outline" disabled={!outputText} className="h-11 border-red-200 text-red-600 hover:bg-red-50">Clear</Button><Button onClick={handleCopy} variant="outline" disabled={!outputText} className="col-span-2 h-11"><Copy className="mr-2 h-4 w-4" />Copy transcript</Button></div>
-        </div>
-        <div className="mt-3 text-center text-xs text-stone-400"><span className="md:hidden">Hold a sign steady, then tap Add detected sign.</span><span className="hidden md:inline">Hold a sign steady, then press {formatTranscriptCommitShortcut(commitShortcut)} or use Add sign to place it in the transcript.</span></div>
+        )}
+
+        {/* Transcript */}
+        <section aria-labelledby="transcript-heading" className="overflow-hidden rounded-[28px] border border-senyalita-border bg-white/80 shadow-[0_24px_60px_-40px_rgba(15,23,42,0.55)] backdrop-blur-xl">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-6 pt-5">
+            <h2 id="transcript-heading" className="font-display text-lg font-bold tracking-tight text-senyalita-dark">Transcript</h2>
+            <div className="hidden flex-wrap gap-2 md:flex">
+              <TranscriptChip onClick={() => setSpeakEnabled((enabled) => !enabled)} active={speakEnabled} icon={<Volume2 className="h-3.5 w-3.5" />}>
+                Speak: {speakEnabled ? "on" : "off"}
+              </TranscriptChip>
+              <TranscriptChip onClick={handleSpeak} disabled={!outputText}>Speak now</TranscriptChip>
+              <TranscriptChip onClick={commitPrediction} disabled={!currentPrediction} icon={<Zap className="h-3.5 w-3.5" />}>
+                [{formatTranscriptCommitShortcut(commitShortcut)}] Add sign
+              </TranscriptChip>
+              <TranscriptChip onClick={() => setCapturingShortcut(true)} active={capturingShortcut}>
+                {capturingShortcut ? "Press a key…" : "Set key"}
+              </TranscriptChip>
+              <TranscriptChip onClick={handleSpace}>Add space</TranscriptChip>
+              <TranscriptChip onClick={handleBackspace} disabled={!outputText}>Backspace</TranscriptChip>
+              <TranscriptChip onClick={handleCopy} disabled={!outputText} icon={<Copy className="h-3.5 w-3.5" />}>Copy</TranscriptChip>
+              <TranscriptChip onClick={handleClear} disabled={!outputText} tone="danger" icon={<X className="h-3.5 w-3.5" />}>Clear</TranscriptChip>
+            </div>
+          </div>
+
+          <div className="px-6 pt-3">
+            <Textarea
+              value={outputText}
+              readOnly
+              aria-live="polite"
+              className="min-h-[80px] resize-none rounded-2xl border border-senyalita-border bg-white px-4 py-3.5 text-[17px] leading-relaxed text-senyalita-dark shadow-none placeholder:text-slate-400 focus-visible:ring-0"
+              placeholder="Detected signs appear here when you add them."
+            />
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-2 px-6 md:hidden">
+            <motion.button type="button" onClick={commitPrediction} disabled={!currentPrediction} whileTap={{ scale: 0.97 }} className="col-span-2 inline-flex h-11 items-center justify-center gap-2 rounded-full bg-senyalita-primary text-sm font-semibold text-white shadow-lg shadow-senyalita-primary/25 disabled:bg-slate-300 disabled:shadow-none">
+              <Zap className="h-4 w-4" />Add sign
+            </motion.button>
+            <TranscriptChip onClick={handleSpace} full>Add space</TranscriptChip>
+            <TranscriptChip onClick={handleBackspace} disabled={!outputText} full>Backspace</TranscriptChip>
+            <TranscriptChip onClick={handleCopy} disabled={!outputText} full icon={<Copy className="h-3.5 w-3.5" />}>Copy transcript</TranscriptChip>
+            <TranscriptChip onClick={handleClear} disabled={!outputText} tone="danger" full icon={<X className="h-3.5 w-3.5" />}>Clear</TranscriptChip>
+          </div>
+
+          <p className="mt-4 border-t border-senyalita-border/70 bg-white/60 px-6 py-3.5 text-center text-[11px] text-senyalita-muted">
+            <span className="md:hidden">Hold a sign steady, then tap Add detected sign.</span>
+            <span className="hidden md:inline">
+              Hold a sign steady, then press{" "}
+              <kbd className="rounded border border-senyalita-border bg-white px-1.5 py-0.5 font-sans text-[10px] font-semibold text-senyalita-dark">
+                {formatTranscriptCommitShortcut(commitShortcut)}
+              </kbd>{" "}
+              or use Add sign to place it in the transcript.
+            </span>
+          </p>
+        </section>
       </motion.div>
-      <motion.aside className="flex flex-col gap-4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.15 }}>
-        <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_8px_20px_rgba(69,45,28,0.06)]"><h2 className="mb-2 font-display text-base font-bold text-stone-800">For FSL signers</h2><p className="text-sm leading-5 text-stone-600">Keep your hands centered in the camera frame. Hold a sign briefly, then pause before the next sign for clearer recognition.</p></section>
-        <section className="rounded-2xl border border-[#efd48c] bg-[#fffaf0] p-5"><div className="flex gap-3"><Info className="mt-0.5 h-4 w-4 shrink-0 text-[#c88733]" /><div><h2 className="mb-1 text-xs font-bold text-[#a86624]">Filipino Sign Language</h2><p className="text-xs leading-5 text-[#a86624]">Recognition uses local hand landmarks and runs directly in your browser.</p></div></div></section>
+
+      <motion.aside
+        className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-24"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.06 }}
+      >
         <SuggestionPanel
           letters={suggestions.letters}
           suggestions={suggestions.suggestions}
@@ -368,9 +681,89 @@ export function SignToTextInterface() {
           onClear={suggestions.clear}
         />
 
-        <section className="min-h-[150px] rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_8px_20px_rgba(69,45,28,0.06)]"><h2 className="mb-3 text-sm font-semibold text-stone-800">Live transcript</h2><p className="line-clamp-4 text-sm leading-6 text-stone-400">{outputText || "Recognized signs will appear here..."}</p></section>
-        <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_8px_20px_rgba(69,45,28,0.06)]"><h2 className="mb-4 text-[10px] font-bold uppercase tracking-[0.12em] text-stone-400">Supported characters</h2><p className="mb-2 text-[10px] font-semibold uppercase text-stone-400">Letters</p><div className="mb-4 flex flex-wrap gap-1.5">{"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((letter) => <span key={letter} className="flex h-5 w-5 items-center justify-center rounded bg-[#fff3ee] text-[10px] font-bold text-[#ab654d]">{letter}</span>)}</div><p className="mb-2 text-[10px] font-semibold uppercase text-stone-400">Numbers</p><div className="flex flex-wrap gap-1.5">{"0123456789".split("").map((number) => <span key={number} className="flex h-5 w-5 items-center justify-center rounded bg-stone-100 text-[10px] font-bold text-stone-600">{number}</span>)}</div></section>
+        <section className="rounded-[22px] border border-senyalita-border bg-white/70 p-5 backdrop-blur-xl">
+          <h2 className="mb-2 font-display text-base font-bold tracking-tight text-senyalita-dark">For FSL signers</h2>
+          <p className="text-[13px] leading-relaxed text-senyalita-muted">
+            Keep your hands centered in the camera frame. Hold a sign briefly, then pause before the next sign for clearer recognition.
+          </p>
+        </section>
+
+        <section className="rounded-[22px] border border-senyalita-primary/20 bg-senyalita-primary/[0.06] p-5">
+          <div className="flex gap-3">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-senyalita-primary" />
+            <div>
+              <h2 className="mb-1 text-xs font-bold text-senyalita-dark">On-device recognition</h2>
+              <p className="text-xs leading-relaxed text-senyalita-muted">
+                Hand landmarks are read and classified directly in your browser — video never leaves your device.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="min-h-[140px] rounded-[22px] border border-senyalita-border bg-white/70 p-5 backdrop-blur-xl">
+          <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-senyalita-muted">Live transcript</h2>
+          <p className={cn("line-clamp-4 text-sm leading-relaxed", outputText ? "text-senyalita-dark" : "text-slate-400")}>
+            {outputText || "Recognized signs will appear here…"}
+          </p>
+        </section>
+
+        <section className="rounded-[22px] border border-senyalita-border bg-white/70 p-5 backdrop-blur-xl">
+          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-[0.14em] text-senyalita-muted">Supported characters</h2>
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Letters</p>
+          <div className="mb-4 flex flex-wrap gap-1.5">
+            {"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((letter) => (
+              <span key={letter} className="flex h-6 w-6 items-center justify-center rounded-md border border-senyalita-primary/15 bg-senyalita-primary/[0.07] font-mono text-[11px] font-bold text-senyalita-primary">
+                {letter}
+              </span>
+            ))}
+          </div>
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Numbers</p>
+          <div className="flex flex-wrap gap-1.5">
+            {"0123456789".split("").map((number) => (
+              <span key={number} className="flex h-6 w-6 items-center justify-center rounded-md border border-senyalita-border bg-white font-mono text-[11px] font-bold text-senyalita-muted">
+                {number}
+              </span>
+            ))}
+          </div>
+        </section>
       </motion.aside>
     </div>
+  );
+}
+
+/**
+ * Pill-shaped transcript action. Mirrors the Type→Sign composer chips so both
+ * translation directions share one control vocabulary.
+ */
+function TranscriptChip({
+  onClick, disabled, active, tone = "default", full, icon, children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  active?: boolean;
+  tone?: "default" | "danger";
+  full?: boolean;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={active}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border font-medium transition-all duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none",
+        full ? "h-11 w-full justify-center text-[13px]" : "h-8 px-3 text-xs",
+        tone === "danger"
+          ? "border-rose-200 bg-white text-rose-600 hover:-translate-y-0.5 hover:border-rose-300 hover:bg-rose-50 hover:shadow-sm"
+          : active
+            ? "border-senyalita-primary/30 bg-senyalita-primary/10 text-senyalita-primary"
+            : "border-senyalita-border bg-white text-senyalita-muted hover:-translate-y-0.5 hover:border-senyalita-primary/30 hover:text-senyalita-dark hover:shadow-sm",
+      )}
+    >
+      {icon}
+      {children}
+    </button>
   );
 }

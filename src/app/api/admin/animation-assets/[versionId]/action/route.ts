@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import type { GestureAnimationAsset } from "@/features/sign-animation/types";
 import { requireAdmin } from "@/lib/supabase/queries/profiles";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
+import { BadRequestError, toErrorResponse } from "@/server/http/errors";
+import { validateAnimationAsset } from "@/server/services/animationValidation";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -35,7 +37,17 @@ export async function POST(request: NextRequest, { params }: { params: { version
 
     if (body.action === "complete-processing") {
       if (!isGestureAnimationAsset(body.asset)) {
-        return NextResponse.json({ error: "A valid generated landmark animation is required." }, { status: 400 });
+        throw new BadRequestError("A valid generated landmark animation is required.");
+      }
+
+      // Structural validation before anything is written to storage: a bad
+      // extraction should fail loudly here rather than publish a gloss that
+      // renders as an empty canvas.
+      const validation = validateAnimationAsset(body.asset, { gloss: body.asset.label });
+      if (!validation.valid) {
+        throw new BadRequestError(
+          `This animation cannot be published: ${validation.errors.map((e) => e.message).join(" ")}`,
+        );
       }
       const landmarkPath = `${version.asset_id}/${version.id}/landmarks.json`;
       const { error: uploadError } = await supabase.storage
@@ -114,6 +126,6 @@ export async function POST(request: NextRequest, { params }: { params: { version
 
     return NextResponse.json({ error: "Unsupported asset action." }, { status: 400 });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to update animation version." }, { status: 403 });
+    return toErrorResponse(error, `POST /api/admin/animation-assets/${params.versionId}/action`);
   }
 }

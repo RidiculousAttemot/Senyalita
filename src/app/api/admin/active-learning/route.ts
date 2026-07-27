@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/queries/profiles";
+import { toErrorResponse } from "@/server/http/errors";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
@@ -218,10 +219,7 @@ export async function GET(request: NextRequest) {
       }
     }
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to fetch active learning data" },
-      { status: 500 },
-    );
+    return toErrorResponse(err, "GET /api/admin/active-learning");
   }
 }
 
@@ -290,9 +288,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Action failed" },
-      { status: 500 },
-    );
+    return toErrorResponse(err, "POST /api/admin/active-learning");
   }
 }

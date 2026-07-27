@@ -8,6 +8,15 @@ out/
 dist/
 build/
 
+# TypeScript incremental build cache — generated, must not be committed.
+# A stale committed copy makes `tsc --noEmit` fail with TS5033
+# ("Could not write file ... tsconfig.tsbuildinfo").
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Agent worktrees (git worktrees created under the repo root)
+.claude/worktrees/
+
 # Datasets
 datasets/raw/**/*.json
 datasets/processed/**/*.json

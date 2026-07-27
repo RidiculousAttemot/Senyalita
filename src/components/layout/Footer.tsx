@@ -11,6 +11,13 @@ export function Footer() {
     return null;
   }
 
+  // /translate is a focused workspace — the sticky header plus the tall sign
+  // stage already fill the viewport, and a marketing footer below them just
+  // pushes the translator up and invites scrolling away from the tool.
+  if (pathname === "/translate" || pathname?.startsWith("/translate/")) {
+    return null;
+  }
+
   // Landing page ("/") gets its own richer footer — scoped here so the
   // simpler footer used by /translate, /learn, /conversation, etc. is untouched.
   if (pathname === "/") {

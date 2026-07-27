@@ -1,7 +1,30 @@
 // Verify the live Supabase project via the HTTP API.
+//
+// Credentials come from the environment. A service-role key was previously
+// hardcoded here and committed; it bypasses every RLS policy, so it must never
+// live in tracked source. Reads .env.local if the vars are not already set.
 
-const URL = "https://tfhpcbasfugqaimcoios.supabase.co";
-const KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRmaHBjYmFzZnVncWFpbWNvaW9zIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDgyNTc4NiwiZXhwIjoyMDk2NDAxNzg2fQ.-37n1ZaFkVGPiRnXdRd6bNAwmHTzL6FQ6OpC-sN1Mbc";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+const envPath = path.join(ROOT, ".env.local");
+if (fs.existsSync(envPath)) {
+  for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
+    if (!line.includes("=") || line.trimStart().startsWith("#")) continue;
+    const i = line.indexOf("=");
+    const key = line.slice(0, i).trim();
+    if (!process.env[key]) process.env[key] = line.slice(i + 1).trim();
+  }
+}
+
+const URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!URL || !KEY) {
+  console.error("Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or provide .env.local).");
+  process.exit(1);
+}
 const H = { apikey: KEY, Authorization: `Bearer ${KEY}` };
 
 const j = async (p, init = {}) => {
