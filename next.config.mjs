@@ -23,16 +23,19 @@ const nextConfig = {
     return config;
   },
   async redirects() {
+    // /type-to-sign and /sign-to-text are kept as permanent redirects: the
+    // pages themselves are gone (the workflows live on /translate), but the
+    // paths were linked externally, so they should not start 404ing.
     return [
       {
         source: '/type-to-sign',
         destination: '/translate',
-        permanent: false,
+        permanent: true,
       },
       {
         source: '/sign-to-text',
         destination: '/translate',
-        permanent: false,
+        permanent: true,
       },
     ];
   },
