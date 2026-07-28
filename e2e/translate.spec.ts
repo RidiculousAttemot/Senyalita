@@ -136,10 +136,18 @@ test.describe("Text-to-Sign", () => {
 });
 
 test.describe("routing", () => {
-  test("public surface is only / and /translate", async ({ page }) => {
-    for (const path of ["/conversation", "/learn", "/evaluation", "/presentation", "/history"]) {
+  test("public surface is /, /translate and /evaluation", async ({ page }) => {
+    for (const path of ["/conversation", "/learn", "/presentation", "/history"]) {
       const res = await page.goto(`${BASE}${path}`);
       expect(res?.status(), `${path} should be gone`).toBe(404);
+    }
+
+    // /evaluation is public route #3. It was removed with the rest and then
+    // restored: it is the harness that produces the recognition accuracy
+    // figures, so it has to keep resolving.
+    for (const path of ["/", "/translate", "/evaluation"]) {
+      const res = await page.goto(`${BASE}${path}`);
+      expect(res?.status(), `${path} should resolve`).toBe(200);
     }
   });
 
