@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { Activity, ArrowUpRight, BarChart3, BrainCircuit, Camera, Clock3, Database, Film, Gauge, Sparkles, Wand2, WandSparkles } from "lucide-react";
+import { Activity, ArrowUpRight, BrainCircuit, Camera, Clock3, Database, Film, Gauge, Sparkles, Wand2, WandSparkles } from "lucide-react";
 import { fetchAdminAnalytics } from "@/lib/supabase/queries/analytics";
 import { listTelemetryEvents } from "@/lib/supabase/queries/telemetry";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -207,10 +207,9 @@ export default async function AdminDashboardOverview() {
           <p className="admin-dashboard-subtitle">Monitor recognition quality, model activity, and the workflows that keep Filipino Sign Language translation reliable.</p>
         </div>
         <div className="admin-dashboard-actions">
-          <Link href="/admin/training" className="admin-action-button"><BrainCircuit size={16} /> Start Recognition Training</Link>
           <Link href="/admin/animation-studio" className="admin-action-button admin-action-button-primary"><Wand2 size={16} /> Create Animation</Link>
           <Link href="/admin/animation-library" className="admin-action-button"><Film size={16} /> Open Animation Library</Link>
-          <Link href="/admin/analytics" className="admin-action-button"><BarChart3 size={16} /> View Analytics</Link>
+          <Link href="/admin/animation-dataset" className="admin-action-button"><Database size={16} /> Animation Dataset</Link>
         </div>
       </header>
 
@@ -289,24 +288,23 @@ export default async function AdminDashboardOverview() {
           <div className="admin-quick-action-grid">
             <Link href="/admin/animation-studio">Create Animation <ArrowUpRight size={15} /></Link>
             <Link href="/admin/animation-library">Animation Library <ArrowUpRight size={15} /></Link>
-            <Link href="/admin/training">Start Training <ArrowUpRight size={15} /></Link>
-            <Link href="/admin/collection">Dataset Manager <ArrowUpRight size={15} /></Link>
-            <Link href="/admin/analytics">View Analytics <ArrowUpRight size={15} /></Link>
+            <Link href="/admin/animation-dataset">Animation Dataset <ArrowUpRight size={15} /></Link>
+            <Link href="/admin/animation-inspector">Animation Inspector <ArrowUpRight size={15} /></Link>
+            <Link href="/admin/system">System Health <ArrowUpRight size={15} /></Link>
           </div>
         </article>
         <article className="admin-panel admin-model-summary">
           <p className="admin-overline">Production model</p>
           <h2>{activeModelName ?? (modelAvailable ? "No active model" : "Model registry unavailable")}</h2>
-          <p>{activeModel ? "The model currently marked active for the browser recognition workflow." : "Model deployment details are available in model management."}</p>
+          <p>{activeModel ? "The model currently marked active for the browser recognition workflow." : "No model row is marked active in the registry."}</p>
           <div className="admin-model-summary-stats"><span><strong>{getMetricDisplay({ value: activeModel?.accuracy, available: modelAvailable, format: (value) => formatAdminPercent(value) })}</strong> validated accuracy</span><span><strong>{getMetricDisplay({ value: activeModel?.num_classes, available: modelAvailable })}</strong> configured classes</span></div>
-          <Link href="/admin/models" className="admin-inline-link">Open model management <ArrowUpRight size={15} /></Link>
+          <Link href="/admin/system" className="admin-inline-link">System health <ArrowUpRight size={15} /></Link>
         </article>
       </section>
 
       <section className="admin-panel admin-activity-panel">
         <div className="admin-panel-heading">
           <div><p className="admin-overline">Recent activity</p><h2>Telemetry and system events</h2></div>
-          <Link href="/admin/audits" className="admin-inline-link">View audits <ArrowUpRight size={15} /></Link>
         </div>
         {activityRows.length ? (
           <AdminDataTable rows={activityRows} />
