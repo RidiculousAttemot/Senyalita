@@ -3,10 +3,13 @@ node_modules/
 .npm
 
 # Next.js & build outputs
+# Leading slashes anchor these to the repo root. Unanchored, a bare "build/"
+# also ignores any nested directory of that name — which is how
+# src/app/admin/(dashboard)/models/ silently never reached the repository.
 .next/
-out/
-dist/
-build/
+/out/
+/dist/
+/build/
 
 # TypeScript incremental build cache — generated, must not be committed.
 # A stale committed copy makes `tsc --noEmit` fail with TS5033
@@ -27,7 +30,10 @@ datasets/archive/
 !datasets/processed/**/.gitkeep
 
 # Models and training artifacts
-models/
+# Anchored: this is the root ML artefact directory. Unanchored it also matched
+# src/app/admin/(dashboard)/models/, so those pages existed on one machine and
+# in no clone or deployment.
+/models/
 *.joblib
 *.pkl
 *.h5
@@ -39,9 +45,10 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
-venv/
-ENV/
+# Anchored: "env"/"ENV" are plausible source directory names.
+/env/
+/venv/
+/ENV/
 
 # IDE
 .vscode/
