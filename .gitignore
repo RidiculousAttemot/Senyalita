@@ -20,6 +20,12 @@ tsconfig.tsbuildinfo
 # Agent worktrees (git worktrees created under the repo root)
 .claude/worktrees/
 
+# Scratch output from the extraction scripts (TMP_DIR in
+# scripts/extract-holistic-videos.mjs and friends). There was no rule here at
+# all, so 15,381 decoded PNG frames — 35GB — were committed. Anchored to the
+# repo root so a nested "tmp" directory that is real source stays trackable.
+/tmp/
+
 # Datasets
 datasets/raw/**/*.json
 datasets/processed/**/*.json
