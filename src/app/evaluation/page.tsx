@@ -1,39 +1,30 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useRecognition, type RecognitionCategory } from "@/features/recognition";
+import { useRecognition } from "@/features/recognition";
 
 type EvalResult = {
   gesture: string;
-  category: "alphabet" | "phrase";
   predicted: string;
   confidence: number;
   correct: boolean | null;
   timestamp: string;
 };
 
-const TEST_GESTURES = [
-  { label: "A", category: "alphabet" as const },
-  { label: "B", category: "alphabet" as const },
-  { label: "C", category: "alphabet" as const },
-  { label: "D", category: "alphabet" as const },
-  { label: "E", category: "alphabet" as const },
-  { label: "Thank You", category: "phrase" as const },
-  { label: "Good Morning", category: "phrase" as const },
-  { label: "Hello", category: "phrase" as const },
-  { label: "How Are You", category: "phrase" as const },
-  { label: "Yes", category: "phrase" as const },
-  { label: "No", category: "phrase" as const },
-  { label: "One", category: "phrase" as const },
-  { label: "Father", category: "phrase" as const },
-  { label: "Mother", category: "phrase" as const },
-  { label: "Blue", category: "phrase" as const },
-  { label: "Water", category: "phrase" as const },
-  { label: "Rice", category: "phrase" as const },
-  { label: "Coffee", category: "phrase" as const },
-  { label: "Today", category: "phrase" as const },
-  { label: "Monday", category: "phrase" as const },
-];
+/**
+ * The full alphabet, and nothing else.
+ *
+ * The battery previously carried 15 phrases (Thank You, Good Morning, Hello,
+ * Water, Rice, Monday …) alongside A–E. The recognition path is alphabet-only,
+ * so those phrases were being scored against a model that cannot predict them:
+ * every one would count as a miss and drag the reported accuracy down for a
+ * capability the system does not claim. A harness that scores gestures the
+ * system cannot recognise produces a number that is not defensible.
+ *
+ * A–Z is exactly the label set the model exposes, so the accuracy this page
+ * reports is now the accuracy of the thing being measured.
+ */
+const TEST_GESTURES = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((label) => ({ label }));
 
 export default function EvaluationPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -45,13 +36,11 @@ export default function EvaluationPage() {
   const [results, setResults] = useState<EvalResult[]>([]);
   const [currentPrediction, setCurrentPrediction] = useState<string | null>(null);
   const [currentConfidence, setCurrentConfidence] = useState(0);
-  const [currentCategory, setCurrentCategory] = useState<RecognitionCategory | null>(null);
 
   const onPrediction = useCallback(
     (result: any) => {
       setCurrentPrediction(result.label);
       setCurrentConfidence(result.confidence);
-      setCurrentCategory((result as any).category ?? null);
     },
     []
   );
@@ -177,7 +166,6 @@ export default function EvaluationPage() {
     const gesture = TEST_GESTURES[currentIndex];
     const result: EvalResult = {
       gesture: gesture.label,
-      category: gesture.category,
       predicted: currentPrediction ?? "—",
       confidence: currentConfidence,
       correct,
@@ -253,9 +241,6 @@ export default function EvaluationPage() {
                   <p className="transcript-text predicted-sign" style={{ fontSize: 28 }}>
                     {current.label}
                   </p>
-                  <p className="panel-note">
-                    Type: {current.category}
-                  </p>
 
                   <div style={{ marginTop: 16, padding: 12, background: "rgba(0,0,0,0.3)", borderRadius: 8 }}>
                     <p className="panel-label">Recognition Result</p>
@@ -266,7 +251,7 @@ export default function EvaluationPage() {
                     </p>
                     <p className="confidence">
                       Confidence: {currentConfidence > 0 ? `${(currentConfidence * 100).toFixed(1)}%` : "—"}
-                      {currentCategory && ` | ${currentCategory}`}
+                      
                     </p>
                   </div>
 
