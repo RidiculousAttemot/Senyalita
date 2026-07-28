@@ -24,8 +24,20 @@ const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3000";
  * those 404 by design — a phrase with no published sign is what triggers
  * fingerspelling. Against a cold dev server that is easily more than the
  * default 30s, so these tests get their own budget rather than racing it.
+ *
+ * The budget is set from a measurement, not a guess. A single published
+ * letter asset is ~3MB and is served from Supabase storage:
+ *
+ *     GET /api/animations/A -> 200, 3,011,400 bytes, 19.9s   (~150 KB/s)
+ *
+ * Fingerspelling "CAB" loads three of those in sequence while the preloader
+ * competes for the same connection, so a cold first test can legitimately
+ * need well over a minute before the canvas mounts. The old 90s budget and
+ * 60s canvas wait failed on a cold cache and passed on a warm one — a flake
+ * that says nothing about the code under test. Widened so the assertion is
+ * about whether pixels get painted, not about download throughput.
  */
-test.describe.configure({ mode: "serial", timeout: 90_000 });
+test.describe.configure({ mode: "serial", timeout: 240_000 });
 
 /** Painted-pixel count plus a cheap content hash, so two distinct poses that
  *  happen to light the same number of pixels are still distinguishable. */
@@ -66,7 +78,7 @@ async function paintedPixels(page: import("@playwright/test").Page) {
 async function translate(page: import("@playwright/test").Page, text: string) {
   await page.goto(`${BASE}/translate`);
   const input = page.locator("#composer-input");
-  await expect(input).toBeVisible({ timeout: 60_000 });
+  await expect(input).toBeVisible({ timeout: 150_000 });
   await input.fill(text);
 
   // The button is disabled until React registers the change; clicking a
@@ -77,7 +89,7 @@ async function translate(page: import("@playwright/test").Page, text: string) {
 
   // The canvas only mounts once the first clip has downloaded (~3MB each),
   // and the preloader is competing for the same connection.
-  await expect(page.locator("canvas")).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator("canvas")).toBeVisible({ timeout: 150_000 });
 }
 
 test.describe("Text-to-Sign", () => {
@@ -166,7 +178,7 @@ test.describe("Sign-to-Text", () => {
     // that one appears the instant the mode flips, so asserting on it passes
     // while SignToTextInterface (a next/dynamic import) is still compiling.
     await expect(page.getByRole("heading", { name: /spelled letters/i }))
-      .toBeVisible({ timeout: 60_000 });
+      .toBeVisible({ timeout: 150_000 });
     await expect(page.getByRole("heading", { name: /transcript/i }).first()).toBeVisible();
     await expect(page.getByRole("heading", { name: /supported characters/i })).toBeVisible();
 
