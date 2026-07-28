@@ -20,13 +20,13 @@ import { ADMIN_NAVIGATION } from "../src/lib/admin/navigation";
  *   2. Every /admin/... literal in any file TRANSITIVELY IMPORTED by an admin
  *      page or layout resolves.
  *
- * (2) walks the real import graph rather than grepping all of src/, so
- * orphaned components (AiInsightsView, TrainingCenterView, ModelRegistryView,
- * CollectionOverviewView, ModelComparisonView — all rendered by zero pages and
- * all still carrying dead links) do not fail the suite. They are unreachable,
- * so they cannot 404 anyone. When the follow-up sweep deletes them this test
- * keeps passing unchanged; if anything ever renders one again, its dead links
- * enter the graph and this test fails immediately.
+ * (2) walks the real import graph rather than grepping all of src/. That
+ * mattered while five orphaned components still carried dead links; the
+ * follow-up sweep has since deleted them, and this test kept passing
+ * unchanged, which was the point. The graph walk stays because it is the
+ * property that holds: only links something can actually render are checked,
+ * so a future orphan cannot fail the suite and a future *rendered* dead link
+ * cannot escape it.
  *
  * NOTE ON SCOPE. This proves a route exists, not that it is in the repository.
  * /admin/models existed on disk the whole time it was 404ing in production —
