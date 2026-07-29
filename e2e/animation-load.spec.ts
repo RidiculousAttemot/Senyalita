@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { COMMON_WORDS } from "../src/lib/commonAssetsPreload";
 
 /**
  * The animation path must never quietly substitute something else.
@@ -23,12 +24,12 @@ import { expect, test } from "@playwright/test";
 
 const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
-/** The exact list from src/lib/commonAssetsPreload.ts. */
-const PRELOAD_GLOSSES = [
-  ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""),
-  "HELLO", "THANK_YOU", "GOOD_MORNING", "GOOD_AFTERNOON", "GOOD_EVENING",
-  "KAMUSTA", "SALAMAT", "PAALAM", "OO", "HINDI", "PLEASE", "SORRY",
-];
+/**
+ * Imported rather than copied, so the burst is always the burst the app
+ * actually fires. A hardcoded duplicate would have kept testing the twelve
+ * unpublished phrases after they were removed from the real list.
+ */
+const PRELOAD_GLOSSES = COMMON_WORDS;
 
 test.describe("animation asset delivery", () => {
   // 38 concurrent requests move ~82MB; the burst takes ~11s against a warm
