@@ -1,12 +1,39 @@
 import "./globals.css";
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import { cn } from "@/lib/utils";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 
-const inter = Inter({
-  subsets: ["latin"],
+/**
+ * Inter, self-hosted. Previously `Inter` from next/font/google.
+ *
+ * next/font/google downloads the font during `next build`, so the build failed
+ * outright whenever Google was unreachable:
+ *
+ *   request to https://fonts.googleapis.com/css2?family=Inter:wght@100..900
+ *     failed, reason: connect ETIMEDOUT 108.177.125.95:443
+ *   `next/font` error: Failed to fetch `Inter` from Google Fonts.
+ *
+ * That is not a local-only annoyance — the same timeout during a Vercel
+ * deployment fails the deploy. `fallback` and `display` do not help: they
+ * govern how text renders in the browser, not whether the build fetches.
+ *
+ * The woff2 now lives in the repository (./fonts), so the build has no network
+ * dependency at all and no request leaves the user's browser for a font.
+ * It is the latin subset of the variable face — matching the previous
+ * `subsets: ["latin"]` — so the rendered typography is unchanged.
+ */
+const inter = localFont({
+  src: "./fonts/Inter-latin-variable.woff2",
   variable: "--font-inter",
+  display: "swap",
+  // Variable font: one file covers the whole weight range.
+  weight: "100 900",
+  style: "normal",
+  fallback: ["system-ui", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
+  // For local fonts this names the metric-matched stand-in, rather than being
+  // a boolean as it is for the Google loader.
+  adjustFontFallback: "Arial",
 });
 
 export const metadata = {
