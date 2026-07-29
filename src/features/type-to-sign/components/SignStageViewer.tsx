@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, Pause, Play,
-  Repeat, RotateCcw, Sparkles,
+  Presentation, Repeat, RotateCcw, Sparkles,
 } from "lucide-react";
 import { SignAnimationPlayer } from "@/features/sign-animation/player/SignAnimationPlayer";
 import type {
@@ -50,6 +50,17 @@ export function SignStageViewer({
   const [speed, setSpeed] = useState(1);
   const [loop, setLoop] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  /**
+   * Room-legible type for demoing to an audience.
+   *
+   * The stage's readouts sit at 9–13px, which is right for one person at a
+   * laptop and unreadable from three metres. The gloss currently being signed
+   * and the "Sign i of n" counter are the two things an audience needs to
+   * follow, so those are what scale; the controls stay put, because the person
+   * driving the demo is standing at the machine.
+   */
+  const [presentationMode, setPresentationMode] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("skeleton");
   const [overlayOpacity, setOverlayOpacity] = useState(0.85);
   const [showTrails, setShowTrails] = useState(false);
@@ -167,9 +178,23 @@ export function SignStageViewer({
     <div className="flex flex-col gap-3">
       {/* Fixed height at every breakpoint: switching view mode must never
           reflow the page around it. Content scales inside instead. */}
+      {/*
+        The stage carries a fixed height at every breakpoint, and that height
+        went on applying in fullscreen — so requesting fullscreen blacked out
+        the rest of the screen and left the canvas at its windowed 720px. On a
+        1080p projector that wasted about a third of the vertical space.
+        Fullscreen now fills the viewport; the ResizeObserver on the surface
+        below picks the new size up and the canvas follows.
+      */}
       <div
         ref={stageRef}
-        className="group relative h-[420px] overflow-hidden rounded-[28px] border border-senyalita-border bg-white shadow-[0_24px_60px_-32px_rgba(15,23,42,0.45)] sm:h-[560px] lg:h-[650px] xl:h-[720px]"
+        data-testid="sign-stage"
+        data-fullscreen={isFullscreen ? "true" : "false"}
+        className={`group relative overflow-hidden bg-white ${
+          isFullscreen
+            ? "h-screen w-screen rounded-none border-0"
+            : "h-[420px] rounded-[28px] border border-senyalita-border shadow-[0_24px_60px_-32px_rgba(15,23,42,0.45)] sm:h-[560px] lg:h-[650px] xl:h-[720px]"
+        }`}
       >
         <div ref={surfaceRef} className="absolute inset-0">
           {hasClips && (
@@ -212,7 +237,12 @@ export function SignStageViewer({
                     transition={{ duration: 0.2 }}
                     className="flex items-center gap-2"
                   >
-                    <span className="font-display text-xl font-bold tracking-tight text-senyalita-dark">
+                    <span
+                      data-testid="stage-gloss"
+                      className={`font-display font-bold tracking-tight text-senyalita-dark ${
+                        presentationMode ? "text-[clamp(2rem,4vw,4rem)] leading-none" : "text-xl"
+                      }`}
+                    >
                       {current?.gesture}
                     </span>
                     {current && fingerspelledGlosses.has(current.gesture) && (
@@ -223,7 +253,12 @@ export function SignStageViewer({
                   </motion.div>
                 </AnimatePresence>
                 {clips.length > 1 && (
-                  <span className="text-[11px] font-medium tabular-nums text-senyalita-muted">
+                  <span
+                    data-testid="stage-counter"
+                    className={`font-medium tabular-nums text-senyalita-muted ${
+                      presentationMode ? "text-[clamp(1rem,1.6vw,1.5rem)]" : "text-[11px]"
+                    }`}
+                  >
                     Sign {index + 1} of {clips.length}
                   </span>
                 )}
@@ -329,6 +364,13 @@ export function SignStageViewer({
             </IconButton>
             <IconButton label="Download frame" onClick={downloadFrame} disabled={!hasClips || viewMode === "human"}>
               <Download className="h-4 w-4" />
+            </IconButton>
+            <IconButton
+              label={presentationMode ? "Exit presentation mode" : "Presentation mode"}
+              onClick={() => setPresentationMode((v) => !v)}
+              active={presentationMode}
+            >
+              <Presentation className="h-4 w-4" />
             </IconButton>
             <IconButton label={isFullscreen ? "Exit fullscreen" : "Fullscreen"} onClick={toggleFullscreen} disabled={!hasClips}>
               {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
