@@ -78,22 +78,79 @@ async function findLocalAsset(gloss: string): Promise<unknown | null> {
 
 export interface ResolvedAnimation {
   asset: unknown;
-  source: "published" | "local-development";
+  /**
+   * How the asset was obtained. The two `local-development-*` values record
+   * WHY the published lookup was not used, which is the distinction that made
+   * this bug invisible: a fallback because nothing is published is normal,
+   * a fallback because the lookup failed is an incident.
+   */
+  source: "published" | "local-development-absent" | "local-development-failed";
 }
 
-export async function resolveAnimationAsset(gloss: string): Promise<ResolvedAnimation | null> {
-  const published = await getPublishedAnimationAsset(gloss);
-  if (published) return { asset: published, source: "published" };
+/** A published asset exists but could not be retrieved. */
+export class AnimationLookupFailure extends Error {
+  constructor(
+    readonly gloss: string,
+    readonly stage: "asset" | "version" | "download" | "parse",
+    message: string,
+  ) {
+    super(`animation lookup failed for "${gloss}" at stage "${stage}": ${message}`);
+    this.name = "AnimationLookupFailure";
+  }
+}
 
-  if (!localFallbackEnabled()) return null;
+export type AnimationResolution =
+  | { outcome: "resolved"; resolved: ResolvedAnimation }
+  | { outcome: "absent" }
+  | { outcome: "failed"; failure: AnimationLookupFailure };
+
+export async function resolveAnimationAsset(gloss: string): Promise<AnimationResolution> {
+  const published = await getPublishedAnimationAsset(gloss);
+
+  if (published.outcome === "found") {
+    return { outcome: "resolved", resolved: { asset: published.asset, source: "published" } };
+  }
+
+  const failure =
+    published.outcome === "failed"
+      ? new AnimationLookupFailure(gloss, published.stage, published.message)
+      : null;
+
+  if (failure) {
+    // The real diagnosis, at the point it is known. The previous message here
+    // asserted "has no published Supabase asset" for every fallback, which was
+    // a wrong diagnosis printed confidently -- worse than silence, because it
+    // sent anyone reading the logs after the wrong problem.
+    console.error(`[animations] ${failure.message}`);
+  }
+
+  if (!localFallbackEnabled()) {
+    return failure ? { outcome: "failed", failure } : { outcome: "absent" };
+  }
 
   const local = await findLocalAsset(gloss);
-  if (!local) return null;
+  if (!local) {
+    return failure ? { outcome: "failed", failure } : { outcome: "absent" };
+  }
 
-  // Loud on purpose: this asset would 404 in production.
+  if (failure) {
+    console.warn(
+      `[animations] "${gloss}" is being served from the local development ` +
+        "fallback because the published lookup FAILED, not because it is " +
+        "unpublished. In production this request would have 404'd.",
+    );
+    return {
+      outcome: "resolved",
+      resolved: { asset: local, source: "local-development-failed" },
+    };
+  }
+
   console.warn(
     `[animations] "${gloss}" served from the local development fallback. ` +
       "It has no published Supabase asset and will fingerspell in production.",
   );
-  return { asset: local, source: "local-development" };
+  return {
+    outcome: "resolved",
+    resolved: { asset: local, source: "local-development-absent" },
+  };
 }

@@ -3,13 +3,16 @@ import type { GestureAnimationAsset } from "../types";
 export interface LoaderStats {
   cached: number;
   loaded: number;
+  /** Genuinely not published: a 404. Expected, and handled by fingerspelling. */
   missed: number;
+  /** Infrastructure failure: network error, 5xx, or malformed payload. */
+  failed: number;
 }
 
 export class AnimationLoader {
   private cache: Map<string, GestureAnimationAsset> = new Map();
   private pending: Map<string, Promise<GestureAnimationAsset | null>> = new Map();
-  private stats: LoaderStats = { cached: 0, loaded: 0, missed: 0 };
+  private stats: LoaderStats = { cached: 0, loaded: 0, missed: 0, failed: 0 };
 
   async load(gestureLabel: string): Promise<GestureAnimationAsset | null> {
     const key = gestureLabel.toUpperCase().replace(/\s+/g, "_");
@@ -52,15 +55,50 @@ export class AnimationLoader {
     }
   }
 
+  /**
+   * Returns null for "no asset available", which the caller turns into
+   * fingerspelling. That is correct for a 404 and wrong for everything else,
+   * so the other cases are logged rather than swallowed.
+   *
+   * The previous implementation wrapped the whole thing in a bare `catch {}`.
+   * A network failure, a 503 and a genuine 404 all produced the same silent
+   * null, which is the third place in this path where the reason a frame did
+   * not animate was discarded.
+   */
   private async fetchAsset(
     key: string,
   ): Promise<GestureAnimationAsset | null> {
+    let response: Response;
     try {
-      const publishedResponse = await fetch(`/api/animations/${encodeURIComponent(key)}`);
-      if (publishedResponse.ok) {
-        return await publishedResponse.json() as GestureAnimationAsset;
+      response = await fetch(`/api/animations/${encodeURIComponent(key)}`);
+    } catch (error) {
+      console.error(
+        `[AnimationLoader] network error fetching "${key}":`,
+        error instanceof Error ? error.message : error,
+      );
+      this.stats.failed++;
+      return null;
+    }
+
+    if (response.ok) {
+      try {
+        return await response.json() as GestureAnimationAsset;
+      } catch (error) {
+        console.error(`[AnimationLoader] malformed JSON for "${key}":`, error);
+        this.stats.failed++;
+        return null;
       }
-    } catch {
+    }
+
+    // 404 is the expected "not published yet" answer and stays quiet.
+    if (response.status !== 404) {
+      console.error(
+        `[AnimationLoader] "${key}" lookup failed: HTTP ${response.status}` +
+          ` (source=${response.headers.get("X-Animation-Source") ?? "unknown"},` +
+          ` stage=${response.headers.get("X-Animation-Failure-Stage") ?? "unknown"}).` +
+          " This is an infrastructure failure, not a missing animation.",
+      );
+      this.stats.failed++;
     }
     return null;
   }
@@ -82,6 +120,6 @@ export class AnimationLoader {
   clearCache(): void {
     this.cache.clear();
     this.pending.clear();
-    this.stats = { cached: 0, loaded: 0, missed: 0 };
+    this.stats = { cached: 0, loaded: 0, missed: 0, failed: 0 };
   }
 }

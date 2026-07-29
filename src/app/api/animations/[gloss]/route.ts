@@ -8,7 +8,28 @@ export const runtime = "nodejs";
 export async function GET(_request: Request, { params }: { params: { gloss: string } }) {
   try {
     const gloss = decodeURIComponent(params.gloss);
-    const resolved = await resolveAnimationAsset(gloss);
+    const resolution = await resolveAnimationAsset(gloss);
+
+    // A failed lookup is not a missing asset. Reporting infrastructure failure
+    // as 404 is what let this hide: the client treats 404 as "unpublished",
+    // fingerspells, and nothing anywhere records that a published asset was
+    // unreachable. 503 says the asset exists and the request should be retried.
+    if (resolution.outcome === "failed") {
+      return NextResponse.json(
+        { error: "Animation temporarily unavailable." },
+        {
+          status: 503,
+          headers: {
+            "Cache-Control": "no-store",
+            "Retry-After": "1",
+            "X-Animation-Source": "lookup-failed",
+            "X-Animation-Failure-Stage": resolution.failure.stage,
+          },
+        },
+      );
+    }
+
+    const resolved = resolution.outcome === "resolved" ? resolution.resolved : null;
 
     if (!resolved) {
       // Never cache a miss. A 404 here means "no published asset yet", which
