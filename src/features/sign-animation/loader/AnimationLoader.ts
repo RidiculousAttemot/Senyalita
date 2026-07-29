@@ -1,5 +1,15 @@
 import type { GestureAnimationAsset } from "../types";
 
+/**
+ * Concurrent requests allowed while warming the cache.
+ *
+ * Four, not one: browsers open ~6 connections per origin, so a slightly
+ * smaller pool keeps the warm-up from monopolising them while still finishing
+ * the alphabet promptly. Anything the user actually asks for goes through
+ * load() directly and is never queued behind this.
+ */
+const PRELOAD_CONCURRENCY = 4;
+
 export interface LoaderStats {
   cached: number;
   loaded: number;
@@ -103,10 +113,34 @@ export class AnimationLoader {
     return null;
   }
 
-  preload(gestureLabels: string[]): void {
-    for (const label of gestureLabels) {
-      this.load(label);
-    }
+  /**
+   * Warms the cache without stampeding.
+   *
+   * This was a bare unawaited loop, so every label dispatched at once: 26
+   * concurrent requests moving ~3MB each, roughly 82MB in one burst on every
+   * mount. Measured against a production server that took 10.7s wall with a
+   * p50 of 6.2s per request, and against storage directly it was 32.7s. The
+   * same assets fetched one at a time return in 0.1-0.5s, so nearly all of
+   * that was self-inflicted queueing.
+   *
+   * A small pool keeps the warm-up in the background where it belongs. This is
+   * deliberately NOT a fix for the local-development fallback incident: that
+   * cause was never identified (storage survived 38-way concurrency and the
+   * database survived 150-way, both without a single error). Reducing peak
+   * load is worth doing on its own merits, and the observability added in
+   * "distinguish a failed lookup from an absent asset" is what will identify
+   * the fallback if it recurs.
+   */
+  async preload(gestureLabels: string[], concurrency = PRELOAD_CONCURRENCY): Promise<void> {
+    const queue = [...gestureLabels];
+    const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+      for (let label = queue.shift(); label !== undefined; label = queue.shift()) {
+        // load() already de-duplicates in-flight requests, and swallows
+        // nothing: failures are logged by fetchAsset.
+        await this.load(label);
+      }
+    });
+    await Promise.all(workers);
   }
 
   getCacheSize(): number {

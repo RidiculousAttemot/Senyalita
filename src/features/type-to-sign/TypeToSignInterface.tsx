@@ -160,7 +160,9 @@ export function TypeToSignInterface() {
     if (!trimmed) return;
     try {
       const keys = globalPipeline.translate(trimmed).animationPlan.items.map((i) => i.animationKey);
-      globalLoader.preload(keys.filter(Boolean));
+      void globalLoader.preload(keys.filter(Boolean)).catch(() => {
+        // Warming is best-effort; fetchAsset has already logged the reason.
+      });
     } catch {
       // Best-effort prefetch — a malformed partial phrase mid-typing just skips warming.
     }

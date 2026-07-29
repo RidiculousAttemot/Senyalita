@@ -24,7 +24,13 @@ export function preloadCommonAssets(): void {
   if (started) return;
   started = true;
 
-  const run = () => globalLoader.preload(COMMON_WORDS);
+  // preload() is now async. Nothing awaits it — warming is background work —
+  // so the rejection has to be caught here or it surfaces as an unhandled one.
+  const run = () => {
+    void globalLoader.preload(COMMON_WORDS).catch((error: unknown) => {
+      console.error("[preload] warming the animation cache failed:", error);
+    });
+  };
 
   if (typeof window === "undefined") return;
   if ("requestIdleCallback" in window) {
