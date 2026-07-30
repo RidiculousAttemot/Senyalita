@@ -37,6 +37,34 @@ const nextConfig = {
         destination: '/translate',
         permanent: true,
       },
+      // /learn and /conversation were removed by the scope reduction, not
+      // moved. There is no equivalent surface, so both land on /translate
+      // rather than 404ing for anyone following an old link.
+      //
+      // Deliberately 307 (permanent: false), unlike the two above. Those are
+      // renames — the workflows genuinely live on /translate now, so a 301 is
+      // accurate and cacheable forever. These two are deletions, and a 301 is
+      // cached by the browser indefinitely: if either page ever comes back,
+      // anyone who hit the redirect once would keep being bounced with no way
+      // to clear it. /evaluation already demonstrated that a page removed
+      // under the two-workflow rule can turn out to be needed.
+      {
+        source: '/learn',
+        destination: '/translate',
+        permanent: false,
+      },
+      {
+        source: '/conversation',
+        destination: '/translate',
+        permanent: false,
+      },
+      // The detail route had a dynamic segment; :id is discarded because
+      // nothing on /translate consumes a conversation id.
+      {
+        source: '/conversation/:id',
+        destination: '/translate',
+        permanent: false,
+      },
     ];
   },
 };

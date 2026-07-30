@@ -137,7 +137,9 @@ test.describe("Text-to-Sign", () => {
 
 test.describe("routing", () => {
   test("public surface is /, /translate and /evaluation", async ({ page }) => {
-    for (const path of ["/conversation", "/learn", "/presentation", "/history"]) {
+    // /learn and /conversation moved out of this list when they gained
+    // redirects; they are asserted below instead. These two are gone outright.
+    for (const path of ["/presentation", "/history"]) {
       const res = await page.goto(`${BASE}${path}`);
       expect(res?.status(), `${path} should be gone`).toBe(404);
     }
@@ -152,9 +154,36 @@ test.describe("routing", () => {
   });
 
   test("legacy paths redirect to /translate", async ({ page }) => {
-    for (const path of ["/type-to-sign", "/sign-to-text"]) {
+    // The first two are renames (301) and the rest are deletions (307), but
+    // from a visitor's side the requirement is identical: an old link lands on
+    // /translate instead of a 404.
+    for (const path of [
+      "/type-to-sign",
+      "/sign-to-text",
+      "/learn",
+      "/conversation",
+      "/conversation/some-old-id",
+    ]) {
       await page.goto(`${BASE}${path}`);
-      await expect(page).toHaveURL(new RegExp("/translate$"));
+      await expect(page, `${path} should land on /translate`).toHaveURL(new RegExp("/translate$"));
+    }
+  });
+
+  test("deleted pages redirect at the status code they claim", async ({ request }) => {
+    // Renames are permanent; deletions are not, so a restored page is not
+    // fighting a 301 cached in every browser that ever hit it.
+    const expected: Array<[string, number]> = [
+      ["/type-to-sign", 308],
+      ["/sign-to-text", 308],
+      ["/learn", 307],
+      ["/conversation", 307],
+      ["/conversation/some-old-id", 307],
+    ];
+
+    for (const [path, status] of expected) {
+      const res = await request.get(`${BASE}${path}`, { maxRedirects: 0 });
+      expect(res.status(), `${path}`).toBe(status);
+      expect(res.headers()["location"], `${path} target`).toContain("/translate");
     }
   });
 
