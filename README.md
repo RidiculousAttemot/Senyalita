@@ -1,15 +1,66 @@
 # SignLangVisual
-The Development of a Real Time Sign Language Recognition and Translation System Using Deep Learning for Text and Speech output
+
+The Development of a Real Time Sign Language Recognition and Translation System Using
+Deep Learning for Text and Speech output
+
+An AI-assisted **Filipino Sign Language alphabet translation system**. It recognises
+fingerspelled letters from a webcam and builds words with a suggestion engine, and it
+plays typed text back as sign animations — fingerspelling anything the dictionary does
+not cover.
+
+Recognition runs **entirely in the browser**. Video never leaves the device.
+
+## Two workflows
+
+Both live on `/translate`, in a tab switcher.
+
+| | Input | Output |
+| --- | --- | --- |
+| **Sign-to-Text** | webcam | one recognised letter at a time, assembled into words with suggestions |
+| **Text-to-Sign** | typed text | animated FSL playback, fingerspelled when no sign is published |
+
+## The model
+
+| | |
+| --- | --- |
+| Architecture | Bidirectional LSTM — 35 temporal steps, 48 hidden units |
+| Classes | 131 |
+| Size | ~320 KB, served from `public/models/fsl_unified/bilstm_tfjs/` |
+| Test accuracy | 94.86% |
+| Runtime | TensorFlow.js, client-side |
+
+Feature extraction uses MediaPipe Hand Landmarker (a pretrained model from Google);
+the BiLSTM is trained in this repository. The deployed model retains phrase classes,
+but the **application scope** is alphabet recognition, so the UI treats predictions as
+single characters.
+
+## Quick start
+
+```bash
+nvm use
+npm install
+npm run dev
+```
+
+Then open http://localhost:3000. Camera pages need `localhost` or HTTPS — that is a
+`getUserMedia` requirement, not a project one.
+
+Copy `.env.example` to `.env.local` and fill in the Supabase values. The Supabase URL
+and anon key are the only variables needed for a working local app.
+
+| Command | Does |
+| --- | --- |
+| `npm run dev` | dev server on :3000 |
+| `npm run build` | production build |
+| `npm test` | Vitest suite |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` | `next lint` |
+| `npm run knip` | unused-export detection |
 
 ## Requirements
 
 **Node.js 22 LTS** — pinned in [`.nvmrc`](.nvmrc) (currently `22.23.1`) and enforced by
 `engines` in `package.json` (`>=22.12.0 <24.0.0`).
-
-```bash
-nvm use          # or: fnm use / volta pin
-npm install
-```
 
 The range is narrow because both ends are load-bearing:
 
@@ -41,40 +92,17 @@ delete once everyone is on the pinned Node 22:
 Disabling the production cache costs full-rebuild time on every build. That is a
 deliberate trade for a build that completes.
 
-## Phase 1 Status
-Phase 1 is complete. It delivers the frontend camera pipeline with MediaPipe Hands landmark rendering, status indicators, language toggle, and text-to-speech for a placeholder transcript.
+## Documentation
 
-### What Phase 1 Includes
-- Landing page with Start button
-- Camera page with webcam permission flow
-- Two-hand landmark rendering with MediaPipe Hands
-- Status indicator and FPS diagnostic
-- Placeholder transcript with English/Tagalog toggle and browser text-to-speech
+| Document | Covers |
+| --- | --- |
+| [SYSTEM_OVERVIEW.md](SYSTEM_OVERVIEW.md) | What the system is, scope, model, data architecture |
+| [SYSTEM_FLOW.md](SYSTEM_FLOW.md) | User roles and the two workflows, step by step |
+| [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) | Algorithms, constants, and the recognition hot path |
+| [FOLDER_STRUCTURE.md](FOLDER_STRUCTURE.md) | Directory layout |
+| [AGENTS.md](AGENTS.md) | Phase-by-phase project history |
 
-### Run Locally
-1. Install dependencies:
-	`npm install`
-2. Start the dev server:
-	`npm run dev`
-3. Open: http://localhost:3000
+## Stack
 
-### Demo Checklist
-- Open the landing page and click Start
-- Approve camera permission
-- Verify one-hand and two-hand landmarks
-- Confirm status updates and FPS display
-- Toggle English/Tagalog and click Text-to-Speech to read the placeholder transcript
-
-### Demo Script
-See docs/phase-1-demo-script.md for a step-by-step recording guide.
-
-### Current Limitations
-- No gesture recognition model yet (CNN-LSTM is Phase 2)
-- Placeholder transcript only
-- Accuracy depends on camera quality and lighting
-
-### Next Phase
-Phase 2 will add CNN-LSTM inference, translation mapping, and logging (still frontend-first).
-
-## Phase 3 Status
-Phase 3 adds a temporary developer dataset capture panel on the camera page. It records normalized MediaPipe landmark sequences and exports them as JSON for future CNN-LSTM training.
+Next.js 14 (App Router) · React 18 · TypeScript · Tailwind v4 · TensorFlow.js ·
+MediaPipe Tasks Vision · Supabase (Postgres, Auth, Storage) · Vercel
