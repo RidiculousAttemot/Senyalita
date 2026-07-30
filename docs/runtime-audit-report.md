@@ -14,7 +14,7 @@ Reports gaps, orphans, and gestures with no replies.
 ## Usage
 ```bash
 # Required: database connection string
-set DATABASE_URL=postgresql://postgres:...@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres
+set DATABASE_URL=postgresql://postgres:[PASSWORD]@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres
 
 # Basic text report
 node scripts/audit-deployed-model.mjs

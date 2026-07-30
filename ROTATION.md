@@ -1,28 +1,62 @@
 # Credential rotation checklist
 
-Written 2026-07-28. Nothing in this document has been rotated — it is a
-checklist for you to execute. No credential values appear here.
+Written 2026-07-28. **Rotation completed and the exposed files scrubbed
+2026-07-30.** No credential values appear here.
 
-## 0. Why this is not optional
+## 0. Status — DONE, with a caveat that still matters
 
-Five **tracked** files in this repository contain what appear to be live
-credentials. They are in git history, so they are in every clone, and
-rotation — not deletion — is what actually protects the project. Deleting the
-lines is housekeeping; changing the secrets is the fix.
+The database passwords have been rotated, and the four tracked files that
+carried a live value have been scrubbed to the `[PASSWORD]` placeholder style
+already used by `scripts/db-provision.mjs:15`.
 
-| File | Line | What it holds |
-|---|---|---|
-| `docs/production-deployment-report.md` | 29 | A Supabase JWT key |
-| `docs/database-audit.md` | 204 | Pooler connection string incl. password |
-| `docs/database-verification-report.md` | 193 | Pooler connection string incl. password |
-| `docs/runtime-audit-report.md` | 17 | Connection string incl. password |
-| `scripts/db-find-region.mjs` | 13 | Pooler connection string incl. password |
+| File | Line | Was | Now |
+|---|---|---|---|
+| `docs/database-audit.md` | 204 | Pooler conn string incl. password | `[PASSWORD]` |
+| `docs/database-verification-report.md` | 193 | Pooler conn string incl. password | `[PASSWORD]` |
+| `docs/runtime-audit-report.md` | 17 | Conn string incl. password | `[PASSWORD]` |
+| `scripts/db-find-region.mjs` | 13 | Hardcoded password | Reads `PGPASSWORD`/`DATABASE_URL` |
 
-Verified **not** exposed (they use placeholders):
+Host and username are deliberately preserved so the documented commands stay
+useful; only the secret is gone.
+
+### Correction to the original audit
+
+`docs/production-deployment-report.md:29` was listed here as "a Supabase JWT
+key". **That was wrong.** The token on that line is truncated to 37 characters
+— a single 36-character segment followed by an ellipsis. That segment is
+`eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9`, the base64 of
+`{"alg":"HS256","typ":"JWT"}`, which every HS256 token begins with. The payload
+and signature — the parts that are secret — were never in the file. The row is
+also labelled `NEXT_PUBLIC_SUPABASE_ANON_KEY` / "Public", and the anon key is
+publishable by design. Nothing was exposed there and nothing needed changing.
+
+Line 34 of the same file was flagged by a later, broader scan and is also
+clean: its password is the angle-bracket placeholder `<pwd>`.
+
+So the real exposure was **four** files, not five.
+
+### HISTORY STILL CARRIES THE OLD VALUES
+
+Scrubbing changes the current files only. Every pre-scrub commit still contains
+the original passwords, and `git log -p` or `git show <old-sha>:<path>` will
+return them. This is acceptable **only because the credentials have been
+rotated** — the values in history are now useless.
+
+If they had not been rotated, this scrub would have made things worse rather
+than better: an obvious secret gets fixed, while a secret that merely looks
+absent gets forgotten.
+
+Cleaning history itself remains a separate, unmade decision, with the same cost
+as the `tmp/` cleanup: a full rewrite, every commit hash changed, every clone
+re-cloned.
+
+### Verified not exposed
 
 - `.env.example` — placeholder
-- `scripts/db-provision.mjs:15` — `[PASSWORD]`
+- `scripts/db-provision.mjs:15` — `[PASSWORD]` (unchanged by the scrub, which
+  confirms it was already safe)
 - `scripts/db-test.mjs:34` — masked with `***`
+- No `sb_secret_…` or complete three-segment JWT appears in any tracked file.
 
 `.env.local` is git-ignored and untracked. Confirmed via
 `git status --ignored`; it is listed as ignored and appears in no tree.

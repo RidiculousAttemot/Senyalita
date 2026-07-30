@@ -201,7 +201,7 @@ The complete machine-readable output lives in `docs/database-audit.json`.
 ## How to re-run
 
 ```powershell
-$env:DATABASE_URL = "postgresql://postgres.tfhpcbasfugqaimcoios:<DB_PASSWORD>@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres"
+$env:DATABASE_URL = "postgresql://postgres.tfhpcbasfugqaimcoios:[PASSWORD]@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres"
 node scripts/db-audit.mjs
 ```
 

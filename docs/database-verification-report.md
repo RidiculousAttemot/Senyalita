@@ -190,7 +190,7 @@ The migration set is idempotent. To wipe and re-apply:
 # 1. Drop and recreate the schema in the Supabase SQL editor
 #    (or run a one-off `drop schema public cascade; create schema public;`).
 
-$env:DATABASE_URL = "postgresql://postgres.tfhpcbasfugqaimcoios:<DB_PASSWORD>@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres"
+$env:DATABASE_URL = "postgresql://postgres.tfhpcbasfugqaimcoios:[PASSWORD]@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres"
 node scripts/db-migrate.mjs      # 8/8 OK
 node scripts/db-seed-gestures.mjs
 node scripts/db-audit.mjs        # writes docs/database-audit.json
