@@ -39,11 +39,17 @@ single characters.
 ```bash
 nvm use
 npm install
+npm run hooks:install
 npm run dev
 ```
 
 Then open http://localhost:3000. Camera pages need `localhost` or HTTPS — that is a
 `getUserMedia` requirement, not a project one.
+
+`npm run hooks:install` sets `core.hooksPath` to the tracked [`.githooks/`](.githooks)
+directory, enabling a pre-push secret scan. **Run it once per clone** — git will not
+enable hooks for you, and a hook that is not installed protects nothing. See
+[Secret scanning](#secret-scanning).
 
 Copy `.env.example` to `.env.local` and fill in the Supabase values. The Supabase URL
 and anon key are the only variables needed for a working local app.
@@ -56,6 +62,23 @@ and anon key are the only variables needed for a working local app.
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | `next lint` |
 | `npm run knip` | unused-export detection |
+| `npm run audit:secrets` | scan all git history for credentials |
+| `npm run hooks:install` | enable the pre-push secret scan (once per clone) |
+
+## Secret scanning
+
+`npm run audit:secrets` scans every blob reachable from every ref — not the working
+tree. That distinction is the whole point: a live Supabase `service_role` key sat on
+`origin/main` for six weeks while the working tree read clean, because it had been
+removed locally and never pushed. Two earlier audits missed it by scanning files
+instead of objects. [`ROTATION.md`](ROTATION.md) §0.5 has the post-mortem.
+
+The pre-push hook runs the same scanner against the commit range being pushed and
+refuses on a hit, printing path and line but never the value. `git push --no-verify`
+bypasses it, deliberately and visibly.
+
+It is local-only and cannot protect a push from another clone, so enable GitHub push
+protection as the second layer: **Settings → Code security → Secret scanning**.
 
 ## Requirements
 

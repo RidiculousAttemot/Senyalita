@@ -1,13 +1,20 @@
 # Credential rotation checklist
 
-Written 2026-07-28. **Rotation completed and the exposed files scrubbed
-2026-07-30.** No credential values appear here.
+Written 2026-07-28. Database passwords rotated and four files scrubbed
+2026-07-30. **Reopened 2026-07-31: a live `service_role` JWT was found on
+`origin/main` that this document had declared absent.** See §0.5. No credential
+values appear here.
 
-## 0. Status — DONE, with a caveat that still matters
+## 0. Status — NOT DONE
 
 The database passwords have been rotated, and the four tracked files that
 carried a live value have been scrubbed to the `[PASSWORD]` placeholder style
-already used by `scripts/db-provision.mjs:15`.
+already used by `scripts/db-provision.mjs:15`. That part stands.
+
+What did not happen: the `service_role` JWT in `scripts/api-verify.mjs` was
+never rotated, because §0's "Verified not exposed" list said no such key
+existed. It did, and still does, on the published default branch. Read §0.5
+before trusting anything else here.
 
 | File | Line | Was | Now |
 |---|---|---|---|
@@ -50,16 +57,83 @@ Cleaning history itself remains a separate, unmade decision, with the same cost
 as the `tmp/` cleanup: a full rewrite, every commit hash changed, every clone
 re-cloned.
 
-### Verified not exposed
+### Verified not exposed — TWO OF THESE WERE WRONG
 
-- `.env.example` — placeholder
+- `.env.example` — placeholder. Still true.
 - `scripts/db-provision.mjs:15` — `[PASSWORD]` (unchanged by the scrub, which
-  confirms it was already safe)
-- `scripts/db-test.mjs:34` — masked with `***`
-- No `sb_secret_…` or complete three-segment JWT appears in any tracked file.
+  confirms it was already safe). Still true.
+- ~~`scripts/db-test.mjs:34` — masked with `***`~~ **WRONG.** True on this
+  branch. On `origin/main` the file carries two unmasked 16-character
+  passwords.
+- ~~No `sb_secret_…` or complete three-segment JWT appears in any tracked
+  file.~~ **WRONG.** True of the working tree. `origin/main` serves a complete
+  three-segment `service_role` JWT from `scripts/api-verify.mjs`.
 
 `.env.local` is git-ignored and untracked. Confirmed via
 `git status --ignored`; it is listed as ignored and appears in no tree.
+
+## 0.5. Reopened 2026-07-31 — what the earlier audit missed
+
+### The exposure
+
+| Where | What | Status |
+|---|---|---|
+| `scripts/api-verify.mjs` | Complete `service_role` JWT, `iss: supabase`, `exp` 2036-06-06 | **Live unless rotated.** Bypasses RLS entirely |
+| `scripts/db-test.mjs` | Two unmasked 16-character DB passwords | Probably dead — the 2026-07-30 password rotation likely covered them |
+
+Published by commit `02b57013` ("cleanaup", 2026-06-19), which **is an ancestor
+of `origin/main`**. The repository is public (`"visibility": "public"` from the
+unauthenticated GitHub API), so both have been world-readable since 2026-06-19.
+
+The values were removed from this branch on 2026-07-27 (`08a1f549`), but that
+commit was never pushed. Local removal and published state are different
+things; only the second one matters.
+
+### Scoping error 1 — audited the branch, claimed it about the repository
+
+The "Verified not exposed" list was produced by scanning the local working
+tree. The branch had already been cleaned on 2026-07-27, so it read clean —
+while `origin/main`, which is what the public actually sees, was serving a live
+key the whole time. The audit was accurate about what it looked at and wrong
+about what it claimed.
+
+**Rule: a credential audit scans what is PUBLISHED — every ref and all history
+— not the working tree.** `git rev-list --objects --all`, not `git grep`. Use
+`npm run audit:secrets`, which does exactly this.
+
+### Scoping error 2 — placeholder filter narrower than the claim
+
+A follow-up check classified `postgresql://` passwords as real or placeholder
+by testing for `[...]` and `<...>` brackets. It did not test for `${...}`, so
+`scripts/db-find-region.mjs` — which contains the template literal
+`${process.env.DB_PASSWORD}` — was reported as a live 26-character password on
+a public branch. It is not a credential at all. That escalation was wrong and
+is withdrawn.
+
+### Both errors have the same shape
+
+A check narrower than the conclusion drawn from it. One produced a false
+negative that hid a live `service_role` key for six weeks; the other produced a
+false positive that raised a nonexistent one. The fix in both directions is to
+state what was scanned alongside what was found — which `scripts/audit-secrets.mjs`
+now prints on every run.
+
+### Consequence for history
+
+Once the `service_role` key is rotated, every copy in history becomes inert,
+exactly as with the database passwords in §0. **No history rewrite is planned.**
+A rewrite changes all 127 commit hashes and forces every clone to be re-cloned,
+and after six weeks of public exposure it removes nothing an attacker could not
+already have taken. Rotation is the remediation; the history copies are noise
+once the key is dead.
+
+### Not yet done
+
+Scrubbing `scripts/api-verify.mjs` and `scripts/db-test.mjs` is deliberately
+**deferred until the key is confirmed rotated**. Scrubbing first would make the
+files stop looking urgent while the live key remained reachable in history —
+the precise failure mode §4 warns about, and the one that produced this
+section.
 
 ## 1. What each credential is, and what actually consumes it
 
