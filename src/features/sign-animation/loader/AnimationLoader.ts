@@ -130,6 +130,26 @@ export class AnimationLoader {
    * load is worth doing on its own merits, and the observability added in
    * "distinguish a failed lookup from an absent asset" is what will identify
    * the fallback if it recurs.
+   *
+   * 2026-07-31, replayed against a dev server with ANIMATION_LOCAL_FALLBACK=0
+   * (`npm run dev:prod-assets`), so a masked failure would surface as 503:
+   *
+   *   concurrency  1 -> 26/26 published, p50 1639ms, wall 44.8s
+   *   concurrency  4 -> 26/26 published, p50 1702ms, wall 12.3s
+   *   concurrency 26 -> 26/26 published, p50 2611ms, wall  3.0s  (x3 rounds)
+   *   concurrency 78 -> 78/78 published, p50 4688ms, 259MB
+   *   concurrency 156 -> 156/156 published, p50 10.0s, max 92.7s, 519MB
+   *
+   * Still not reproduced, and the space is now smaller: not pool exhaustion,
+   * not rate limiting, not an upstream timeout — none of those fire even at
+   * 519MB across 156 concurrent requests. What load produces is unbounded
+   * latency with a clean 200: a 3MB asset took 92.7s while the server logged
+   * success. Any client-side timeout turns that into a failure the server
+   * never records, which fits an incident invisible in the logs.
+   *
+   * Note the cap is a production tradeoff, not a local win: locally it makes
+   * wall time 4x worse (12.3s at 4 vs 3.0s at 26). It was chosen against
+   * production numbers (10.7s wall, p50 6.2s), where the burst is the problem.
    */
   async preload(gestureLabels: string[], concurrency = PRELOAD_CONCURRENCY): Promise<void> {
     const queue = [...gestureLabels];

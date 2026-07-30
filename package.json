@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "next dev",
+    "dev:prod-assets": "node scripts/dev-prod-assets.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
