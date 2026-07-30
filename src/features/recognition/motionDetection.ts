@@ -2,7 +2,11 @@ import type { HandData } from "./buffer";
 
 const MOTION_THRESHOLD = 0.015;
 const IDLE_THRESHOLD = 0.005;
-const IDLE_FRAMES = 15;
+/**
+ * Still frames required before a gesture is called finished. Exported so the
+ * sequence buffer can trim the same trailing stillness off the gesture span.
+ */
+export const IDLE_FRAMES = 15;
 const START_FRAMES = 3;
 const VELOCITY_WINDOW = 5;
 const STABILITY_WINDOW = 8;

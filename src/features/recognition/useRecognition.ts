@@ -5,7 +5,7 @@ import { RecognitionState, RealPredictionResult, RecognitionCategory } from "./t
 import { InferenceResult } from "./model";
 import { SequenceBuffer, SEQUENCE_LENGTH, MINIMUM_FRAMES, HandData } from "./buffer";
 import { PredictionSmoother } from "./smoothing";
-import { MotionDetector, MotionState } from "./motionDetection";
+import { MotionDetector, MotionState, IDLE_FRAMES } from "./motionDetection";
 import { translateResult, getRecognitionCategory } from "./translation";
 import { loadModel, infer, getCachedResult } from "./model";
 import { ModeManager, type RecognitionMode } from "./recognitionModes";
@@ -214,7 +214,19 @@ export const useRecognition = (
         }
       }
       if (motionDetectorRef.current) {
+        const previousState = motionDetectorRef.current.getState();
         const newState = motionDetectorRef.current.update(left, right);
+
+        // Hand the gesture's boundaries to the buffer so its span can be
+        // stretched to the temporal scale the model was trained on. Motion is
+        // measured here, on raw landmarks, because the buffer's wrist-centred
+        // features cannot express a hand moving across the body.
+        if (previousState === "idle" && newState === "gesturing") {
+          bufferRef.current?.markGestureStart();
+        } else if (previousState === "gesturing" && newState === "idle") {
+          bufferRef.current?.markGestureEnd(IDLE_FRAMES);
+        }
+
         if (newState === "gesturing") {
           freezeCounterRef.current = 0;
           setFrozenPrediction(null);
