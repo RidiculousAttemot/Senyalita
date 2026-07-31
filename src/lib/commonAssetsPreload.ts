@@ -1,5 +1,3 @@
-import { globalLoader } from "@/features/sign-animation/hooks/useAnimationClip";
-
 /**
  * The fingerspelling alphabet, and nothing else.
  *
@@ -15,27 +13,21 @@ import { globalLoader } from "@/features/sign-animation/hooks/useAnimationClip";
  */
 export const COMMON_WORDS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
-let started = false;
-
-/** Warms the shared animation-asset cache with high-frequency words so the
- * first real translation has a head start. Idempotent — safe to call from
- * every mount of the translate UI. */
-export function preloadCommonAssets(): void {
-  if (started) return;
-  started = true;
-
-  // preload() is now async. Nothing awaits it — warming is background work —
-  // so the rejection has to be caught here or it surfaces as an unhandled one.
-  const run = () => {
-    void globalLoader.preload(COMMON_WORDS).catch((error: unknown) => {
-      console.error("[preload] warming the animation cache failed:", error);
-    });
-  };
-
-  if (typeof window === "undefined") return;
-  if ("requestIdleCallback" in window) {
-    window.requestIdleCallback(run, { timeout: 2000 });
-  } else {
-    setTimeout(run, 300);
-  }
-}
+/**
+ * There is deliberately no `preloadCommonAssets()` any more.
+ *
+ * It warmed all 26 letters the moment the Text-to-Sign tab mounted. Measured
+ * against production that was **16.1MB over the wire and 78MB decoded and
+ * JSON-parsed** (0.62MB brotli / 3.01MB raw per asset) — roughly 1.3s of
+ * blocked main thread, competing with the recognition model and the MediaPipe
+ * WASM for bandwidth, before the user had typed anything and on a tab they may
+ * never open.
+ *
+ * TypeToSignInterface's debounced typing-pause prefetch already warms exactly
+ * the glosses a message resolves to, through the real pipeline, ~400ms after
+ * typing stops — still ahead of the Translate click. Precise warming on intent
+ * beats warming the alphabet on arrival.
+ *
+ * This list survives because e2e/animation-load.spec.ts walks it to assert no
+ * published asset is ever served from the local development fallback.
+ */

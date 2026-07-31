@@ -7,7 +7,6 @@ import { globalPipeline } from "@/features/translation-pipeline";
 import type { AnimationPlanItem, TranslationPipelineResult } from "@/features/translation-pipeline/types";
 import { FingerspellingEngine } from "@/features/sign-animation/player/FingerspellingEngine";
 import type { AnimationClip } from "@/features/sign-animation/types";
-import { preloadCommonAssets } from "@/lib/commonAssetsPreload";
 import { globalLoader } from "@/features/sign-animation/hooks/useAnimationClip";
 import { useProgressiveSignTranslation } from "./useProgressiveSignTranslation";
 import { SignComposer } from "./components/SignComposer";
@@ -138,11 +137,18 @@ export function TypeToSignInterface() {
     recognitionRef.current?.stop?.();
   }, []);
 
-  // Warm the shared asset cache with high-frequency words so the first real
-  // translation (and any of the quick-suggestion chips) has a head start.
-  useEffect(() => {
-    preloadCommonAssets();
-  }, []);
+  // No blanket cache warm on mount.
+  //
+  // This used to call preloadCommonAssets(), fetching all 26 letters the moment
+  // the tab mounted: 16.1MB over the wire and 78MB decoded and JSON-parsed,
+  // roughly 1.3s of blocked main thread, racing the model and the MediaPipe
+  // WASM for bandwidth — before the user had typed anything, and on a tab they
+  // may never use.
+  //
+  // The debounced typing-pause prefetch below already warms exactly the assets
+  // a message needs, resolved through the real pipeline, and fires ~400ms after
+  // typing stops — still ahead of the Translate click. Precise warming on
+  // intent beats warming the whole alphabet on arrival.
 
   const handleTranslate = useCallback(() => {
     const trimmed = message.trim();
