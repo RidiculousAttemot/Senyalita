@@ -77,6 +77,15 @@ The pre-push hook runs the same scanner against the commit range being pushed an
 refuses on a hit, printing path and line but never the value. `git push --no-verify`
 bypasses it, deliberately and visibly.
 
+Because it scans objects, a credential that was ever committed is found forever —
+revoking it does not remove it from history. [`scripts/secret-allowlist.json`](scripts/secret-allowlist.json)
+records values confirmed dead, keyed by SHA-256 so no secret is stored (they are
+already public in history; the digest only identifies). Allowlisted values are still
+printed on every run with their reason and death date — they stop failing the build,
+they do not stop being reported. **Revoke first, then allowlist**: entering a live key
+there hides it permanently. Without this the scanner fails on every run, and a check
+that is always bypassed is how the six-week blind spot happened in the first place.
+
 It is local-only and cannot protect a push from another clone, so enable GitHub push
 protection as the second layer: **Settings → Code security → Secret scanning**.
 

@@ -21,8 +21,36 @@
  * Values are NEVER printed — only path, line, kind, and a masked preview.
  */
 import { execSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 const MAX_BLOB = 2_000_000;
+
+/**
+ * Values confirmed dead, keyed by SHA-256 so no secret is stored here.
+ *
+ * Hashing costs nothing in safety: every value in this list is already in the
+ * repo's published history in plaintext, which is precisely why it is listed.
+ * The digest exists to identify, not to protect.
+ *
+ * Allowlisted findings are still PRINTED on every run, with the reason and the
+ * date they died. That is the whole difference between an allowlist and a blind
+ * spot — the scanner keeps saying what it found, it just stops failing on
+ * values a human has already adjudicated.
+ */
+const ALLOWLIST_PATH = path.join(process.cwd(), "scripts", "secret-allowlist.json");
+
+const loadAllowlist = () => {
+  try {
+    const raw = JSON.parse(readFileSync(ALLOWLIST_PATH, "utf8"));
+    return new Map((raw.entries ?? []).map((e) => [e.sha256, e]));
+  } catch {
+    return new Map();
+  }
+};
+
+const fingerprint = (value) => createHash("sha256").update(value, "utf8").digest("hex");
 
 /**
  * Binary and model formats. Excluded because a secret cannot hide in them in a
@@ -144,6 +172,7 @@ for (const line of sizes.split(/\r?\n/)) {
   wanted.push(sha);
 }
 
+const allowlist = loadAllowlist();
 const findings = [];
 let scanned = 0;
 
@@ -174,11 +203,14 @@ if (wanted.length) {
         const value = hit[0];
         if (PLACEHOLDER.test(value)) continue;
         const line = text.slice(0, hit.index).split("\n").length;
+        const sha256 = fingerprint(value);
         for (const p of pathsBySha.get(m[1])) {
           findings.push({
             kind,
             path: p,
             line,
+            sha256,
+            allowed: allowlist.get(sha256) ?? null,
             masked: `${value.slice(0, 8)}…<masked len=${value.length}>`,
             key: `${kind}::${value}`,
           });
@@ -198,17 +230,30 @@ console.log(`               skipped ${skippedLarge} blobs >${MAX_BLOB / 1e6}MB, 
 const unique = new Map();
 for (const f of findings) if (!unique.has(f.key)) unique.set(f.key, f);
 
-if (!unique.size) {
-  console.log("               no secrets found");
-  process.exit(0);
+const known = [...unique.values()].filter((f) => f.allowed);
+const fresh = [...unique.values()].filter((f) => !f.allowed);
+
+console.log(`               ${known.length} known-dead (allowlisted), ${fresh.length} new`);
+
+// Printed, never silenced. An allowlisted value that stops being mentioned is
+// one nobody re-examines when the reason behind it expires.
+for (const f of known) {
+  console.log(`  known-dead  ${f.kind}  ${f.path}:${f.line}`);
+  console.log(`              ${f.allowed.reason} (dead since ${f.allowed.revokedOn})`);
 }
 
-console.error(`\n${unique.size} SECRET-SHAPED VALUE(S) FOUND:\n`);
-for (const f of unique.values()) {
+if (!fresh.length) process.exit(0);
+
+console.error(`\n${fresh.length} SECRET-SHAPED VALUE(S) FOUND:\n`);
+for (const f of fresh) {
   console.error(`  ${f.kind}`);
   console.error(`    ${f.path}:${f.line}`);
   console.error(`    ${f.masked}`);
+  console.error(`    sha256: ${f.sha256}`);
 }
 console.error("\nValues are masked above by design. To inspect one:");
 console.error("  git log --all --oneline -- <path>");
+console.error("\nIf a value here is already revoked, add its sha256 to");
+console.error("scripts/secret-allowlist.json with a reason and the date it died.");
+console.error("Revoke FIRST. Allowlisting a live key hides it permanently.");
 process.exit(1);
