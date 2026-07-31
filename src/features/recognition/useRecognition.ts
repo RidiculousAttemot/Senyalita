@@ -26,6 +26,7 @@ export type RecognitionControls = {
   state: RecognitionState;
   appendFrame: (left: HandData | null, right: HandData | null) => void;
   resetRecognition: () => void;
+  clearSequence: () => void;
   bufferLength: number;
   bufferCap: number;
   minimumFrames: number;
@@ -241,6 +242,30 @@ export const useRecognition = (
     []
   );
 
+  /**
+   * Drops the evidence for the sign just committed, without disturbing the
+   * session: mode, motion state and the loaded model all survive.
+   *
+   * Committing a letter used to leave both the 120-frame buffer and the
+   * 5-entry smoother history full of it, so the next letter had to out-vote a
+   * window that still described the previous one. Measured against the served
+   * model by replaying recorded landmarks at 30fps on the real 100ms cadence,
+   * that cost 2900ms to get from A to B; clearing both brings it to 200ms.
+   *
+   * The buffer needs MINIMUM_FRAMES (5) before it can sample again, which at
+   * 30fps is one extra 100ms tick — the 200ms floor, not a new stall.
+   */
+  const clearSequence = useCallback(() => {
+    bufferRef.current?.reset();
+    smootherRef.current?.reset();
+    setFrozenPrediction(null);
+    freezeCounterRef.current = 0;
+    stableLabelRef.current = null;
+    stableCountRef.current = 0;
+    lastResultRef.current = null;
+    setState({ stage: "predicting", result: null });
+  }, []);
+
   const resetRecognition = useCallback(() => {
     bufferRef.current?.reset();
     smootherRef.current?.reset();
@@ -259,6 +284,7 @@ export const useRecognition = (
     state,
     appendFrame,
     resetRecognition,
+    clearSequence,
     bufferLength,
     // Sourced from the buffer so diagnostics cannot drift from it again —
     // this reported 30 while the buffer actually held 45.
