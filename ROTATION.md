@@ -78,6 +78,12 @@ re-cloned.
 
 ## 0.5. Reopened 2026-07-31 — what the earlier audit missed
 
+> **Superseded by §0.6.** This section records the state while the exposure was
+> open; its "Live unless rotated" and "Probably dead" statuses were both
+> resolved on 2026-07-31. Kept for the audit trail — the reasoning about how the
+> audit went wrong is still the point of it. Every commit hash below is
+> pre-rewrite; see §0.6 for the current identifiers.
+
 ### The exposure
 
 | Where | What | Status |
@@ -85,8 +91,10 @@ re-cloned.
 | `scripts/api-verify.mjs` | Complete `service_role` JWT, `iss: supabase`, `exp` 2036-06-06 | **Live unless rotated.** Bypasses RLS entirely |
 | `scripts/db-test.mjs` | Two unmasked 16-character DB passwords | Probably dead — the 2026-07-30 password rotation likely covered them |
 
-Published by commit `02b57013` ("cleanaup", 2026-06-19), which **is an ancestor
-of `origin/main`**. The repository is public (`"visibility": "public"` from the
+Published by the commit "cleanaup" of 2026-06-19 — cited here as `02b57013`,
+which **no longer exists**; the 2026-07-31 rewrite renumbered it to
+**`fa36c0cc`**, the only identifier that resolves now. It **is an ancestor of
+`origin/main`**. The repository is public (`"visibility": "public"` from the
 unauthenticated GitHub API), so both have been world-readable since 2026-06-19.
 
 The values were removed from this branch on 2026-07-27 (`08a1f549`), but that
@@ -197,8 +205,9 @@ The 2026-07-30 rotation did cover them. Nothing further needed.
 
 An unrelated history rewrite on 2026-07-31 (removing 28.89 GB of
 `tmp/holistic_extract` scratch) renumbered every commit. **`02b57013`, cited
-throughout §0.5, is no longer reachable from any branch** — it survives only in
-`refs/original/` and will vanish at the next `git gc`.
+throughout §0.5, no longer exists.** The `git gc` has since run: `refs/original/`
+is empty and the old objects are pruned, so that SHA resolves nowhere. Any
+citation of it in this document is a historical label, not a lookup.
 
 The published commit that introduced the credentials is now **`fa36c0cc`**
 ("cleanaup"). The commit that cleaned them is now **`08a1f549`**. The exposure
