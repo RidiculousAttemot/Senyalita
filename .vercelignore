@@ -1,7 +1,37 @@
+# Files excluded from the deployment upload.
+#
+# This takes precedence over .gitignore, so anything large and untracked must
+# be listed here explicitly or `vercel --prod` uploads it from the working
+# tree. /tmp alone is ~35 GB of MediaPipe extraction scratch.
+#
+# Root-anchored (/x) where a nested directory of the same name could be real
+# source — notably /models, since public/models/ carries the served BiLSTM and
+# must ship.
+
+# Dependencies and build output — Vercel installs and builds these itself
 node_modules
+.next
+
+# 2.3 GB, and the deploy does not read it. Vercel excludes .git by default,
+# but listing it makes the upload size deterministic rather than dependent on
+# CLI behaviour. Commit attribution is unaffected: the CLI shells out to git
+# locally for metadata, it does not read an uploaded .git.
+.git
+
+# Large data that is never served from the app bundle
+/tmp
 datasets
 /models
+.venv
+
+# Tooling and analysis that has no runtime role
 scripts
 docs
 phases
-.next
+coverage
+e2e
+tests
+playwright-report
+test-results
+.agents
+.claude
