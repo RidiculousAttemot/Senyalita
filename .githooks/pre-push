@@ -39,13 +39,22 @@ it never reaches the remote. Once pushed to a public repo, treat the
 credential as compromised and ROTATE it -- deleting it afterwards does
 not un-publish it.
 
-You can bypass this check:
+Two ways to clear this properly, depending on what it is:
+
+  * Not a secret (a placeholder the filter missed) -- add its form to
+    PLACEHOLDER in scripts/audit-secrets.mjs.
+  * A real credential that is already REVOKED -- add its sha256
+    (printed above) to scripts/secret-allowlist.json with a reason and
+    the date it died. Revoke first. Allowlisting a live key hides it
+    permanently.
+
+You can also bypass:
 
     git push --no-verify
 
-That is a real and sometimes correct option -- if this is a false
-positive, use it, then add the placeholder form to PLACEHOLDER in
-scripts/audit-secrets.mjs so the next person is not stopped too.
+That is real and sometimes correct, but prefer the two options above:
+a bypass leaves nothing behind, so the next person meets the same wall
+with none of what you learned.
 
 This hook is the first layer and it is local-only: it cannot protect a
 push from another machine or another clone. Enable GitHub push
