@@ -2,22 +2,24 @@
 
 Hosted on Vercel, project `signlangvisual`.
 
-## ⚠️ Production branch — do not delete
+## Production branch
 
-**Vercel builds Production from `cleanup/final-architecture`, not `main`.**
+**Vercel builds Production from `main`** (as of 2026-07-31). Pushes to any other
+branch produce **Preview** deployments, which cannot take the domain no matter
+how green they are.
 
-Deleting that branch takes the live site down. This is a **dashboard setting**
-(Settings → Git → Production Branch) — nothing in the repository records it, and
-no local git command can see it. `git branch -d` will happily report a branch
-safe to delete while it is the one serving production.
-
-Pushes to `main` therefore produce **Preview** deployments only. They cannot take
-the domain, no matter how green they are.
+This is a **dashboard setting** (Settings → Git → Production Branch). Nothing in
+the repository records it and no local git command can read it, so **this file
+can go stale without anything failing.** It already did once: it was written
+naming `cleanup/final-architecture`, and the setting was changed to `main` within
+the hour. If a push to `main` lands as Preview, the setting moved again — believe
+the dashboard, not this line, and correct it here.
 
 **Before deleting any branch, confirm the deploy topology.** Content checks are
 not sufficient: on 2026-07-31 `main` and `cleanup/final-architecture` had
-byte-identical trees, every file verified present on both — and deleting the
-branch would still have taken production down.
+byte-identical trees, every file verified present on both — and at that moment
+deleting `cleanup/final-architecture` would have taken production down, because
+it was then the production branch.
 
 ## Changing the production branch
 

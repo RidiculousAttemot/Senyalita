@@ -2,12 +2,13 @@
 
 ## ⚠️ Before deleting any branch
 
-**`cleanup/final-architecture` is Vercel's Production Branch. Deleting it takes
-the live site down.** `main` only produces Preview deployments.
+**Vercel's Production Branch is `main`** (as of 2026-07-31). Deleting the
+production branch takes the live site down.
 
-This lives in a dashboard setting, so no local check can see it — `git branch -d`
-will call the branch safe, and identical file trees prove nothing. **Confirm the
-deploy topology before deleting any branch.** See [DEPLOYMENT.md](DEPLOYMENT.md).
+Which branch that *is* lives in a dashboard setting, so no local check can see
+it, and it has already changed once mid-session — `git branch -d` will call a
+branch safe, and identical file trees prove nothing. **Confirm the current
+setting before deleting any branch.** See [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Overview
 Filipino Sign Language (FSL) recognition app using MediaPipe + TF.js + Supabase.
