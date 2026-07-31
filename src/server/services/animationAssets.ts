@@ -1,10 +1,7 @@
 import "server-only";
 import fs from "fs/promises";
 import path from "path";
-import {
-  getPublishedAnimationAsset,
-  getPublishedAnimationSignedUrl,
-} from "@/lib/supabase/queries/animationAssets";
+import { getPublishedAnimationAsset } from "@/lib/supabase/queries/animationAssets";
 
 /**
  * Resolves the landmark animation for a gloss.
@@ -94,7 +91,7 @@ export interface ResolvedAnimation {
 export class AnimationLookupFailure extends Error {
   constructor(
     readonly gloss: string,
-    readonly stage: "asset" | "version" | "download" | "parse" | "sign",
+    readonly stage: "asset" | "version" | "download" | "parse",
     message: string,
   ) {
     super(`animation lookup failed for "${gloss}" at stage "${stage}": ${message}`);
@@ -106,70 +103,6 @@ export type AnimationResolution =
   | { outcome: "resolved"; resolved: ResolvedAnimation }
   | { outcome: "absent" }
   | { outcome: "failed"; failure: AnimationLookupFailure };
-
-/**
- * What the animation route should do for a gloss.
- *
- * `redirect` is the production path: the browser is sent to Storage and fetches
- * the ~3MB itself. `inline` only ever happens for the local development
- * fallback, which has no Storage object to sign.
- */
-export type AnimationUrlResolution =
-  | { outcome: "redirect"; url: string; source: "published" }
-  | {
-      outcome: "inline";
-      asset: unknown;
-      source: "local-development-absent" | "local-development-failed";
-    }
-  | { outcome: "absent" }
-  | { outcome: "failed"; failure: AnimationLookupFailure };
-
-/**
- * Resolves a gloss to something the route can serve without ever holding the
- * asset bytes.
- *
- * Mirrors resolveAnimationAsset's ordering and its absent/failed distinction
- * exactly — the only difference is that a published hit yields a signed URL to
- * redirect to rather than a parsed object to re-serialise.
- */
-export async function resolveAnimationUrl(gloss: string): Promise<AnimationUrlResolution> {
-  const signed = await getPublishedAnimationSignedUrl(gloss);
-
-  if (signed.outcome === "found") {
-    return { outcome: "redirect", url: signed.url, source: "published" };
-  }
-
-  const failure =
-    signed.outcome === "failed"
-      ? new AnimationLookupFailure(gloss, signed.stage, signed.message)
-      : null;
-
-  if (failure) console.error(`[animations] ${failure.message}`);
-
-  if (!localFallbackEnabled()) {
-    return failure ? { outcome: "failed", failure } : { outcome: "absent" };
-  }
-
-  const local = await findLocalAsset(gloss);
-  if (!local) {
-    return failure ? { outcome: "failed", failure } : { outcome: "absent" };
-  }
-
-  if (failure) {
-    console.warn(
-      `[animations] "${gloss}" is being served from the local development ` +
-        "fallback because the published lookup FAILED, not because it is " +
-        "unpublished. In production this request would have 404'd.",
-    );
-    return { outcome: "inline", asset: local, source: "local-development-failed" };
-  }
-
-  console.warn(
-    `[animations] "${gloss}" served from the local development fallback. ` +
-      "It has no published Supabase asset and will fingerspell in production.",
-  );
-  return { outcome: "inline", asset: local, source: "local-development-absent" };
-}
 
 export async function resolveAnimationAsset(gloss: string): Promise<AnimationResolution> {
   const published = await getPublishedAnimationAsset(gloss);
