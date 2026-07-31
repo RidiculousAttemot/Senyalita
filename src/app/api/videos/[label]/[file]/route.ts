@@ -1,79 +1,60 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
+import { resolveSourceVideoUrl } from "@/server/services/datasetCatalog";
+import { toErrorResponse } from "@/server/http/errors";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const VIDEO_ROOT = path.join(process.cwd(), "datasets", "raw", "user_videos");
-
-const CONTENT_TYPES: Record<string, string> = {
-  ".mp4": "video/mp4",
-  ".mov": "video/quicktime",
-  ".webm": "video/webm",
-};
-
-/** Resolves inside VIDEO_ROOT or returns null, so a crafted label/file cannot escape the dataset. */
-function safeResolve(label: string, file: string): string | null {
-  const candidate = path.resolve(VIDEO_ROOT, label, file);
-  const root = path.resolve(VIDEO_ROOT);
-  if (candidate !== root && !candidate.startsWith(root + path.sep)) return null;
-  if (!CONTENT_TYPES[path.extname(candidate).toLowerCase()]) return null;
-  return candidate;
-}
-
+/**
+ * Serves the original human recording paired with a published landmark asset.
+ *
+ * Previously this read the raw file off the local filesystem
+ * (datasets/raw/user_videos). `datasets` is excluded from deployments by
+ * .vercelignore, so the directory exists in development and nowhere else:
+ * every request 404'd in production while the same request worked locally,
+ * and the Human/Split/Overlay panes rendered as a silent blank box.
+ *
+ * It now mirrors /api/animations/[gloss]: resolve the version's
+ * source_video_path, hand back a short-lived signed Storage URL, and 307.
+ * The browser fetches the video straight from Storage's CDN — no bytes
+ * through the function, no Range plumbing to keep alive.
+ *
+ * The status codes keep absent and failed distinct. A 404 means "no
+ * published source video" (e.g. a webcam asset never recorded one); a 503
+ * means the lookup infrastructure broke and the request should be retried,
+ * not treated as a missing recording.
+ */
 export async function GET(
-  request: Request,
+  _request: Request,
   { params }: { params: { label: string; file: string } },
 ) {
-  const filePath = safeResolve(
-    decodeURIComponent(params.label),
-    decodeURIComponent(params.file),
-  );
-  if (!filePath || !fs.existsSync(filePath)) {
-    return NextResponse.json({ error: "Video unavailable." }, { status: 404 });
-  }
+  try {
+    const resolution = await resolveSourceVideoUrl(
+      decodeURIComponent(params.label),
+      decodeURIComponent(params.file),
+    );
 
-  const stat = fs.statSync(filePath);
-  const contentType = CONTENT_TYPES[path.extname(filePath).toLowerCase()];
-  const range = request.headers.get("range");
-
-  // Range support is what lets the <video> element seek, which Split View
-  // needs to hold the recording on the same timestamp as the landmark frame.
-  if (range) {
-    const match = /bytes=(\d*)-(\d*)/.exec(range);
-    const start = match?.[1] ? Number(match[1]) : 0;
-    const end = match?.[2] ? Number(match[2]) : stat.size - 1;
-
-    if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= stat.size) {
-      return new NextResponse(null, {
-        status: 416,
-        headers: { "Content-Range": `bytes */${stat.size}` },
-      });
+    if (resolution.outcome === "failed") {
+      return NextResponse.json(
+        { error: "Source video temporarily unavailable." },
+        { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "1" } },
+      );
     }
 
-    const clampedEnd = Math.min(end, stat.size - 1);
-    const stream = fs.createReadStream(filePath, { start, end: clampedEnd });
-    return new NextResponse(stream as unknown as ReadableStream, {
-      status: 206,
-      headers: {
-        "Content-Type": contentType,
-        "Content-Length": String(clampedEnd - start + 1),
-        "Content-Range": `bytes ${start}-${clampedEnd}/${stat.size}`,
-        "Accept-Ranges": "bytes",
-        "Cache-Control": "public, max-age=3600",
-      },
-    });
-  }
+    if (resolution.outcome === "absent") {
+      return NextResponse.json(
+        { error: "Video unavailable." },
+        { status: 404, headers: { "Cache-Control": "no-store" } },
+      );
+    }
 
-  const stream = fs.createReadStream(filePath);
-  return new NextResponse(stream as unknown as ReadableStream, {
-    status: 200,
-    headers: {
-      "Content-Type": contentType,
-      "Content-Length": String(stat.size),
-      "Accept-Ranges": "bytes",
-      "Cache-Control": "public, max-age=3600",
-    },
-  });
+    // 307, not 308: a permanent redirect would be cached by the browser
+    // against a URL that expires, and replayed after it died.
+    return NextResponse.redirect(resolution.url, {
+      status: 307,
+      headers: { "Cache-Control": "public, max-age=60, s-maxage=60" },
+    });
+  } catch (error) {
+    return toErrorResponse(error, `GET /api/videos/${params.label}/${params.file}`);
+  }
 }

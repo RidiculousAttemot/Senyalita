@@ -138,6 +138,16 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
   // sign's own recording instead of pinning the first one.
   const currentClipAsset = currentAsset ?? clips[0]?.asset;
   const videoSrc = currentClipAsset?.video;
+  // A dead reference-video URL (expired signature, unpublished source, 503)
+  // used to render a silent blank pane — indistinguishable from a rendering
+  // bug, which is exactly where the last video outage sent debugging. Track
+  // failure so the pane falls back to the skeleton or a note instead.
+  const [videoFailed, setVideoFailed] = useState(false);
+  useEffect(() => setVideoFailed(false), [videoSrc]);
+  const handleVideoError = useCallback(() => {
+    console.warn(`[SignAnimationPlayer] reference video failed to load: ${videoSrc}`);
+    setVideoFailed(true);
+  }, [videoSrc]);
   // Split view gives the skeleton a half-width square panel; the drawing
   // buffer has to match that box or the figure renders stretched.
   let renderWidth = width;
@@ -587,8 +597,8 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
     if (viewMode === "human") {
       return (
         <div style={{ position: "relative", width: "100%", height: "100%" }}>
-          {videoSrc
-            ? <video ref={videoRef} src={videoSrc} {...videoProps} style={fillBox} />
+          {videoSrc && !videoFailed
+            ? <video ref={videoRef} src={videoSrc} onError={handleVideoError} {...videoProps} style={fillBox} />
             : <canvas ref={canvasRef} width={renderWidth} height={renderHeight} style={fillBox} />}
         </div>
       );
@@ -597,7 +607,9 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
     if (viewMode === "overlay") {
       return (
         <div style={{ position: "relative", width: "100%", height: "100%" }}>
-          {videoSrc && <video ref={videoRef} src={videoSrc} {...videoProps} style={fillBox} />}
+          {videoSrc && !videoFailed && (
+            <video ref={videoRef} src={videoSrc} onError={handleVideoError} {...videoProps} style={fillBox} />
+          )}
           <canvas
             ref={canvasRef}
             width={renderWidth}
@@ -616,11 +628,18 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
         color: "#475569", background: "rgba(255,255,255,0.82)", backdropFilter: "blur(6px)",
         padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", pointerEvents: "none",
       };
+      const unavailable: React.CSSProperties = {
+        position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 11, fontWeight: 600, color: "#94A3B8", textAlign: "center", padding: "0 16px",
+      };
       const pane: React.CSSProperties = { position: "relative", flex: 1, minWidth: 0, height: "100%" };
       return (
         <div style={{ display: "flex", gap: 6, width: "100%", height: "100%" }}>
           <div style={pane}>
-            {videoSrc && <video ref={videoRef} src={videoSrc} {...videoProps} style={fillBox} />}
+            {videoSrc && !videoFailed && (
+              <video ref={videoRef} src={videoSrc} onError={handleVideoError} {...videoProps} style={fillBox} />
+            )}
+            {videoSrc && videoFailed && <span style={unavailable}>Recording unavailable</span>}
             <span style={paneLabel}>Human</span>
           </div>
           <div style={pane}>

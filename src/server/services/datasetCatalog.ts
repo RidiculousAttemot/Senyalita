@@ -17,7 +17,7 @@ import { NotFoundError } from "@/server/http/errors";
 
 const LANDMARK_BUCKET = "animation-landmarks";
 const VIDEO_BUCKET = "animation-source-videos";
-const SIGNED_URL_TTL_SECONDS = 300;
+const SIGNED_URL_TTL_SECONDS = 600;
 
 /** Kept identical to the old filesystem response so the UI needs no changes. */
 export interface DatasetAssetSummary {
@@ -195,23 +195,58 @@ export async function getDatasetAsset(label: string, file: string): Promise<Reso
   return { asset: JSON.parse(await blob.text()), status: row.status, version: row.version };
 }
 
-/** Short-lived signed URL for the original recording, for provenance views. */
-export async function getSourceVideoUrl(label: string, file: string): Promise<string | null> {
+/**
+ * What /api/videos/[label]/[file] should do for a recording.
+ *
+ * `redirect` is the only production path: the browser is sent to a signed
+ * Storage URL and fetches the bytes itself. `absent` and `failed` are
+ * deliberately distinct — a 404 means "no published source video", a 503
+ * means the lookup infrastructure broke and the request should retry.
+ */
+export type SourceVideoUrlResolution =
+  | { outcome: "redirect"; url: string }
+  | { outcome: "absent" }
+  | { outcome: "failed"; stage: "asset" | "version" | "sign"; message: string };
+
+/**
+ * Resolves a recording to a short-lived signed Storage URL without touching
+ * the bytes.
+ *
+ * The old implementation read the raw file off the local filesystem
+ * (datasets/raw/user_videos). The bytes always lived in Storage under
+ * animation-source-videos; the filesystem copy was never deployed, so in
+ * production every request 404'd and the Human/Split/Overlay panes rendered
+ * as a silent blank box. Signing is a local HMAC against the service key — no
+ * download, no Range plumbing, no function-timeout exposure on a large file.
+ */
+export async function resolveSourceVideoUrl(label: string, file: string): Promise<SourceVideoUrlResolution> {
   const supabase = createSupabaseServiceClient();
   const version = parseVersionFromFile(file);
 
-  const { data: parent } = await supabase
+  const { data: parent, error: parentError } = await supabase
     .from("animation_assets").select("id").eq("gloss", label.toUpperCase()).maybeSingle();
-  if (!parent) return null;
+  if (parentError) return { outcome: "failed", stage: "asset", message: parentError.message };
+  if (!parent) return { outcome: "absent" };
 
   let q = supabase.from("animation_asset_versions").select("source_video_path").eq("asset_id", parent.id);
   q = version !== null ? q.eq("version", version) : q.order("version", { ascending: false }).limit(1);
 
-  const { data: row } = await q.maybeSingle();
-  if (!row?.source_video_path) return null;
+  const { data: row, error: versionError } = await q.maybeSingle();
+  if (versionError) return { outcome: "failed", stage: "version", message: versionError.message };
+  if (!row?.source_video_path) return { outcome: "absent" };
 
-  const { data } = await supabase.storage
+  const { data: signed, error: signError } = await supabase.storage
     .from(VIDEO_BUCKET)
     .createSignedUrl(row.source_video_path, SIGNED_URL_TTL_SECONDS);
-  return data?.signedUrl ?? null;
+  if (signError) return { outcome: "failed", stage: "sign", message: signError.message };
+  if (!signed?.signedUrl) {
+    return { outcome: "failed", stage: "sign", message: "storage returned no signed URL and no error" };
+  }
+  return { outcome: "redirect", url: signed.signedUrl };
+}
+
+/** Short-lived signed URL for the original recording, for provenance views. */
+export async function getSourceVideoUrl(label: string, file: string): Promise<string | null> {
+  const resolution = await resolveSourceVideoUrl(label, file);
+  return resolution.outcome === "redirect" ? resolution.url : null;
 }
