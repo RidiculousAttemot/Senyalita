@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import { cn } from "@/lib/utils";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { Analytics } from "@vercel/analytics/next";
 
 /**
  * Inter, self-hosted. Previously `Inter` from next/font/google.
@@ -58,6 +59,7 @@ export default function RootLayout({
         <Header />
         <main id="main-content" className="flex-grow">{children}</main>
         <Footer />
+        <Analytics />
       </body>
     </html>
   );
