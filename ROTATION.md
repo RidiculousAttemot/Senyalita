@@ -1,11 +1,15 @@
 # Credential rotation checklist
 
 Written 2026-07-28. Database passwords rotated and four files scrubbed
-2026-07-30. **Reopened 2026-07-31: a live `service_role` JWT was found on
-`origin/main` that this document had declared absent.** See §0.5. No credential
+2026-07-30. Reopened 2026-07-31 when a live `service_role` JWT was found on
+`origin/main` that this document had declared absent (§0.5).
+**Closed 2026-07-31: the exposure is remediated — see §0.6.** No credential
 values appear here.
 
-## 0. Status — NOT DONE
+## 0. Status — SUPERSEDED BY §0.6
+
+The section below records the state on 2026-07-30, before the `service_role`
+exposure was found. Kept for the audit trail; read §0.6 for what is true now.
 
 The database passwords have been rotated, and the four tracked files that
 carried a live value have been scrubbed to the `[PASSWORD]` placeholder style
@@ -127,13 +131,97 @@ and after six weeks of public exposure it removes nothing an attacker could not
 already have taken. Rotation is the remediation; the history copies are noise
 once the key is dead.
 
-### Not yet done
+### Not yet done — resolved, see §0.6
 
-Scrubbing `scripts/api-verify.mjs` and `scripts/db-test.mjs` is deliberately
-**deferred until the key is confirmed rotated**. Scrubbing first would make the
+Scrubbing `scripts/api-verify.mjs` and `scripts/db-test.mjs` was deliberately
+**deferred until the key was confirmed rotated**. Scrubbing first would make the
 files stop looking urgent while the live key remained reachable in history —
 the precise failure mode §4 warns about, and the one that produced this
 section.
+
+It turned out there was nothing left to scrub: both files were already cleaned
+on this branch by `08a1f549` (2026-07-27). What was outstanding was the
+published copy, and that is addressed by revocation rather than by editing
+files. §0.6 has the detail.
+
+## 0.6. Closed 2026-07-31 — remediated
+
+### What was done
+
+Not a JWT-secret rotation. Both key schemes turned out to be already
+provisioned on the project, so the app was **migrated to the new API keys** and
+the legacy pair was then revoked:
+
+| Variable the app reads | Was | Now |
+|---|---|---|
+| `SUPABASE_SERVICE_ROLE_KEY` | legacy `service_role` JWT (219 chars) | `sb_secret_…` (41) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | legacy `anon` JWT (208) | `sb_publishable_…` (46) |
+
+The variable **names** were kept. Nothing under `src/` needed changing — both
+values are passed straight to `createClient` (`lib/supabase/client.ts:8`,
+`service.ts:10`), so the scheme is invisible to the code.
+
+This was preferable to §2 Phase B's plan. Phase B assumed the legacy scheme
+only, where rotating the JWT secret invalidates `anon` and `service_role`
+together and leaves the deployed site broken until a redeploy finishes.
+Migrating instead let both schemes run concurrently, so the cutover had **no
+downtime window** and the legacy keys could be revoked separately, after the
+replacements were confirmed working.
+
+Order actually followed: update Vercel env → redeploy with build cache off →
+update `.env.local` → verify → *then* revoke.
+
+### Verification before revoking
+
+Local, against a restarted dev server reading the new `.env.local`:
+
+```
+GET /api/animations/A  →  200
+    X-Animation-Source: published
+    label "a", 160 frames, 30 fps
+```
+
+`X-Animation-Source: published` is the load-bearing part. It proves the asset
+came from Supabase Storage — which requires the secret key — and not from the
+`ANIMATION_LOCAL_FALLBACK` filesystem path, which would have produced an
+identical-looking 200 while proving nothing. All of A–Z returned 200.
+
+### Database passwords — confirmed dead, not assumed
+
+§0.5 rated these "probably dead". Verified by comparing the historical value
+against the live one by fingerprint, without printing either: the password in
+history is 16 characters, the one in `.env.local` is 12, and they do not match.
+The 2026-07-30 rotation did cover them. Nothing further needed.
+
+### Commit hashes in this document are stale
+
+An unrelated history rewrite on 2026-07-31 (removing 28.89 GB of
+`tmp/holistic_extract` scratch) renumbered every commit. **`02b57013`, cited
+throughout §0.5, is no longer reachable from any branch** — it survives only in
+`refs/original/` and will vanish at the next `git gc`.
+
+The published commit that introduced the credentials is now **`fa36c0cc`**
+("cleanaup"). The commit that cleaned them is now **`08a1f549`**. The exposure
+history is unchanged; only the identifiers moved.
+
+### History still carries the dead values
+
+Unchanged from §0.5, and still deliberate. Once revoked, the copies are inert,
+and a rewrite after six weeks of public exposure removes nothing an attacker
+could not already have taken.
+
+One practical consequence: **`npm run audit:secrets` will keep reporting these
+three findings forever**, because it scans objects and cannot know a value has
+been revoked. They are `scripts/db-test.mjs:4`, `:5` and
+`scripts/api-verify.mjs:4`, all inert.
+
+That also means the pre-push hook blocks any push whose range includes those
+old commits. It did exactly that when `main` was force-pushed to the rewritten
+history on 2026-07-31, and was bypassed once with `--no-verify` — deliberately,
+after confirming the findings were the known-dead values and that the push
+transferred **zero new objects** (every commit was already on the remote via
+`cleanup/final-architecture`). A bypass is only defensible with that check
+done; do not make it routine.
 
 ## 1. What each credential is, and what actually consumes it
 
@@ -145,6 +233,13 @@ section.
 | `SUPABASE_SECRET_KEY` | `.env.local` | nothing under `src/` | **No** |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `.env.local` | nothing under `src/` | **No** |
 | `DATABASE_URL` (3 passwords) | `.env.local`, Supabase dashboard | `scripts/db-*.mjs` only | **No** |
+
+Read the last two rows carefully after §0.6. Those **variable names** are still
+unread by `src/` — but since the migration their **values** are what
+`SUPABASE_SERVICE_ROLE_KEY` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` now hold. They
+are duplicates kept only as a record of where the new keys came from, and can
+be deleted from `.env.local` once that is no longer useful. Do not read "No" as
+"this value is not in production" — it is, under a different name.
 
 Two consequences worth reading twice:
 
@@ -169,6 +264,11 @@ Two consequences worth reading twice:
 4. Nothing else to do. The deployed site never reads these.
 
 ### Phase B — API keys (this one has a downtime window)
+
+> **Superseded on 2026-07-31 — see §0.6.** This phase assumes the legacy scheme
+> only. Because both schemes were already provisioned, migrating to the new keys
+> avoided the downtime window described below entirely. Keep this section for the
+> case where only legacy keys exist; otherwise prefer §0.6's order.
 
 The anon key is used by middleware, so it is on the path of every single
 request. Between rotating it and finishing a redeploy, the deployed site is
