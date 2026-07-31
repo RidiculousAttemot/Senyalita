@@ -223,6 +223,20 @@ export const useRecognition = (
         // measured here, on raw landmarks, because the buffer's wrist-centred
         // features cannot express a hand moving across the body.
         if (previousState === "idle" && newState === "gesturing") {
+          // Movement after stillness means the previous sign is finished and a
+          // new one is starting, so its evidence is now noise. Without this the
+          // next letter has to out-vote a 120-frame window still describing the
+          // last one: measured at 2433ms from A to B against the served model,
+          // versus 167ms once the window is cleared.
+          //
+          // clearSequence() already did this, but only on commit — a keypress.
+          // Signing continuously never triggered it, which is why recognition
+          // stalled between letters even though the fix was in place.
+          bufferRef.current?.reset();
+          smootherRef.current?.reset();
+          lastResultRef.current = null;
+          // reset() dropped the frame appended above; it belongs to the new sign.
+          bufferRef.current?.append(left, right);
           bufferRef.current?.markGestureStart();
         } else if (previousState === "gesturing" && newState === "idle") {
           bufferRef.current?.markGestureEnd(IDLE_FRAMES);
