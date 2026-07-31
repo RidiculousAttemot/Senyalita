@@ -22,6 +22,24 @@ const nextConfig = {
 
     return config;
   },
+  async headers() {
+    // Next applies immutable caching to its own /_next/static output, but not to
+    // anything under public/. Measured on production, weights.bin was served
+    // with "max-age=0, must-revalidate" — 312KB revalidated on every load — and
+    // the vendored MediaPipe runtime would inherit the same, trading a slow CDN
+    // for a slow origin.
+    //
+    // These files are safe to pin because their content is fixed for a given
+    // build: the WASM is copied from a pinned package version, the .task is a
+    // released model artifact, and the BiLSTM weights change only when the model
+    // is retrained — which also changes model.json, so a stale weights.bin can
+    // never pair with a new topology without both being re-fetched.
+    const immutable = [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }];
+    return [
+      { source: "/mediapipe/wasm/:path*", headers: immutable },
+      { source: "/models/:path*", headers: immutable },
+    ];
+  },
   async redirects() {
     // /type-to-sign and /sign-to-text are kept as permanent redirects: the
     // pages themselves are gone (the workflows live on /translate), but the

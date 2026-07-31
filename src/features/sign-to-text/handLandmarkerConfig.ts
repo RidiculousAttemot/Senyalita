@@ -19,10 +19,28 @@ export const CAPTURE_TARGET_FPS = 30;
  */
 export const CAPTURE_INTERVAL_MS = 1000 / CAPTURE_TARGET_FPS - 2;
 
+/**
+ * Both of these are served from this origin rather than a third-party CDN.
+ *
+ * Measured on a cold production load of /translate: the WASM runtime is 10.9MB
+ * and the hand-landmarker task 7.6MB, together 18.5MB — roughly fourteen times
+ * the entire same-origin payload, and the two slowest requests by a wide margin.
+ * Self-hosting does not shrink them; it removes a third-party dependency from
+ * the critical path of a system demonstrated on venue wifi, and lets them be
+ * served immutable from the same edge as everything else. Same reasoning as
+ * self-hosting Inter in 0c2ad36b.
+ *
+ * public/mediapipe/wasm/ is copied verbatim from
+ * node_modules/@mediapipe/tasks-vision/wasm, so the runtime always matches the
+ * installed API version — pinning a CDN URL to a version string is what lets
+ * those two drift apart. Both the SIMD and no-SIMD builds are shipped;
+ * FilesetResolver picks one at load time, so a visitor downloads only the
+ * variant their browser supports.
+ */
 export const HAND_LANDMARKER_MODEL_URL = process.env.NEXT_PUBLIC_MEDIAPIPE_HAND_MODEL_URL
-  ?? "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task";
+  ?? "/models/mediapipe/hand_landmarker.task";
 
-export const MEDIAPIPE_WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
+export const MEDIAPIPE_WASM_URL = "/mediapipe/wasm";
 
 /** Bone pairs for drawing a hand skeleton over 21 landmarks. */
 export const HAND_CONNECTIONS: Array<[number, number]> = [
