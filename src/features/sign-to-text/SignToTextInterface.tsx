@@ -12,6 +12,11 @@ import { cn } from "@/lib/utils";
 import { formatTranscriptCommitShortcut, isTranscriptCommitShortcut } from "./commitShortcut";
 import { createFrameRateTracker } from "./cameraFrameRate";
 import { HAND_CAPTURE_CONSTRAINTS, handLandmarkerOptionsFor, type DetectionSensitivity } from "./handCaptureProfile";
+import {
+  CAPTURE_INTERVAL_MS,
+  HAND_CONNECTIONS,
+  createHandLandmarker,
+} from "./handLandmarkerConfig";
 import { CameraSettingsPanel, type CameraSettings } from "./CameraSettingsPanel";
 import { SuggestionPanel, useLetterSuggestions } from "@/features/suggestions";
 
@@ -26,21 +31,8 @@ interface HandOverlay {
   y: number;
 }
 
-const HAND_CONNECTIONS: Array<[number, number]> = [
-  [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8],
-  [0, 9], [9, 10], [10, 11], [11, 12], [0, 13], [13, 14], [14, 15], [15, 16],
-  [0, 17], [17, 18], [18, 19], [19, 20], [5, 9], [9, 13], [13, 17],
-];
-
-const HAND_LANDMARKER_MODEL_URL = process.env.NEXT_PUBLIC_MEDIAPIPE_HAND_MODEL_URL
-  ?? "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task";
-const MEDIAPIPE_WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
-
-/** 30fps — the rate training clips were extracted at. */
-const CAPTURE_TARGET_FPS = 30;
-// A small tolerance stops a camera running at a nominal 30fps from having
-// every other frame rejected by jitter.
-const CAPTURE_INTERVAL_MS = 1000 / CAPTURE_TARGET_FPS - 2;
+// Shared with /evaluation via handLandmarkerConfig so the harness cannot drift
+// from the path it is measuring.
 /** Hand-label badges only need to keep up with the eye, not the camera. */
 const OVERLAY_INTERVAL_MS = 100;
 
@@ -182,22 +174,8 @@ export function SignToTextInterface() {
       cameraStreamRef.current = stream;
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
-      const { HandLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
-      const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL);
       const sensitivity = settingsRef.current.sensitivity;
-      const landmarkerOptions = handLandmarkerOptionsFor(sensitivity);
-      let handLandmarker;
-      try {
-        handLandmarker = await HandLandmarker.createFromOptions(vision, {
-          baseOptions: { modelAssetPath: HAND_LANDMARKER_MODEL_URL, delegate: "GPU" },
-          ...landmarkerOptions,
-        });
-      } catch {
-        handLandmarker = await HandLandmarker.createFromOptions(vision, {
-          baseOptions: { modelAssetPath: HAND_LANDMARKER_MODEL_URL, delegate: "CPU" },
-          ...landmarkerOptions,
-        });
-      }
+      const handLandmarker = await createHandLandmarker(handLandmarkerOptionsFor(sensitivity));
       activeSensitivityRef.current = sensitivity;
       setActiveSensitivity(sensitivity);
       if (cameraRunIdRef.current !== runId) {

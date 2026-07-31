@@ -2,6 +2,12 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRecognition } from "@/features/recognition";
+import { HAND_CAPTURE_CONSTRAINTS, handLandmarkerOptionsFor } from "@/features/sign-to-text/handCaptureProfile";
+import {
+  CAPTURE_INTERVAL_MS,
+  HAND_CONNECTIONS,
+  createHandLandmarker,
+} from "@/features/sign-to-text/handLandmarkerConfig";
 
 type EvalResult = {
   gesture: string;
@@ -29,7 +35,6 @@ const TEST_GESTURES = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((label) => ({ l
 export default function EvaluationPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const isProcessingRef = useRef(false);
   const lastSizeRef = useRef<{ width: number; height: number } | null>(null);
   const [status, setStatus] = useState("initializing");
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -49,16 +54,16 @@ export default function EvaluationPage() {
 
   useEffect(() => {
     let stream: MediaStream | null = null;
-    let hands: any = null;
-    let camera: any = null;
+    let landmarker: Awaited<ReturnType<typeof createHandLandmarker>> | null = null;
+    let rafId = 0;
     let cancelled = false;
 
     const setup = async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 640, height: 480 },
-          audio: false,
-        });
+        // Same constraints, landmarker options, model build and capture rate as
+        // the live path in SignToTextInterface. A harness that captures
+        // differently from production reports an accuracy production never has.
+        stream = await navigator.mediaDevices.getUserMedia(HAND_CAPTURE_CONSTRAINTS);
         if (cancelled) return;
 
         const video = videoRef.current;
@@ -66,86 +71,84 @@ export default function EvaluationPage() {
         video.srcObject = stream;
         await video.play();
 
-        const [{ Hands, HAND_CONNECTIONS }, drawingUtils, cameraUtils] = await Promise.all([
-          import("@mediapipe/hands"),
-          import("@mediapipe/drawing_utils"),
-          import("@mediapipe/camera_utils"),
-        ]);
+        landmarker = await createHandLandmarker(handLandmarkerOptionsFor("balanced"));
+        if (cancelled) {
+          landmarker.close();
+          return;
+        }
 
-        hands = new Hands({
-          locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
-        });
-        hands.setOptions({
-          maxNumHands: 2,
-          modelComplexity: 1,
-          minDetectionConfidence: 0.6,
-          minTrackingConfidence: 0.6,
-        });
+        let lastVideoTime = -1;
+        let lastAppendTime = -Infinity;
 
-        hands.onResults((results: any) => {
+        const tick = () => {
+          if (cancelled) return;
+          rafId = requestAnimationFrame(tick);
+
+          const videoEl = videoRef.current;
+          if (!landmarker || !videoEl || videoEl.paused || videoEl.ended) return;
+          // detectForVideo rejects a repeated timestamp, so only run on a new frame.
+          if (videoEl.currentTime === lastVideoTime) return;
+          lastVideoTime = videoEl.currentTime;
+
+          const now = performance.now();
+          const results = landmarker.detectForVideo(videoEl, now);
+
+          const leftIndex = results.handedness.findIndex(
+            (h) => h[0]?.categoryName?.toLowerCase() === "left",
+          );
+          const rightIndex = results.handedness.findIndex(
+            (h) => h[0]?.categoryName?.toLowerCase() === "right",
+          );
+
+          // Throttled to the training extraction rate. Feeding every camera
+          // frame would pack a 60fps stream into the model's window and halve
+          // the real duration each sequence represents.
+          if (results.landmarks.length > 0 && now - lastAppendTime >= CAPTURE_INTERVAL_MS) {
+            lastAppendTime = now;
+            appendFrame(
+              leftIndex >= 0 ? { landmarks: results.landmarks[leftIndex] } : null,
+              rightIndex >= 0 ? { landmarks: results.landmarks[rightIndex] } : null,
+            );
+          }
+
           const canvas = canvasRef.current;
           const ctx = canvas?.getContext("2d");
-          const videoEl = videoRef.current;
-          if (!canvas || !ctx || !videoEl) return;
-
           const width = videoEl.videoWidth;
           const height = videoEl.videoHeight;
-          if (!width || !height) return;
+          if (!canvas || !ctx || !width || !height) return;
 
-          if (!lastSizeRef.current || lastSizeRef.current.width !== width || lastSizeRef.current.height !== height) {
+          if (
+            !lastSizeRef.current
+            || lastSizeRef.current.width !== width
+            || lastSizeRef.current.height !== height
+          ) {
             canvas.width = width;
             canvas.height = height;
             lastSizeRef.current = { width, height };
           }
 
-          ctx.save();
           ctx.clearRect(0, 0, width, height);
-          const landmarksList = results.multiHandLandmarks ?? [];
-          const handednessList = results.multiHandedness ?? [];
-
-          let leftHand: any = null;
-          let rightHand: any = null;
-
-          for (let i = 0; i < landmarksList.length; i++) {
-            const handedness = handednessList[i]?.label ?? "";
-            const landmarks = landmarksList[i].map((p: any) => ({ x: p.x, y: p.y, z: p.z }));
-            const hand = { landmarks };
-
-            if (handedness.toLowerCase().includes("left")) {
-              leftHand = hand;
-            } else {
-              rightHand = hand;
+          for (const hand of results.landmarks) {
+            ctx.strokeStyle = "#22c55e";
+            ctx.lineWidth = 3;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            for (const [start, end] of HAND_CONNECTIONS) {
+              ctx.beginPath();
+              ctx.moveTo(hand[start].x * width, hand[start].y * height);
+              ctx.lineTo(hand[end].x * width, hand[end].y * height);
+              ctx.stroke();
             }
-
-            drawingUtils.drawConnectors(ctx, landmarks, HAND_CONNECTIONS, {
-              color: "#22c55e",
-              lineWidth: 3,
-            });
-            drawingUtils.drawLandmarks(ctx, landmarks, { color: "#ef4444", lineWidth: 2 });
-          }
-
-          if (landmarksList.length > 0) {
-            appendFrame(leftHand, rightHand);
-          }
-
-          ctx.restore();
-        });
-
-        camera = new cameraUtils.Camera(video, {
-          onFrame: async () => {
-            const currentVideo = videoRef.current;
-            if (!hands || !currentVideo || isProcessingRef.current) return;
-            isProcessingRef.current = true;
-            try {
-              await hands.send({ image: currentVideo });
-            } finally {
-              isProcessingRef.current = false;
+            ctx.fillStyle = "#ef4444";
+            for (const point of hand) {
+              ctx.beginPath();
+              ctx.arc(point.x * width, point.y * height, 3.5, 0, 2 * Math.PI);
+              ctx.fill();
             }
-          },
-          width: 640,
-          height: 480,
-        });
-        camera?.start?.();
+          }
+        };
+
+        rafId = requestAnimationFrame(tick);
         setStatus("ready");
       } catch {
         setStatus("error");
@@ -155,9 +158,8 @@ export default function EvaluationPage() {
     setup();
     return () => {
       cancelled = true;
-      isProcessingRef.current = false;
-      camera?.stop?.();
-      hands?.close?.();
+      cancelAnimationFrame(rafId);
+      landmarker?.close();
       if (stream) stream.getTracks().forEach((t) => t.stop());
     };
   }, [appendFrame]);
