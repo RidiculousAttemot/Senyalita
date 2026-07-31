@@ -15,6 +15,18 @@ export const createSupabaseServiceClient = () => {
     );
   }
   return createClient<Database>(url, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false }
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      // Next's App Router patches global fetch and caches it. That silently
+      // memoised storage.createSignedUrl(), so a warm function kept handing out
+      // one token long after its `exp` passed: production returned 400
+      // InvalidJWT ("exp claim timestamp check failed") on a request Vercel
+      // reported as X-Vercel-Cache: MISS, Age: 0 — a genuinely fresh request
+      // replaying a 34-minute-old signature.
+      //
+      // Nothing this client does should ever be served from a cache: signatures
+      // are time-bound and every read is meant to reflect the database now.
+      fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }),
+    },
   });
 };
