@@ -133,6 +133,7 @@ deliberate trade for a build that completes.
 | [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) | Algorithms, constants, and the recognition hot path |
 | [FOLDER_STRUCTURE.md](FOLDER_STRUCTURE.md) | Directory layout |
 | [AGENTS.md](AGENTS.md) | Phase-by-phase project history |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | Vercel topology — **which branch must not be deleted**, rollback pinning, build-time env inlining |
 
 ## Stack
 

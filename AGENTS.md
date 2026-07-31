@@ -1,5 +1,14 @@
 # Project State
 
+## ⚠️ Before deleting any branch
+
+**`cleanup/final-architecture` is Vercel's Production Branch. Deleting it takes
+the live site down.** `main` only produces Preview deployments.
+
+This lives in a dashboard setting, so no local check can see it — `git branch -d`
+will call the branch safe, and identical file trees prove nothing. **Confirm the
+deploy topology before deleting any branch.** See [DEPLOYMENT.md](DEPLOYMENT.md).
+
 ## Overview
 Filipino Sign Language (FSL) recognition app using MediaPipe + TF.js + Supabase.
 Stack: Next.js 14 (App Router), TypeScript, Supabase (auth, DB, realtime), TF.js.
