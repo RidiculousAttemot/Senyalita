@@ -11,15 +11,25 @@ export default async function AdminSystemHealthPage() {
   const supabase = await createSupabaseServerClient();
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { error: databaseError } = await supabase.from("translation_sessions").select("id").limit(1);
-  const { data: storageFiles, error: storageError } = await supabase.storage.from("gesture-videos").list();
-  const { count: totalPredictions } = await supabase.from("translation_logs").select("*", { count: "exact", head: true });
-  const { count: recentPredictions } = await supabase.from("translation_logs").select("*", { count: "exact", head: true }).gte("created_at", thirtyDaysAgo);
-  const { data: recentLogs } = await supabase.from("translation_logs").select("inference_time_ms, recognition_source").gte("created_at", thirtyDaysAgo);
-  const { count: aiRepliesSent, error: telemetryError } = await supabase.from("telemetry_events").select("*", { count: "exact", head: true }).eq("event_type", "ai_reply_used");
-  const { count: selectedReplies } = await supabase.from("conversation_messages").select("*", { count: "exact", head: true }).eq("is_selected_reply", true);
-  const { count: captureCount } = await supabase.from("gesture_captures").select("*", { count: "exact", head: true });
-  const { count: pendingReviewCount } = await supabase.from("review_queue").select("*", { count: "exact", head: true }).eq("status", "pending");
+  const [
+    { error: databaseError },
+    { data: storageFiles, error: storageError },
+    { count: totalPredictions },
+    { count: recentPredictions },
+    { data: recentLogs },
+    { count: telemetryCount, error: telemetryError },
+    { count: animationAssetCount, error: animationAssetsError },
+    { data: animationVersions },
+  ] = await Promise.all([
+    supabase.from("translation_sessions").select("id").limit(1),
+    supabase.storage.from("gesture-videos").list(),
+    supabase.from("translation_logs").select("*", { count: "exact", head: true }),
+    supabase.from("translation_logs").select("*", { count: "exact", head: true }).gte("created_at", thirtyDaysAgo),
+    supabase.from("translation_logs").select("inference_time_ms, recognition_source").gte("created_at", thirtyDaysAgo),
+    supabase.from("telemetry_events").select("*", { count: "exact", head: true }).gte("created_at", thirtyDaysAgo),
+    supabase.from("animation_assets").select("*", { count: "exact", head: true }),
+    supabase.from("animation_asset_versions").select("status"),
+  ]);
 
   const logs = recentLogs ?? [];
   const averageLatencyMs = logs.length > 0 ? logs.reduce((sum, log) => sum + (log.inference_time_ms ?? 0), 0) / logs.length : null;
@@ -28,21 +38,23 @@ export default async function AdminSystemHealthPage() {
     sources[source] = (sources[source] ?? 0) + 1;
     return sources;
   }, {});
-  const telemetryAvailable = !telemetryError;
+
+  const versions = animationVersions ?? [];
+  const animationPublishedCount = versions.filter((v) => v.status === "published").length;
+  const animationExtractionQueueCount = versions.filter((v) => v.status === "pending" || v.status === "processing").length;
 
   return <SystemHealthOverviewView health={{
-    aiAcceptanceRate: telemetryAvailable && aiRepliesSent && aiRepliesSent > 0 ? (selectedReplies ?? 0) / aiRepliesSent : null,
-    aiRepliesSent: telemetryAvailable ? aiRepliesSent ?? null : null,
+    animationAssetCount: animationAssetsError ? null : animationAssetCount ?? null,
+    animationExtractionQueueCount,
+    animationPublishedCount,
     averageLatencyMs,
-    captureCount: captureCount ?? null,
     databaseAvailable: !databaseError,
     model: getCachedResult(),
-    pendingReviewCount: pendingReviewCount ?? null,
     recentPredictions: recentPredictions ?? null,
     sourceBreakdown,
     storageAvailable: !storageError,
     storageFileCount: storageFiles?.filter((file) => file.id && !file.id.endsWith("/")).length ?? 0,
-    telemetryAvailable,
+    telemetryAvailable: !telemetryError && telemetryCount !== null,
     totalPredictions: totalPredictions ?? null,
   }} />;
 }

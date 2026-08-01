@@ -7,13 +7,12 @@ describe("SystemHealthOverviewView", () => {
     render(
       <SystemHealthOverviewView
         health={{
-          aiAcceptanceRate: null,
-          aiRepliesSent: null,
+          animationAssetCount: null,
+          animationExtractionQueueCount: 0,
+          animationPublishedCount: 0,
           averageLatencyMs: null,
-          captureCount: null,
           databaseAvailable: false,
           model: { status: "loading" },
-          pendingReviewCount: null,
           recentPredictions: null,
           sourceBreakdown: {},
           storageAvailable: false,

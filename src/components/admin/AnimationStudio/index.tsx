@@ -182,6 +182,7 @@ export function AnimationStudio() {
         {activeTab === "publish" && extractionResult && (
           <PublishTab
             extractionResult={extractionResult}
+            videoMeta={videoMeta}
             onPublish={handlePublish}
           />
         )}

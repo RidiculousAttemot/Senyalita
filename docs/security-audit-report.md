@@ -92,14 +92,33 @@ WHERE schemaname = 'public' AND tablename IN (
 
 ## 4. API Route Security
 
-| Route | Method | Auth | Admin | Status |
-|-------|--------|------|-------|--------|
-| `/api/admin/gestures` | GET, POST | ✅ | ✅ | |
-| `/api/admin/gestures/upload` | POST | ✅ | ✅ | |
-| `/api/admin/replies` | GET, POST | ✅ | ✅ | |
-| `/api/admin/replies/upload` | POST | ✅ | ✅ | |
-| `/api/admin/gesture-library/import` | POST | ✅ | ✅ | |
-| `/api/feedback` | POST | ✅ | ❌ | |
+**Rewritten 2026-08-01** — the routes below were removed by the admin scope
+reduction and no longer exist: `/api/admin/gestures`, `/api/admin/gestures/upload`,
+`/api/admin/replies`, `/api/admin/replies/upload`, `/api/admin/gesture-library/import`.
+`/api/admin/active-learning` also existed with `requireAdmin()` protection but
+had zero callers anywhere in the app — removed as dead code rather than audited.
+
+| Route | Method | Auth | Admin | Verified |
+|-------|--------|------|-------|----------|
+| `/api/admin/health` | GET | ✅ `requireAdmin()` | ✅ | Code-reviewed 2026-08-01 |
+| `/api/admin/animation-assets` | GET | ✅ `requireAdmin()` | ✅ | Code-reviewed 2026-08-01 |
+| `/api/admin/animation-assets/upload` | POST | ✅ `requireAdmin()` | ✅ | MIME allowlist + 100MB cap, code-reviewed |
+| `/api/admin/animation-assets/[versionId]/action` | POST | ✅ `requireAdmin()` | ✅ | Code-reviewed 2026-08-01 |
+| `/api/assets/dataset` | — | ✅ `requireAdmin()` | ✅ | Code-reviewed 2026-08-01 |
+| `/api/ai/replies` | POST | rate-limited, public by design | — | 20 req/min, prompt-injection sanitisation |
+| `/api/animations/[gloss]` | GET | public by design | — | Serves published animation JSON only |
+| `/api/videos/[label]/[file]` | GET | public by design | — | Serves published reference video only |
+
+Every admin page under `/admin/*` now calls `requireAdmin()` itself (not just
+the `src/middleware.ts` role check) — see `docs/admin-dashboard-structure.md`.
+`requireAdmin()` itself has unit tests: `src/lib/supabase/__tests__/profiles.test.ts`.
+The admin login server action rate-limits to 5 attempts/minute
+(`src/lib/supabase/actions.ts`); the legacy cookie-based admin session
+(`ADMIN_PASSWORD`, `src/lib/admin-auth.ts`) has been removed.
+
+"Verified" above means code-reviewed against the source in this repo, not a
+live run against a deployed environment — the checklists below this section
+still need an actual pass against production before every ⬜ can be checked.
 
 ---
 

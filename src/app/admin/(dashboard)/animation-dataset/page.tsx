@@ -1,7 +1,10 @@
-"use client";
-
 import { AnimationDatasetManager } from "@/components/admin/AnimationDataset";
+import { requireAdmin } from "@/lib/supabase/queries/profiles";
 
-export default function AnimationDatasetRoute() {
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+export default async function AnimationDatasetRoute() {
+  await requireAdmin();
   return <AnimationDatasetManager />;
 }

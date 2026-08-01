@@ -1,6 +1,5 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { ADMIN_SESSION_COOKIE } from "@/lib/admin-auth";
 import type { Database } from "@/lib/supabase/types";
 
 export const runtime = "nodejs";
@@ -28,14 +27,6 @@ export async function GET(request: NextRequest) {
   });
 
   await supabase.auth.signOut();
-
-  response.cookies.set(ADMIN_SESSION_COOKIE, "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 0,
-  });
 
   return response;
 }

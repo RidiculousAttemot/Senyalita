@@ -21,11 +21,16 @@ Admin is **not linked from the public landing page**. Access it by direct URL:
 | Page | URL |
 |------|-----|
 | Admin Dashboard | `http://localhost:3000/admin` |
-| Sign Asset Library (Alphabet) | `http://localhost:3000/admin/gesture-library` |
-| Import Gestures | `http://localhost:3000/admin/gesture-library/import` |
+| Animation Studio (upload/extract/publish) | `http://localhost:3000/admin/animation-studio` |
+| Animation Library | `http://localhost:3000/admin/animation-library` |
+| Animation Dataset Manager | `http://localhost:3000/admin/animation-dataset` |
+| Animation Inspector | `http://localhost:3000/admin/animation-inspector` |
+| System Health | `http://localhost:3000/admin/system` |
 | Admin Login | `http://localhost:3000/admin/login` |
 
-(Replace `3000` with the actual port printed by `npm run dev`.)
+(Replace `3000` with the actual port printed by `npm run dev`.) The admin panel
+manages animation assets only — there is no gesture/dataset/training UI in the
+running app; see `docs/admin-dashboard-structure.md` for the full route list.
 
 ### Supabase Admin Auth
 
@@ -64,17 +69,16 @@ If you see an infinite redirect loop when opening `/admin` or `/admin/login`:
 
 ### Admin Dashboard UI
 
-The admin area now features a polished dashboard:
+The admin area features a polished dashboard:
 
 - **Login Page** (`/admin/login`): Clean, centered auth card with Senyalita branding. No dashboard navigation or tools visible until authenticated.
 - **Dashboard** (`/admin`): Left sidebar navigation grouped into categories:
-  - **Core Management** — Sign Asset Library, Dataset, Models, Translation
-  - **Evaluation** — Analytics, Monitoring, Model Health, Recognition Analysis
-  - **Learning & Content** — Learning, Knowledge Base, Research, Research Insights
-  - **System** — Users, System Health, Import, Collection
-- **Coming Soon** badges mark tools not yet implemented.
-- **Status Cards** show: Auth Provider (Supabase), Required Role (admin), Current Model (BiLSTM v4), Type-to-Sign (alphabet-first), Sign-to-Text (active).
-- Responsive: sidebar collapses on mobile with bottom tab bar.
+  - **Dashboard** — Overview
+  - **Animations** — Animation Studio, Animation Dataset, Animation Library, Animation Inspector
+  - **System** — System Health
+- Responsive: sidebar collapses on mobile with a drawer.
+- Every page (and every `/api/admin/*` route) calls `requireAdmin()` itself in
+  addition to the middleware check.
 
 ## Type-to-Sign
 
@@ -97,18 +101,11 @@ Both URLs serve the same page.
 
 ### Sign Asset Library
 
-The admin page at `/admin/gesture-library` lists all alphabet entries (A–Z, Ñ, NG) with:
-
-| Column | Description |
-|--------|-------------|
-| Label | Letter or token (A, B, ..., Z, Ñ, NG) |
-| Display | Visual representation |
-| Asset Type | `pose-sequence`, `video`, or `animation` |
-| Status | Ready / Draft / Missing |
-| Notes | Description and model support status |
-
-Letters A–Z are marked **Ready** (supported by the current `bilstm_v4` model).
-Ñ and NG are marked **Missing** (not yet in the model — future development).
+The admin page at `/admin/animation-library` lists every animation asset (one
+row per gloss, including the alphabet) with its published/latest version
+status, quality score, and review count. Assets are created via
+`/admin/animation-studio` (upload → extract → preview → publish), not through
+a separate import tool.
 
 ### Admin URL
 
@@ -122,8 +119,6 @@ If Next.js prints a different port, replace `3000` with that value.
 
 ## Future Work
 
-- Full word/phrase gloss library (beyond alphabet)
-- Animation assets for each alphabet entry
-- Sign asset upload/edit UI
+- Full word/phrase gloss library (beyond alphabet) — in progress via Animation Studio
+- Video trimming in Animation Studio (currently uploads the recording as-is; no in/out point selection)
 - Continuous sign language translation (word-level, not just isolated)
-- Admin accounts managed in Supabase Auth with role metadata

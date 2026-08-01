@@ -1,14 +1,13 @@
-import { Bot, Database, FolderArchive, Gauge, HardDrive, ListChecks, Radio, ShieldCheck } from "lucide-react";
+import { Database, Film, FolderArchive, Gauge, HardDrive, Radio, ShieldCheck } from "lucide-react";
 import type { ModelLoadResult } from "@/features/recognition/model/types";
 
 export type SystemHealthData = {
-  aiAcceptanceRate: number | null;
-  aiRepliesSent: number | null;
+  animationAssetCount: number | null;
+  animationExtractionQueueCount: number;
+  animationPublishedCount: number;
   averageLatencyMs: number | null;
-  captureCount: number | null;
   databaseAvailable: boolean;
   model: ModelLoadResult;
-  pendingReviewCount: number | null;
   recentPredictions: number | null;
   sourceBreakdown: Record<string, number>;
   storageAvailable: boolean;
@@ -19,8 +18,6 @@ export type SystemHealthData = {
 
 type ServiceTone = "healthy" | "attention" | "unknown";
 
-const formatPercent = (value: number | null) => value === null ? "Unavailable" : `${(value * 100).toFixed(1)}%`;
-
 export function SystemHealthOverviewView({ health }: { health: SystemHealthData }) {
   const serverServicesAvailable = health.databaseAvailable && health.storageAvailable;
   const modelRuntimeAvailable = health.model.status === "ready";
@@ -29,24 +26,24 @@ export function SystemHealthOverviewView({ health }: { health: SystemHealthData 
   return (
     <div className="admin-system-health">
       <header className="admin-dashboard-header">
-        <div><p className="admin-overline">Production operations</p><h1>System health</h1><p className="admin-dashboard-subtitle">Current service checks, deployed recognition runtime signals, and workflow backlog from the existing production data sources.</p></div>
+        <div><p className="admin-overline">Production operations</p><h1>System health</h1><p className="admin-dashboard-subtitle">Current service checks, deployed recognition runtime signals, and the animation publishing pipeline.</p></div>
         <Status tone={serverServicesAvailable ? "healthy" : "unknown"} label={serverServicesAvailable ? "Core services available" : "Service checks unavailable"} />
       </header>
       <section className="admin-system-service-grid" aria-label="Service status">
         <Service icon={<Database size={18} />} label="Database" detail={health.databaseAvailable ? "Translation session read check succeeded" : "Translation session read check failed"} tone={health.databaseAvailable ? "healthy" : "unknown"} />
         <Service icon={<HardDrive size={18} />} label="Gesture storage" detail={health.storageAvailable ? `${health.storageFileCount.toLocaleString()} files indexed` : "Storage listing is unavailable"} tone={health.storageAvailable ? "healthy" : "unknown"} />
         <Service icon={<Gauge size={18} />} label="Recognition runtime" detail={modelRuntimeAvailable ? `${health.model.modelType ?? "Recognition model"} ready${health.model.classes ? ` with ${health.model.classes} classes` : ""}` : "Browser runtime monitoring unavailable"} tone={modelRuntimeAvailable ? "healthy" : "unknown"} />
-        <Service icon={<Radio size={18} />} label="Telemetry" detail={health.telemetryAvailable ? "Assistant usage events are available" : "Telemetry unavailable"} tone={health.telemetryAvailable ? "healthy" : "unknown"} />
+        <Service icon={<Radio size={18} />} label="Telemetry" detail={health.telemetryAvailable ? "Recognition telemetry is flowing" : "Telemetry unavailable"} tone={health.telemetryAvailable ? "healthy" : "unknown"} />
       </section>
       <section className="admin-metric-grid" aria-label="Recognition operations summary">
-        <Metric icon={<Bot size={17} />} label="All predictions" note="Recorded translation logs" value={health.totalPredictions?.toLocaleString() ?? "Unavailable"} />
+        <Metric icon={<Gauge size={17} />} label="All predictions" note="Recorded translation logs" value={health.totalPredictions?.toLocaleString() ?? "Unavailable"} />
         <Metric icon={<Gauge size={17} />} label="Predictions, 30 days" note="Recent recognition activity" value={health.recentPredictions?.toLocaleString() ?? "Unavailable"} />
         <Metric icon={<ShieldCheck size={17} />} label="Average latency" note="Recent translation-log inference" value={health.averageLatencyMs === null ? "Unavailable" : `${health.averageLatencyMs.toFixed(1)} ms`} />
-        <Metric icon={<ListChecks size={17} />} label="Review backlog" note="Pending review queue items" value={health.pendingReviewCount?.toLocaleString() ?? "Unavailable"} />
+        <Metric icon={<Film size={17} />} label="Published animations" note="Live in Text-to-Sign" value={health.animationPublishedCount.toLocaleString()} />
       </section>
       <section className="admin-system-health-grid">
         <article className="admin-panel admin-system-source-panel"><div className="admin-panel-heading"><div><p className="admin-overline">30-day activity</p><h2>Recognition sources</h2></div><FolderArchive size={18} aria-hidden="true" /></div>{sourceEntries.length === 0 ? <p className="admin-empty-state">No recent recognition source data is available.</p> : <div className="admin-system-source-list">{sourceEntries.map(([source, count]) => <div key={source}><code>{source}</code><strong>{count.toLocaleString()}</strong></div>)}</div>}</article>
-        <article className="admin-panel admin-system-assistant-panel"><div className="admin-panel-heading"><div><p className="admin-overline">Assistant usage</p><h2>Conversation signals</h2></div><Bot size={18} aria-hidden="true" /></div><dl><div><dt>AI replies used</dt><dd>{health.aiRepliesSent?.toLocaleString() ?? "Unavailable"}</dd></div><div><dt>Reply acceptance</dt><dd>{formatPercent(health.aiAcceptanceRate)}</dd></div><div><dt>Captured samples</dt><dd>{health.captureCount?.toLocaleString() ?? "Unavailable"}</dd></div></dl></article>
+        <article className="admin-panel admin-system-assistant-panel"><div className="admin-panel-heading"><div><p className="admin-overline">Animation Studio</p><h2>Publishing pipeline</h2></div><Film size={18} aria-hidden="true" /></div><dl><div><dt>Animation assets</dt><dd>{health.animationAssetCount?.toLocaleString() ?? "Unavailable"}</dd></div><div><dt>Published</dt><dd>{health.animationPublishedCount.toLocaleString()}</dd></div><div><dt>Awaiting extraction or review</dt><dd>{health.animationExtractionQueueCount.toLocaleString()}</dd></div></dl></article>
       </section>
     </div>
   );

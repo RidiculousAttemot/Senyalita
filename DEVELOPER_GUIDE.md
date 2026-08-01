@@ -605,8 +605,12 @@ happens to carry identical indices, so the comment holds either way.)
   `__tests__/temporalAlignment.test.ts`. The test exists and does what the comment
   claims — only the filename in the comment is wrong.
 - `AGENTS.md` Phase 43b advertises a "full CRUD dictionary manager at
-  `/admin/translation`". No such route exists (`/admin/translation-debug` and
-  `/admin/translation-evaluation` do). Edit `gestureDictionary.ts` in source.
+  `/admin/translation`". No such route ever existed as described, and the two
+  routes this note originally pointed to instead (`/admin/translation-debug`,
+  `/admin/translation-evaluation`) are themselves gone now — the admin panel
+  was cut to 8 routes (animation asset management + system health) by
+  `cleanup/final-architecture`. Edit `gestureDictionary.ts` in source; see
+  `docs/admin-dashboard-structure.md` for the current route list.
 
 ### Dead code in the hot path
 

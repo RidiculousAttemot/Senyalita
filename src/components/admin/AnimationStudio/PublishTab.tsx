@@ -18,7 +18,7 @@ import {
   XCircle,
   Loader2,
 } from "lucide-react";
-import type { ExtractionResult, PublishData, PublishStatus } from "./types";
+import type { ExtractionResult, PublishData, PublishStatus, VideoMetadata } from "./types";
 import { animationLibrary } from "@/lib/animationLibrary";
 import type { AnimationValidationResult } from "@/lib/animationLibrary";
 import { validateAsset, analyzeQuality, generateMetadata } from "@/features/ai-assist";
@@ -26,6 +26,7 @@ import type { ValidationResult, AnimationMetadata, QualityAnalysis } from "@/fea
 
 interface PublishTabProps {
   extractionResult: ExtractionResult;
+  videoMeta: VideoMetadata | null;
   onPublish: (data: PublishData) => void;
 }
 
@@ -38,7 +39,7 @@ const CATEGORIES = [
 const DIFFICULTIES = ["beginner", "intermediate", "advanced"];
 const LANGUAGES = ["FSL", "ASL", "LSF"];
 
-export function PublishTab({ extractionResult, onPublish }: PublishTabProps) {
+export function PublishTab({ extractionResult, videoMeta, onPublish }: PublishTabProps) {
   const { asset, metadata } = extractionResult;
   const [gloss, setGloss] = useState("");
   const [category, setCategory] = useState("");
@@ -101,18 +102,22 @@ export function PublishTab({ extractionResult, onPublish }: PublishTabProps) {
       return;
     }
 
+    if (!videoMeta) {
+      setError("The source recording is missing. Re-upload the video and re-run extraction before publishing.");
+      return;
+    }
+
     setError("");
     setSubmitting(true);
 
     try {
       asset.label = trimmedGloss;
 
+      // The source recording (not a placeholder) so Human Mode has real
+      // footage to play — it and the landmark JSON below both come from the
+      // same upload, which is what keeps Human/Skeleton mode in sync.
       const { assetId, versionId } = await animationLibrary.upload(
-        metadata.sourceFps > 0
-          ? new File([""], "placeholder", { type: "video/mp4" })
-          : extractionResult.frames.length > 0
-            ? new File([""], "placeholder", { type: "video/mp4" })
-            : new File([""], "placeholder", { type: "video/mp4" }),
+        videoMeta.file,
         trimmedGloss,
       );
 
@@ -147,7 +152,7 @@ export function PublishTab({ extractionResult, onPublish }: PublishTabProps) {
     } finally {
       setSubmitting(false);
     }
-  }, [gloss, category, language, difficulty, keywordsStr, notes, asset, metadata, qualityScore, extractionResult, onPublish]);
+  }, [gloss, category, language, difficulty, keywordsStr, notes, asset, qualityScore, videoMeta, onPublish]);
 
   const formatMs = (ms: number): string => {
     const s = ms / 1000;

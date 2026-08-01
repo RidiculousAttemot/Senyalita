@@ -1,203 +1,67 @@
-# Admin Dashboard Structure - Phase 5
+# Admin Dashboard Structure
 
-## Overview
+**Rewritten to match the code on 2026-08-01.** The 7-group, 30-page dashboard
+this document used to describe was cut to a single animation-management console
+by the `cleanup/final-architecture` effort — see `CLEANUP_PLAN.md`. If you find
+this file describing a page that 404s, trust `src/lib/admin/navigation.ts` and
+`e2e/admin-nav.spec.ts` over this doc; the latter fails the build if a nav entry
+ever points at a route that doesn't exist.
 
-The admin dashboard has been reorganized into a clean, thesis-workflow-focused structure with 7 semantic navigation groups, coming-soon badges for future features, and clear empty states. All pages use Supabase admin role authentication via `requireAdmin()`.
+## What the admin panel is for
 
-**Status:** ✓ Complete | Lint: 0 new warnings | Build: ✓ Passed | Tests: 90 passing
+Senyalita ships exactly two public workflows — Sign-to-Text (`/translate`,
+camera tab) and Type-to-Sign (`/translate`, type tab). The admin panel manages
+**one** thing in support of them: the animation assets Type-to-Sign plays back.
+There is no dataset-collection, training, or model-retraining UI in the running
+app — the recognition model is trained offline (`scripts/`) and deployed as a
+static artifact under `public/models/`.
 
----
+## Routes (8 total)
 
-## Navigation Structure (7 Groups)
+| Route | Auth | Purpose |
+|---|---|---|
+| `/admin` | `requireAdmin()` | Overview: recognition health metrics, animation pipeline counts, recent activity |
+| `/admin/login` | public | Supabase email/password sign-in |
+| `/admin/logout` | public | Clears the Supabase session, redirects to login |
+| `/admin/system` | `requireAdmin()` | Service checks (DB, storage, telemetry), recognition runtime status, animation publishing pipeline counts |
+| `/admin/animation-studio` | `requireAdmin()` | Upload a signer video → extract landmarks → preview skeleton → publish |
+| `/admin/animation-dataset` | `requireAdmin()` | Animation Dataset Manager |
+| `/admin/animation-library` | `requireAdmin()` | Browse/search published + in-progress animation assets |
+| `/admin/animation-inspector` | `requireAdmin()` | Look up a gloss, see which resolution strategy served it, preview the skeleton |
 
-### 1. Dashboard
-- **[/admin](/admin)** - Admin dashboard landing
-  - Quick stats: Recognition classes, translation sessions, model status, system health
-  - Thesis workflow overview with Sign-to-Text and Type-to-Sign pipelines
-  - Navigation guide with emoji icons
-  - System readiness indicators
+Every page above now calls `requireAdmin()` itself (defense in depth) in
+addition to the global `src/middleware.ts` check — four of the eight used to
+rely on the middleware alone.
 
-### 2. Library
-- **[/admin/library](/admin/library)** - Sign Asset Library overview
-  - Gesture counts and asset management hub
-  - Links to alphabet and gloss libraries
-  - Status cards for library sections
-- **[/admin/library/alphabet](/admin/library/alphabet)** - Alphabet Letter Grid
-  - Interactive 28-letter grid (A-Z, Ñ, NG)
-  - Recognition status (28/28 ✓)
-  - Type-to-Sign readiness tracker
-  - Animation asset status
-- **[/admin/library/gloss](/admin/library/gloss)** - Gloss Library (Coming Soon)
+## Auth
 
-### 3. Capture Studio
-- **[/admin/capture](/admin/capture)** - Capture Studio hub
-  - Record Gesture (ready) → links to `/admin/capture/record`
-  - Pose Sequence Editor (coming soon)
-  - Import Assets (ready) → links to `/admin/gesture-library/import`
-  - Workflow documentation: Capture → extraction → pose sequence → avatar animation
-- **[/admin/capture/record](/admin/capture/record)** - Gesture Recording UI (Coming Soon)
-- **[/admin/gesture-library/import](/admin/gesture-library/import)** - Asset Import Tool (Existing)
+Supabase Auth; an account is an admin if `app_metadata.role === "admin"`.
+`requireAdmin()` (`src/lib/supabase/queries/profiles.ts`) throws
+`UnauthenticatedError` (401) or `ForbiddenError` (403) accordingly — see
+`src/lib/supabase/__tests__/profiles.test.ts`. The login server action
+(`src/lib/supabase/actions.ts`) rate-limits to 5 attempts/minute per caller.
+There is no separate cookie-based admin session anymore; `ADMIN_PASSWORD` and
+`src/lib/admin-auth.ts` were removed as dead code.
 
-### 4. Training
-- **[/admin/training](/admin/training)** - Training Hub
-  - Overview cards: Dataset Samples, Current Model (BiLSTM v2, 94.86%), Classes (133)
-  - Links to dataset, models, and model-health management
-  - 6-step training workflow documentation
-  - npm run commands reference:
-    - `npm run audit:dataset` - Validate dataset
-    - `npm run train:bilstm` - Train BiLSTM model
-    - `npm run export:tfjs` - Export to TensorFlow.js
-  - Existing pages:
-    - `/admin/dataset` - Dataset management
-    - `/admin/models` - Model versions
-    - `/admin/model-health` - Model performance monitoring
+## Animation Studio workflow
 
-### 5. Audits
-- **[/admin/audits](/admin/audits)** - Audits & Logs overview
-  - Recognition Logs (ready) → links to `/admin/audits/logs`
-  - Gesture History (coming soon)
-  - Confidence Reports (coming soon)
-  - Translation Usage (coming soon)
-  - Recognition logging plan documentation
-  - Current status: No logs yet | Logging In Setup | DB Table Ready ✓
-- **[/admin/audits/logs](/admin/audits/logs)** - Recognition Logs viewer
-  - Empty state: "No Recognition Logs Yet"
-  - Planned fields: gesture label, confidence, timestamp, input mode, source, transcript
-  - Setup instructions for enabling logging
+1. **Video Upload** — file picker or webcam recording, capped at 60s / 500MB.
+2. **Pose Extraction** — MediaPipe Holistic runs client-side over the video,
+   producing a landmark sequence.
+3. **Skeleton Preview** — scrub the extracted skeleton against the source video.
+4. **Publish** — uploads the source recording (`POST /api/admin/animation-assets/upload`)
+   and the landmark JSON (`POST /api/admin/animation-assets/[versionId]/action`).
+   Both come from the same recording, which is what keeps Human Mode (video)
+   and Skeleton Mode in sync on the public Type-to-Sign viewer.
 
-### 6. Evaluation
-- **[/admin/analytics](/admin/analytics)** - Analytics Dashboard (Existing)
-- **[/admin/analytics/recognition](/admin/analytics/recognition)** - Recognition Analysis (Existing)
-- **[/admin/model-health](/admin/model-health)** - Model Health (Existing)
-- **[/admin/active-learning](/admin/active-learning)** - Active Learning Dashboard (Existing)
-- **[/admin/research-insights](/admin/research-insights)** - Research Insights (Existing)
+## Component architecture
 
-### 7. System
-- **[/admin/system](/admin/system)** - System Health & Infrastructure
-  - Infrastructure status (DB, Storage, Auth)
-  - Recognition Engine metrics
-  - AI Assistant status
-  - Dataset & Review queue
-  - System Configuration
-  - Status badges: operational, degraded, unavailable
-- **[/admin/settings](/admin/settings)** - System Settings (Coming Soon)
-- **[/admin/gesture-coverage](/admin/gesture-coverage)** - Gesture Coverage Analysis (Coming Soon)
-- **[/admin/translation-coverage](/admin/translation-coverage)** - Translation Completeness (Coming Soon)
+- `AdminShell` / `AdminSidebar` — shell + nav, driven entirely by
+  `ADMIN_NAVIGATION` in `src/lib/admin/navigation.ts`. Add a page there, not by
+  hand-editing the sidebar.
+- Dashboard pages are async Server Components that call `requireAdmin()` then
+  render a client component from `src/components/admin/`.
 
----
-
-## Implementation Status
-
-### ✓ Implemented & Ready
-- Dashboard landing page (/admin)
-- Library overview (/admin/library)
-- Alphabet library (/admin/library/alphabet)
-- Capture Studio hub (/admin/capture)
-- Training hub (/admin/training)
-- Audits overview (/admin/audits)
-- Audits logs viewer (/admin/audits/logs)
-- System health (/admin/system)
-- 6 existing evaluation pages (analytics, model-health, active-learning, etc.)
-- AdminSidebar with 7-group navigation
-- Coming-soon badges and disabled item styling
-
-### 🔄 In Progress / Coming Soon
-- /admin/library/gloss - Gloss library page
-- /admin/capture/record - Gesture recording UI
-- /admin/settings - System settings page
-- /admin/gesture-coverage - Gesture class coverage analysis
-- /admin/translation-coverage - Translation completeness tracking
-
----
-
-## Component Architecture
-
-### AdminSidebar.tsx (Client Component)
-- **Purpose:** Unified navigation sidebar for all admin pages
-- **Features:**
-  - 7 expandable/collapsible groups
-  - Active link detection (pathname matching + custom .matches override)
-  - Coming-soon badge for disabled items
-  - Keyboard navigation support
-  - Sticky positioning at 260px width
-  - Dark theme (#1e293b bg, #e2e8f0 text) by default
-  - Light theme via @media (prefers-color-scheme: light)
-  - Responsive: width reduction at 1024px, mobile drawer at 768px
-
-### AdminSidebar.module.css
-- **Size:** 400+ lines including all responsive breakpoints
-- **Key Classes:**
-  - `.sidebar` - Sticky sidebar container
-  - `.navItem` - Link styling with smooth transitions
-  - `.navItemActive` - #1e40af blue bg + 3px #60a5fa accent border
-  - `.groupButton` - Expandable section headers with chevron rotation
-  - `.comingSoonBadge` - Inline-flex, uppercase, gray background
-  - `.navItemDisabled` - opacity 0.6, cursor not-allowed, pointer-events none
-  - `.navItemWrapper` - Prevents navigation for disabled items
-  - Light theme overrides via @media query
-
-### ToolLink.tsx (Client Component)
-- **Purpose:** Wrapper component fixing "Event handlers cannot be passed to Client Component props" error
-- **Features:**
-  - Encapsulates Link with event handlers
-  - Server Components can pass href and label
-  - Client-side hover effects
-  - No background hover by default (styling applied via parent context)
-
-### Page Components (Admin Pages)
-- **Architecture:** All Server Components with `export const dynamic = 'force-dynamic'`
-- **Auth:** Each page calls `requireAdmin()` via server action
-- **Query Pattern:** Direct Supabase queries for stats (gesture count, session count, etc.)
-- **UI Pattern:** 
-  - Header (title + subtitle)
-  - Grid of metric/status cards
-  - Info sections (yellow/blue/green with context-specific information)
-  - Links to implemented features or coming-soon badges for placeholders
-
----
-
-## Thesis Workflow Integration
-
-### Sign-to-Text Pipeline (Already Implemented)
-1. User captures hand/pose gestures via camera at `/translate`
-2. MediaPipe extracts 21 hand + 33 pose landmarks in real-time
-3. TensorFlow.js BiLSTM v2 model (475KB, 94.86% accuracy) predicts FSL class
-4. Translation engine (translation.ts) maps 133 classes to English text
-5. Transcript displayed with confidence scores
-6. Session saved to Supabase (translation_sessions, translation_logs)
-
-**Admin tools:** Training hub, Model health, Analytics, Audits/Recognition logs
-
-### Type-to-Sign Pipeline (Framework Ready)
-1. User enters English text at `/type-to-sign`
-2. Type-to-Sign engine processes text → FSL gloss sequence
-3. Pose sequences retrieved from gesture library
-4. Avatar animation generated (future: sign animation player)
-5. Non-manual markers applied (facial expressions, body movements)
-
-**Admin tools:** Library (Alphabet, Gloss), Capture Studio (asset collection)
-
-### Asset Management
-- **Alphabet library:** 28 letters with status tracking
-- **Gloss library:** FSL vocabulary mapped to English
-- **Gesture library:** 133+ gesture definitions with:
-  - Pose sequences (landmarks over time)
-  - Video examples
-  - Category tags
-  - Difficulty levels
-  - Related gestures
-
-**Admin tools:** Library pages, Capture Studio, Gesture library CRUD
-
-### Training & Model Improvement
-- **Dataset pipeline:** Collect → Validate → Preprocess → Train → Evaluate → Export
-- **Current model:** BiLSTM v2 (94.86% test accuracy on 14K+ samples from 7 signers including Kaggle)
-- **Active learning:** Review queue for misclassifications, dataset expansion
-- **Monitoring:** Model drift detection, confidence distribution analysis, class imbalance detection
-
-**Admin tools:** Training hub, Dataset management, Model versions, Active learning, Recognition analysis
-
----
 
 ## Key Database Tables
 

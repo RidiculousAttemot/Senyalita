@@ -1,6 +1,14 @@
 # Cleanup Plan — Final Architecture
 
-**Status: proposal. Nothing has been deleted.**
+**Status: executed.** Every Tier A and Tier B item below was carried out across
+commits `08a1f54`..`d513362` on the original `cleanup/final-architecture` branch,
+merged to `main`. Admin is down to 8 routes (dashboard, login, logout, system,
+animation-studio, animation-dataset, animation-library, animation-inspector);
+the two public workflows are `/translate` (Sign-to-Text tab + Type-to-Sign tab).
+A follow-up pass (branch `cleanup/thesis-final-architecture`) removed the
+remaining orphans knip could still find (dead `fsl-translation`/`sign-animation`
+sub-modules, the unreachable `/api/admin/active-learning` route, legacy cookie
+auth) and hardened admin auth — see that branch's commits for specifics.
 
 Baseline `20fa89da`, tag `pre-cleanup`, branch `cleanup/final-architecture`.
 All four commands pass at baseline (typecheck 10s, lint 7s, test 20s, build 431s),

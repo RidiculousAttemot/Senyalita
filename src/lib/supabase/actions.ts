@@ -3,7 +3,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { createSupabaseServerClient } from "./server";
+import { rateLimit } from "@/server/http/rateLimit";
 import {
   appendLog,
   endSession as endSessionQuery,
@@ -13,11 +15,20 @@ import {
 } from "./queries/translations";
 import { appendTranscript } from "./queries/transcripts";
 
+// Bounds brute-forcing of the admin password: 5 attempts/minute per caller,
+// regardless of which email is being tried.
+const LOGIN_RATE_LIMIT = { limit: 5, windowMs: 60_000, bucket: "admin-login" };
+
 export const signInWithPassword = async (formData: FormData) => {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const next = String(formData.get("next") ?? "").trim();
   if (!email || !password) return { error: "Email and password are required." };
+
+  const limit = rateLimit({ headers: await headers() }, LOGIN_RATE_LIMIT);
+  if (!limit.allowed) {
+    return { error: `Too many sign-in attempts. Try again in ${limit.retryAfterSeconds}s.` };
+  }
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });

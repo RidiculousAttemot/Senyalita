@@ -1,6 +1,13 @@
 # Admin UX Improvements Report
 
-## Current State
+**Superseded 2026-08-01.** Every page this report describes (`/admin/gestures`,
+`/admin/replies`, `/admin/knowledge-base`, `/admin/review`, `/admin/models`) was
+removed by the `cleanup/final-architecture` effort — the admin panel is now
+scoped to animation-asset management only. See `docs/admin-dashboard-structure.md`
+for the current 8-route structure. Kept below as a historical record of the
+UX pass; none of it describes code that still exists.
+
+## Current State (as of the original report)
 
 All admin pages exist and are functional but lack modern UX patterns. The following improvements are needed:
 
@@ -60,7 +67,7 @@ All admin pages exist and are functional but lack modern UX patterns. The follow
 - Bulk action toolbar appears when items selected
 - Actions: Approve, Reject, Delete (context-dependent)
 
-## Technical Implementation
+## Technical Implementation (historical)
 
 All admin pages are server components with client-side interactivity via `"use client"` directives. Improvements are additive — no existing functionality was removed.
 
@@ -70,3 +77,4 @@ Changes made:
 - `src/app/admin/knowledge-base/page.tsx` — added search, category/difficulty filters, pagination
 - `src/app/admin/review/page.tsx` — added status filter, search, bulk approve/reject
 - `src/app/admin/models/page.tsx` — added loading state
+

@@ -1,4 +1,11 @@
-import type { NextRequest } from "next/server";
+/**
+ * Anything with a `headers.get()` lookup — a `NextRequest`, or the
+ * `ReadonlyHeaders` returned by `next/headers` inside a Server Action, which
+ * has no `Request` of its own to rate limit against.
+ */
+interface HeaderSource {
+  headers: { get(name: string): string | null };
+}
 
 /**
  * In-process sliding-window rate limiter.
@@ -51,13 +58,13 @@ export interface RateLimitOptions {
  * left-most entry is the client. It is spoofable in principle, but on Vercel
  * the edge rewrites it, so it is the best signal available without auth.
  */
-export function clientKey(request: NextRequest): string {
+export function clientKey(request: HeaderSource): string {
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) return forwarded.split(",")[0].trim();
   return request.headers.get("x-real-ip") ?? "unknown";
 }
 
-export function rateLimit(request: NextRequest, options: RateLimitOptions): RateLimitResult {
+export function rateLimit(request: HeaderSource, options: RateLimitOptions): RateLimitResult {
   const { limit, windowMs, bucket } = options;
   const now = Date.now();
   sweep(windowMs, now);
