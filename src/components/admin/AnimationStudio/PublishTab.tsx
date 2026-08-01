@@ -12,13 +12,13 @@ import {
   BarChart3,
   Tag,
   Globe,
-  BookOpen,
   AlertTriangle,
   AlertCircle,
   XCircle,
   Loader2,
 } from "lucide-react";
 import type { ExtractionResult, PublishData, PublishStatus, VideoMetadata } from "./types";
+import { normalizeGloss } from "@/features/sign-animation/gloss";
 import { animationLibrary } from "@/lib/animationLibrary";
 import type { AnimationValidationResult } from "@/lib/animationLibrary";
 import { validateAsset, analyzeQuality, generateMetadata } from "@/features/ai-assist";
@@ -27,27 +27,53 @@ import type { ValidationResult, AnimationMetadata, QualityAnalysis } from "@/fea
 interface PublishTabProps {
   extractionResult: ExtractionResult;
   videoMeta: VideoMetadata | null;
+  /** Pre-fills the gloss field when arriving from the Library's "Replace Version". */
+  initialGloss?: string;
   onPublish: (data: PublishData) => void;
 }
 
-const CATEGORIES = [
-  "Greeting", "Question", "Family", "Color", "Number",
-  "Day", "Month", "Food", "Emotion", "Action",
-  "Object", "Place", "Time", "Person", "Animal", "Other",
-];
-
-const DIFFICULTIES = ["beginner", "intermediate", "advanced"];
 const LANGUAGES = ["FSL", "ASL", "LSF"];
 
-export function PublishTab({ extractionResult, videoMeta, onPublish }: PublishTabProps) {
+/** A representative frame from the source recording, for the Library grid. Best-effort: a failed capture just omits the thumbnail. */
+async function captureThumbnail(videoUrl: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.src = videoUrl;
+    const finish = (result: string | null) => {
+      video.remove();
+      resolve(result);
+    };
+    video.onloadedmetadata = () => {
+      video.currentTime = Number.isFinite(video.duration) ? Math.min(video.duration * 0.4, Math.max(0, video.duration - 0.1)) : 0;
+    };
+    video.onseeked = () => {
+      try {
+        const width = 320;
+        const height = Math.round((video.videoHeight || 240) * (width / (video.videoWidth || width)));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return finish(null);
+        ctx.drawImage(video, 0, 0, width, height);
+        finish(canvas.toDataURL("image/jpeg", 0.7));
+      } catch {
+        finish(null);
+      }
+    };
+    video.onerror = () => finish(null);
+  });
+}
+
+export function PublishTab({ extractionResult, videoMeta, initialGloss, onPublish }: PublishTabProps) {
   const { asset, metadata } = extractionResult;
-  const [gloss, setGloss] = useState("");
-  const [category, setCategory] = useState("");
+  const [gloss, setGloss] = useState(initialGloss ?? "");
   const [language, setLanguage] = useState("FSL");
-  const [difficulty, setDifficulty] = useState("beginner");
-  const [keywordsStr, setKeywordsStr] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submitStage, setSubmitStage] = useState("");
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
   const [validation, setValidation] = useState<AnimationValidationResult | null>(null);
@@ -89,7 +115,7 @@ export function PublishTab({ extractionResult, videoMeta, onPublish }: PublishTa
   }, [asset]);
 
   const handlePublish = useCallback(async (action: PublishStatus) => {
-    const trimmedGloss = gloss.trim().toUpperCase();
+    const trimmedGloss = normalizeGloss(gloss);
     if (!trimmedGloss) {
       setError("Gloss label is required");
       return;
@@ -113,6 +139,7 @@ export function PublishTab({ extractionResult, videoMeta, onPublish }: PublishTa
     try {
       asset.label = trimmedGloss;
 
+      setSubmitStage("Uploading recording…");
       // The source recording (not a placeholder) so Human Mode has real
       // footage to play — it and the landmark JSON below both come from the
       // same upload, which is what keeps Human/Skeleton mode in sync.
@@ -121,12 +148,19 @@ export function PublishTab({ extractionResult, videoMeta, onPublish }: PublishTa
         trimmedGloss,
       );
 
+      setSubmitStage("Generating thumbnail…");
+      const thumbnailDataUrl = await captureThumbnail(videoMeta.url);
+
+      setSubmitStage("Saving landmarks…");
       await animationLibrary.performAction(versionId, "complete-processing", {
         asset: asset as unknown as Record<string, unknown>,
         qualityScore,
+        language: language.toLowerCase(),
+        ...(thumbnailDataUrl ? { thumbnailDataUrl } : {}),
       });
 
       if (action === "published") {
+        setSubmitStage("Publishing…");
         await animationLibrary.performAction(versionId, "approve", { notes });
         await animationLibrary.performAction(versionId, "publish");
 
@@ -142,17 +176,15 @@ export function PublishTab({ extractionResult, videoMeta, onPublish }: PublishTa
         await animationLibrary.performAction(versionId, "archive");
       }
 
-      const keywords = keywordsStr.split(",").map((k) => k.trim()).filter(Boolean);
-      onPublish({
-        gloss: trimmedGloss, category, language, difficulty, keywords, notes, status: action,
-      });
+      onPublish({ gloss: trimmedGloss, language, notes, status: action });
       setDone(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Publish failed");
     } finally {
       setSubmitting(false);
+      setSubmitStage("");
     }
-  }, [gloss, category, language, difficulty, keywordsStr, notes, asset, qualityScore, videoMeta, onPublish]);
+  }, [gloss, language, notes, asset, qualityScore, videoMeta, onPublish]);
 
   const formatMs = (ms: number): string => {
     const s = ms / 1000;
@@ -240,32 +272,10 @@ export function PublishTab({ extractionResult, videoMeta, onPublish }: PublishTa
           </div>
 
           <div className="form-group">
-            <label>Category</label>
-            <select value={category} onChange={(e) => setCategory(e.target.value)}>
-              <option value="">Select category...</option>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-
-          <div className="form-group">
             <label><Globe size={14} /> Language</label>
             <select value={language} onChange={(e) => setLanguage(e.target.value)}>
               {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
             </select>
-          </div>
-
-          <div className="form-group">
-            <label><BookOpen size={14} /> Difficulty</label>
-            <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
-              {DIFFICULTIES.map((d) => (
-                <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label>Keywords (comma-separated)</label>
-            <input type="text" placeholder="hello, greeting, wave" value={keywordsStr} onChange={(e) => setKeywordsStr(e.target.value)} />
           </div>
 
           <div className="form-group">
@@ -440,7 +450,7 @@ export function PublishTab({ extractionResult, videoMeta, onPublish }: PublishTa
             disabled={submitting}
           >
             {submitting ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
-            {submitting ? "Saving..." : "Save Draft"}
+            {submitting ? (submitStage || "Saving…") : "Save Draft"}
           </button>
           <button
             className="btn-publish primary"
@@ -448,7 +458,7 @@ export function PublishTab({ extractionResult, videoMeta, onPublish }: PublishTa
             disabled={submitting || !gloss.trim()}
           >
             {submitting ? <Loader2 className="spin" size={16} /> : <Send size={16} />}
-            {submitting ? "Publishing..." : "Publish & Register"}
+            {submitting ? (submitStage || "Publishing…") : "Publish & Register"}
           </button>
           <button
             className="btn-publish danger"
@@ -458,6 +468,11 @@ export function PublishTab({ extractionResult, videoMeta, onPublish }: PublishTa
             <Archive size={16} /> Archive
           </button>
         </div>
+        {submitting && (
+          <p style={{ textAlign: "center", fontSize: 12, color: "#64748b", marginTop: 8 }} role="status" aria-live="polite">
+            {submitStage}
+          </p>
+        )}
 
         <style>{`@keyframes spin { to { transform: rotate(360deg); } } .spin { animation: spin 0.8s linear infinite; }`}</style>
       </div>

@@ -63,116 +63,45 @@ There is no separate cookie-based admin session anymore; `ADMIN_PASSWORD` and
   render a client component from `src/components/admin/`.
 
 
-## Key Database Tables
+## Animation Library
 
-### Recognition Pipeline
-- `gestures` - Core gesture definitions (133 classes)
-- `gesture_captures` - Training data (14K+ labeled samples)
-- `translation_sessions` - Recognition sessions (metadata)
-- `translation_logs` - Per-frame predictions (timestamp, confidence, label)
-- `recognition_logs` - Audit trail (future: enabled in Phase 6)
+The single source of truth for every animation asset (`/admin/animation-library`).
+Each version row carries: original source video, landmark JSON, thumbnail,
+gloss, language, fps, duration, frame count, storage size (landmark JSON
+bytes), quality score, created/published dates, version number, and status.
 
-### Asset Management
-- `gesture_definitions` - Gesture library with pose sequences
-- `gesture_replies` - Pre-defined response gestures
+- **Preview** — opens the real `SignAnimationPlayer` (Human / Skeleton / Split
+  / Overlay, lazy-loaded) against that version's actual asset, not just the
+  published one — an admin can preview a draft before approving it.
+- **Edit Metadata** — language only; gloss is the lookup key and isn't
+  renameable from here, and category/difficulty/keywords fields were removed
+  from Publish (the schema never persisted them — see `git log` on
+  `PublishTab.tsx`).
+- **Replace Version** — links to `/admin/animation-studio?gloss=<gloss>`,
+  which pre-fills Publish's gloss field. Publishing there creates version N+1;
+  version N is kept (archived once N+1 publishes), never overwritten.
+- **Delete** — hard delete, asset + all versions + storage objects. Distinct
+  from Archive (reversible, keeps history). Confirmation required, not undoable.
+- **Download Video / Download JSON** — signed URLs, generated on demand
+  (`GET /api/admin/animation-assets/[versionId]/asset`), not preloaded.
 
-### Type-to-Sign (Future)
-- `gloss_mappings` - English text → FSL gloss
-- `pose_sequences` - Stored animation data
-- `animation_assets` - Video clips and motion data
+Search/lookup normalization (`src/features/sign-animation/gloss.ts`,
+`normalizeGloss()`) is centralised: uppercase, trim, hyphens and whitespace
+both collapse to `_`. Applied at upload, at every cache/resolver lookup, and
+server-side in `lib/supabase/queries/animationAssets.ts` — "hello-world",
+"hello_world" and "Hello World" all resolve to the same asset.
 
----
+Lookup order (`src/server/services/animationAssets.ts`): published Supabase
+asset, then a local dev-only directory fallback (disabled in production
+regardless of flag), then the caller fingerspells on a miss. Never a local
+search before the published lookup.
 
-## Authentication & Authorization
+## Verified correct, left unchanged
 
-### Admin Access
-- Supabase admin auth via `app_metadata.role = 'admin'`
-- Each page calls `requireAdmin()` server action
-- Layout does NOT gate (each page enforces independently)
-- `/admin/login` redirects non-admin users
+- Human/Skeleton/Split/Overlay sync (time-based, not frame-based) —
+  `SignAnimationPlayer.tsx`.
+- No blanket asset preload — Type-to-Sign warms only the debounced
+  currently-typed message, not the whole alphabet on mount.
+- Fingerspelling fallback messaging — `TranslationResult.tsx` already shows
+  "Spelled letter by letter: X — no recorded sign for these yet."; never an error.
 
-### RLS Policies
-- Admin users have full read/write access to:
-  - gesture_definitions
-  - gesture_captures
-  - translation_sessions
-  - translation_logs
-  - model_versions (future)
-- Regular users only see public gesture library and their own session history
-
----
-
-## Upcoming Phases
-
-### Phase 6 - Recognition Logging
-- Enable audit trail of all predictions
-- Populate recognition_logs table on each prediction
-- Implement `/admin/audits/logs` table view with filtering
-- Add confidence reports and gesture history analysis
-
-### Phase 7 - Gesture Coverage & Translation
-- `/admin/gesture-coverage` - Analyze class coverage (weak classes, confusion pairs)
-- `/admin/translation-coverage` - Check FSL gloss mapping completeness
-- Recommend dataset expansion priorities
-
-### Phase 8 - Type-to-Sign Asset Creation
-- `/admin/capture/record` - Video recording UI for pose capture
-- Pose sequence extraction pipeline (automated MediaPipe processing)
-- Batch import tool for gesture animation assets
-- Status tracking: which alphabet letters/glosses have pose sequences
-
-### Phase 9 - Settings & Monitoring
-- `/admin/settings` - System configuration (recognition thresholds, logging levels, etc.)
-- Enhanced `/admin/system` with real-time Vercel/Supabase metrics
-- Sentry error tracking dashboard
-
----
-
-## File Changes Summary
-
-### New Files Created
-- `/src/app/admin/(dashboard)/library/page.tsx` - Library overview
-- `/src/app/admin/(dashboard)/library/alphabet/page.tsx` - Alphabet grid
-- `/src/app/admin/(dashboard)/capture/page.tsx` - Capture Studio hub
-- `/src/app/admin/(dashboard)/training/page.tsx` - Training hub
-- `/src/app/admin/(dashboard)/audits/page.tsx` - Audits overview
-- `/src/app/admin/(dashboard)/audits/logs/page.tsx` - Recognition logs viewer
-
-### Files Modified
-- `/src/components/admin/AdminSidebar.tsx` - Updated SECTIONS array (4 groups → 7 groups), added coming-soon support, updated navigation rendering
-- `/src/components/admin/AdminSidebar.module.css` - Added 50+ lines for coming-soon badges and disabled item styling
-- `/src/app/admin/(dashboard)/page.tsx` - Simplified dashboard landing with thesis workflow focus
-
-### Files Unchanged
-- `/src/app/admin/layout.tsx` - Single sidebar provider (confirmed working)
-- `/src/app/admin/(dashboard)/layout.tsx` - Pass-through (confirmed working)
-- All existing admin pages (analytics, models, etc.) - Backward compatible
-
----
-
-## Testing Checklist
-
-- [x] Build passes with `npm run build` (no new errors)
-- [x] Lint clean with `npm run lint` (0 new warnings from admin changes)
-- [x] Sidebar renders single instance (no duplication)
-- [x] Active link detection working (pathname matching)
-- [x] Coming-soon items non-navigable (preventDefault on click)
-- [x] Responsive at breakpoints (1024px, 768px)
-- [x] Dark theme active by default (#1e293b)
-- [x] Light theme works via @media (prefers-color-scheme: light)
-- [ ] Manual login test (Supabase admin auth)
-- [ ] Expand/collapse groups (collapsible state)
-- [ ] Click implemented links (navigate to correct pages)
-- [ ] Sign-to-Text unaffected (/translate still works)
-- [ ] Type-to-Sign unaffected (/type-to-sign still works)
-
----
-
-## References
-
-- **Main Dashboard:** [/admin](/admin)
-- **Navigation Code:** [src/components/admin/AdminSidebar.tsx](src/components/admin/AdminSidebar.tsx)
-- **Styles:** [src/components/admin/AdminSidebar.module.css](src/components/admin/AdminSidebar.module.css)
-- **Thesis Overview:** [SYSTEM_OVERVIEW.md](SYSTEM_OVERVIEW.md)
-- **Training Pipeline:** [docs/model-training-reference.md](docs/model-training-reference.md)
-- **Recognition Analysis:** [docs/recognition-analysis-guide.md](docs/recognition-analysis-guide.md)

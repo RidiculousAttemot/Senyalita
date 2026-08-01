@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { GestureAnimationAsset } from "@/features/sign-animation/types";
+import { normalizeGloss } from "@/features/sign-animation/gloss";
 import { createSupabaseServiceClient } from "../service";
 import type { AnimationAsset, AnimationAssetVersion } from "@/lib/animationAssets";
 
@@ -51,7 +52,7 @@ export async function getPublishedAnimationAsset(gloss: string): Promise<Publish
   const { data: asset, error: assetError } = await supabase
     .from("animation_assets")
     .select("published_version_id")
-    .eq("gloss", gloss.toUpperCase())
+    .eq("gloss", normalizeGloss(gloss))
     .maybeSingle();
 
   if (assetError) return { outcome: "failed", stage: "asset", message: assetError.message };
@@ -127,7 +128,7 @@ export async function getPublishedAnimationSignedUrl(gloss: string): Promise<Sig
   const { data: asset, error: assetError } = await supabase
     .from("animation_assets")
     .select("published_version_id")
-    .eq("gloss", gloss.toUpperCase())
+    .eq("gloss", normalizeGloss(gloss))
     .maybeSingle();
 
   if (assetError) return { outcome: "failed", stage: "asset", message: assetError.message };

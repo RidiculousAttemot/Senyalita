@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/queries/profiles";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { BadRequestError, toErrorResponse } from "@/server/http/errors";
+import { normalizeGloss } from "@/features/sign-animation/gloss";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
     const form = await request.formData();
     const file = form.get("file");
     const rawGloss = form.get("gloss");
-    const gloss = typeof rawGloss === "string" ? rawGloss.trim().toUpperCase() : "";
+    const gloss = typeof rawGloss === "string" ? normalizeGloss(rawGloss) : "";
 
     if (!(file instanceof Blob) || !gloss) {
       throw new BadRequestError("A source video and canonical gloss are required.");

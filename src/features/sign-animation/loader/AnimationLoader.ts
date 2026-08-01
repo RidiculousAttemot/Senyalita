@@ -1,4 +1,5 @@
 import type { GestureAnimationAsset } from "../types";
+import { normalizeGloss } from "../gloss";
 
 /**
  * Concurrent requests allowed while warming the cache.
@@ -25,7 +26,7 @@ export class AnimationLoader {
   private stats: LoaderStats = { cached: 0, loaded: 0, missed: 0, failed: 0 };
 
   async load(gestureLabel: string): Promise<GestureAnimationAsset | null> {
-    const key = gestureLabel.toUpperCase().replace(/\s+/g, "_");
+    const key = normalizeGloss(gestureLabel);
 
     const cached = this.cache.get(key);
     if (cached) {

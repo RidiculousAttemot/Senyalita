@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const LANDMARK_BUCKET = "animation-landmarks";
+const SUPPORTED_LANGUAGES = new Set(["fsl", "asl", "lsf"]);
 
 function isGestureAnimationAsset(value: unknown): value is GestureAnimationAsset {
   if (!value || typeof value !== "object") return false;
@@ -16,14 +17,28 @@ function isGestureAnimationAsset(value: unknown): value is GestureAnimationAsset
   return typeof asset.label === "string" && Array.isArray(asset.frames) && typeof asset.fps === "number";
 }
 
+/** Decodes a `data:image/jpeg;base64,...` thumbnail into raw bytes, or null for anything else. */
+function decodeJpegDataUrl(value: unknown): Buffer | null {
+  if (typeof value !== "string") return null;
+  const match = /^data:image\/jpeg;base64,(.+)$/.exec(value);
+  if (!match) return null;
+  try {
+    return Buffer.from(match[1], "base64");
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: NextRequest, { params }: { params: { versionId: string } }) {
   try {
     const admin = await requireAdmin();
     const body = await request.json() as {
-      action?: "complete-processing" | "approve" | "reject" | "publish" | "archive";
+      action?: "complete-processing" | "approve" | "reject" | "publish" | "archive" | "update-metadata";
       asset?: unknown;
       qualityScore?: number;
       notes?: string;
+      thumbnailDataUrl?: string;
+      language?: string;
     };
     if (!body.action) return NextResponse.json({ error: "An asset action is required." }, { status: 400 });
 
@@ -49,11 +64,25 @@ export async function POST(request: NextRequest, { params }: { params: { version
           `This animation cannot be published: ${validation.errors.map((e) => e.message).join(" ")}`,
         );
       }
+      const landmarkJson = JSON.stringify(body.asset);
       const landmarkPath = `${version.asset_id}/${version.id}/landmarks.json`;
       const { error: uploadError } = await supabase.storage
         .from(LANDMARK_BUCKET)
-        .upload(landmarkPath, JSON.stringify(body.asset), { contentType: "application/json", upsert: true });
+        .upload(landmarkPath, landmarkJson, { contentType: "application/json", upsert: true });
       if (uploadError) throw new Error(uploadError.message);
+
+      // Thumbnail is best-effort: a bad frame capture should not block
+      // publishing the animation itself.
+      let thumbnailPath: string | null = null;
+      const thumbnailBytes = decodeJpegDataUrl(body.thumbnailDataUrl);
+      if (thumbnailBytes) {
+        const candidatePath = `${version.asset_id}/${version.id}/thumbnail.jpg`;
+        const { error: thumbnailError } = await supabase.storage
+          .from(LANDMARK_BUCKET)
+          .upload(candidatePath, thumbnailBytes, { contentType: "image/jpeg", upsert: true });
+        if (!thumbnailError) thumbnailPath = candidatePath;
+        else console.error(`[animation-assets] thumbnail upload failed for version ${version.id}:`, thumbnailError.message);
+      }
 
       const { error: updateError } = await supabase
         .from("animation_asset_versions")
@@ -65,6 +94,9 @@ export async function POST(request: NextRequest, { params }: { params: { version
           duration_ms: Math.round(body.asset.duration),
           quality_score: typeof body.qualityScore === "number" ? body.qualityScore : null,
           extraction_metadata: body.asset.metadata,
+          storage_bytes: Buffer.byteLength(landmarkJson, "utf-8"),
+          language: body.language && SUPPORTED_LANGUAGES.has(body.language.toLowerCase()) ? body.language.toLowerCase() : undefined,
+          ...(thumbnailPath ? { thumbnail_path: thumbnailPath } : {}),
         })
         .eq("id", version.id);
       if (updateError) throw new Error(updateError.message);
@@ -122,6 +154,18 @@ export async function POST(request: NextRequest, { params }: { params: { version
         .eq("id", version.id);
       if (archiveError) throw new Error(archiveError.message);
       return NextResponse.json({ ok: true, status: "archived" });
+    }
+
+    if (body.action === "update-metadata") {
+      if (!body.language || !SUPPORTED_LANGUAGES.has(body.language.toLowerCase())) {
+        throw new BadRequestError("A supported language (fsl, asl, lsf) is required.");
+      }
+      const { error: updateError } = await supabase
+        .from("animation_asset_versions")
+        .update({ language: body.language.toLowerCase() })
+        .eq("id", version.id);
+      if (updateError) throw new Error(updateError.message);
+      return NextResponse.json({ ok: true });
     }
 
     return NextResponse.json({ error: "Unsupported asset action." }, { status: 400 });

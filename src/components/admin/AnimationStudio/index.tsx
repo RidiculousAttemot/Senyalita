@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { Upload, Wand2, Eye, Send } from "lucide-react";
 import { VideoUploadTab } from "./VideoUploadTab";
 import { PoseExtractionTab } from "./PoseExtractionTab";
@@ -18,6 +19,8 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 export function AnimationStudio() {
+  const searchParams = useSearchParams();
+  const replaceGloss = searchParams?.get("gloss")?.trim().toUpperCase() || undefined;
   const [activeTab, setActiveTab] = useState<TabId>("upload");
   const [videoMeta, setVideoMeta] = useState<VideoMetadata | null>(null);
   const [extractionResult, setExtractionResult] = useState<ExtractionResult | null>(null);
@@ -145,6 +148,11 @@ export function AnimationStudio() {
       <div className="animation-studio-header">
         <h1>Animation Studio</h1>
         <p>Upload FSL videos, extract pose landmarks, review skeleton preview, and publish animation assets</p>
+        {replaceGloss && (
+          <p style={{ marginTop: 8, fontSize: 13, color: "#60a5fa" }}>
+            Replacing <strong>{replaceGloss}</strong> — publishing here creates a new version; the current published version stays until this one is published.
+          </p>
+        )}
       </div>
 
       <div className="animation-studio-tabs">
@@ -183,6 +191,7 @@ export function AnimationStudio() {
           <PublishTab
             extractionResult={extractionResult}
             videoMeta={videoMeta}
+            initialGloss={replaceGloss}
             onPublish={handlePublish}
           />
         )}

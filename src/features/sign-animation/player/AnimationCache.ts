@@ -6,6 +6,7 @@ import type {
   PlaybackPlan,
   AnimationRecommendation,
 } from "../types";
+import { normalizeGloss } from "../gloss";
 
 export class AnimationCache {
   private assetCache: Map<string, GestureAnimationAsset> = new Map();
@@ -19,7 +20,7 @@ export class AnimationCache {
   private misses = 0;
 
   getAsset(key: string): GestureAnimationAsset | null {
-    const normalized = key.toUpperCase().replace(/\s+/g, "_");
+    const normalized = normalizeGloss(key);
     const cached = this.assetCache.get(normalized);
     if (cached) { this.hits++; return cached; }
     this.misses++;
@@ -27,7 +28,7 @@ export class AnimationCache {
   }
 
   setAsset(key: string, asset: GestureAnimationAsset): void {
-    const normalized = key.toUpperCase().replace(/\s+/g, "_");
+    const normalized = normalizeGloss(key);
     this.assetCache.set(normalized, asset);
   }
 
@@ -54,7 +55,7 @@ export class AnimationCache {
   }
 
   getResolution(key: string): ResolverResult | null {
-    const normalized = key.toUpperCase().replace(/\s+/g, "_");
+    const normalized = normalizeGloss(key);
     const cached = this.resolutionCache.get(normalized);
     if (cached) { this.hits++; return cached; }
     this.misses++;
@@ -62,7 +63,7 @@ export class AnimationCache {
   }
 
   setResolution(key: string, result: ResolverResult): void {
-    const normalized = key.toUpperCase().replace(/\s+/g, "_");
+    const normalized = normalizeGloss(key);
     this.resolutionCache.set(normalized, result);
   }
 

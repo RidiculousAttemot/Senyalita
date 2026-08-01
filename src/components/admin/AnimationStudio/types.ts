@@ -45,10 +45,7 @@ export type PublishStatus = "draft" | "published" | "archived";
 
 export interface PublishData {
   gloss: string;
-  category: string;
   language: string;
-  difficulty: string;
-  keywords: string[];
   notes: string;
   status: PublishStatus;
 }

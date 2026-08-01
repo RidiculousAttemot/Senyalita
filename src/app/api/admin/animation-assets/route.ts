@@ -6,6 +6,9 @@ import { toErrorResponse } from "@/server/http/errors";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const LANDMARK_BUCKET = "animation-landmarks";
+const THUMBNAIL_URL_TTL_SECONDS = 3600;
+
 export async function GET(request: NextRequest) {
   try {
     await requireAdmin();
@@ -39,6 +42,41 @@ export async function GET(request: NextRequest) {
 
     if (reviewsError) throw new Error(reviewsError.message);
 
+    // One signed URL per thumbnail, all in flight together rather than one
+    // request at a time — the list can be 100+ assets.
+    const thumbnailPaths = [...new Set(allVersions.map((v) => v.thumbnail_path).filter((p): p is string => Boolean(p)))];
+    const thumbnailUrls = new Map<string, string>();
+    if (thumbnailPaths.length > 0) {
+      const signed = await Promise.all(
+        thumbnailPaths.map(async (thumbnailPath) => {
+          const { data } = await supabase.storage
+            .from(LANDMARK_BUCKET)
+            .createSignedUrl(thumbnailPath, THUMBNAIL_URL_TTL_SECONDS);
+          return [thumbnailPath, data?.signedUrl ?? null] as const;
+        }),
+      );
+      for (const [thumbnailPath, url] of signed) if (url) thumbnailUrls.set(thumbnailPath, url);
+    }
+
+    const projectVersion = (v: (typeof allVersions)[number]) => ({
+      id: v.id,
+      version: v.version,
+      status: v.status,
+      fps: v.fps,
+      totalFrames: v.total_frames,
+      durationMs: v.duration_ms,
+      qualityScore: v.quality_score,
+      landmarkJsonPath: v.landmark_json_path,
+      language: v.language,
+      storageBytes: v.storage_bytes,
+      thumbnailUrl: v.thumbnail_path ? thumbnailUrls.get(v.thumbnail_path) ?? null : null,
+      approvedBy: v.approved_by,
+      approvedAt: v.approved_at,
+      createdBy: v.created_by,
+      createdAt: v.created_at,
+      publishedAt: v.status === "published" ? v.updated_at : null,
+    });
+
     let result = assets.map((asset) => {
       const versions = allVersions.filter((v) => v.asset_id === asset.id);
       const currentPublished = versions.find((v) => v.status === "published");
@@ -51,34 +89,8 @@ export async function GET(request: NextRequest) {
         publishedVersionId: asset.published_version_id,
         createdAt: asset.created_at,
         updatedAt: asset.updated_at,
-        publishedVersion: currentPublished
-          ? {
-              id: currentPublished.id,
-              version: currentPublished.version,
-              fps: currentPublished.fps,
-              totalFrames: currentPublished.total_frames,
-              durationMs: currentPublished.duration_ms,
-              qualityScore: currentPublished.quality_score,
-              landmarkJsonPath: currentPublished.landmark_json_path,
-              status: currentPublished.status,
-              approvedBy: currentPublished.approved_by,
-              approvedAt: currentPublished.approved_at,
-              createdBy: currentPublished.created_by,
-            }
-          : null,
-        latestVersion: latest
-          ? {
-              id: latest.id,
-              version: latest.version,
-              status: latest.status,
-              fps: latest.fps,
-              totalFrames: latest.total_frames,
-              durationMs: latest.duration_ms,
-              qualityScore: latest.quality_score,
-              createdAt: latest.created_at,
-              createdBy: latest.created_by,
-            }
-          : null,
+        publishedVersion: currentPublished ? projectVersion(currentPublished) : null,
+        latestVersion: latest ? projectVersion(latest) : null,
         status: latest?.status ?? "pending",
         versionCount: versions.length,
         reviewCount: assetReviews.length,

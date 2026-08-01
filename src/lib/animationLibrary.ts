@@ -8,31 +8,28 @@ export interface AnimationLibraryAsset {
   versionCount: number;
   createdAt: string;
   updatedAt: string;
-  publishedVersion: {
-    id: string;
-    version: number;
-    fps: number | null;
-    totalFrames: number | null;
-    durationMs: number | null;
-    qualityScore: number | null;
-    landmarkJsonPath: string | null;
-    status: string;
-    approvedBy: string | null;
-    approvedAt: string | null;
-    createdBy: string | null;
-  } | null;
-  latestVersion: {
-    id: string;
-    version: number;
-    status: string;
-    fps: number | null;
-    totalFrames: number | null;
-    durationMs: number | null;
-    qualityScore: number | null;
-    createdAt: string;
-    createdBy: string | null;
-  } | null;
+  publishedVersion: AnimationLibraryVersion | null;
+  latestVersion: AnimationLibraryVersion | null;
   reviewCount: number;
+}
+
+export interface AnimationLibraryVersion {
+  id: string;
+  version: number;
+  status: string;
+  fps: number | null;
+  totalFrames: number | null;
+  durationMs: number | null;
+  qualityScore: number | null;
+  landmarkJsonPath?: string | null;
+  language: string | null;
+  storageBytes: number | null;
+  thumbnailUrl: string | null;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  publishedAt: string | null;
 }
 
 export interface AnimationLibraryQuery {
@@ -91,8 +88,8 @@ export const animationLibrary = {
 
   async performAction(
     versionId: string,
-    action: "complete-processing" | "approve" | "reject" | "publish" | "archive",
-    options?: { asset?: unknown; qualityScore?: number; notes?: string },
+    action: "complete-processing" | "approve" | "reject" | "publish" | "archive" | "update-metadata",
+    options?: { asset?: unknown; qualityScore?: number; notes?: string; language?: string; thumbnailDataUrl?: string },
   ): Promise<{ ok: boolean; status: string }> {
     const res = await fetch(`/api/admin/animation-assets/${versionId}/action`, {
       method: "POST",
@@ -104,6 +101,25 @@ export const animationLibrary = {
       throw new Error(err.error ?? "Action failed");
     }
     return res.json();
+  },
+
+  /** The parsed landmark asset for any version (any status) plus a signed source-video URL, for admin preview. */
+  async getAssetJson(versionId: string): Promise<{ asset: GestureAnimationAsset; videoUrl: string | null }> {
+    const res = await fetch(`/api/admin/animation-assets/${versionId}/asset`);
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error ?? "Failed to load animation preview");
+    }
+    return res.json();
+  },
+
+  /** Permanently removes an asset and every version under it. Not reversible. */
+  async deleteAsset(assetId: string): Promise<void> {
+    const res = await fetch(`/api/admin/animation-assets/asset/${assetId}`, { method: "DELETE" });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error ?? "Delete failed");
+    }
   },
 
   async upload(

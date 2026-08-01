@@ -1,5 +1,6 @@
 import type { GestureAnimationAsset, ResolverResult, ResolutionStrategy } from "../types";
 import { AnimationLoader } from "../loader/AnimationLoader";
+import { normalizeGloss } from "../gloss";
 
 interface SynonymMap {
   [canonical: string]: string[];
@@ -102,7 +103,7 @@ export class SmartAnimationResolver {
   }
 
   async resolve(gloss: string, context?: { categories?: string[] }): Promise<ResolverResult> {
-    const key = gloss.toUpperCase().replace(/\s+/g, "_");
+    const key = normalizeGloss(gloss);
     const cached = this.resolutionCache.get(key);
     if (cached) return cached;
 
@@ -279,14 +280,14 @@ export class SmartAnimationResolver {
   }
 
   isFingerspellFallback(gloss: string): boolean {
-    const result = this.resolutionCache.get(gloss.toUpperCase().replace(/\s+/g, "_"));
+    const result = this.resolutionCache.get(normalizeGloss(gloss));
     return !result?.resolved || result.strategy === "unknown_placeholder";
   }
 
   addSynonym(canonical: string, synonym: string): void {
-    const existing = this.aliasMap.get(synonym.toUpperCase().replace(/\s+/g, "_"));
+    const existing = this.aliasMap.get(normalizeGloss(synonym));
     if (!existing) {
-      this.aliasMap.set(synonym.toUpperCase().replace(/\s+/g, "_"), canonical.toUpperCase().replace(/\s+/g, "_"));
+      this.aliasMap.set(normalizeGloss(synonym), normalizeGloss(canonical));
     }
   }
 
