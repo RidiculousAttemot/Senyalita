@@ -69,34 +69,41 @@ export default function AdminDataTable({ rows }: { rows: AdminDataTableRow[] }) 
     return direction === "asc" ? "ascending" : "descending";
   };
 
+  // aria-sort belongs on the <th> (role="columnheader"); the nested <button>
+  // has an implicit role of "button", which does not support aria-sort.
+  const sortIndicator = (key: SortKey) => {
+    if (sortKey !== key) return null;
+    return <span aria-hidden="true">{direction === "asc" ? " \u25B2" : " \u25BC"}</span>;
+  };
+
   return (
     <div className="admin-table-wrap admin-table-wrap--compact">
       <table className="admin-table admin-table--compact">
         <thead>
           <tr>
-            <th scope="col">
-              <button type="button" className="admin-sort-button" aria-sort={sortLabel("timestamp")} onClick={() => toggleSort("timestamp")}>
-                Time
+            <th scope="col" aria-sort={sortLabel("timestamp")}>
+              <button type="button" className="admin-sort-button" onClick={() => toggleSort("timestamp")}>
+                Time{sortIndicator("timestamp")}
               </button>
             </th>
-            <th scope="col">
-              <button type="button" className="admin-sort-button" aria-sort={sortLabel("category")} onClick={() => toggleSort("category")}>
-                Category
+            <th scope="col" aria-sort={sortLabel("category")}>
+              <button type="button" className="admin-sort-button" onClick={() => toggleSort("category")}>
+                Category{sortIndicator("category")}
               </button>
             </th>
-            <th scope="col">
-              <button type="button" className="admin-sort-button" aria-sort={sortLabel("item")} onClick={() => toggleSort("item")}>
-                Item
+            <th scope="col" aria-sort={sortLabel("item")}>
+              <button type="button" className="admin-sort-button" onClick={() => toggleSort("item")}>
+                Item{sortIndicator("item")}
               </button>
             </th>
-            <th scope="col">
-              <button type="button" className="admin-sort-button" aria-sort={sortLabel("severity")} onClick={() => toggleSort("severity")}>
-                Severity
+            <th scope="col" aria-sort={sortLabel("severity")}>
+              <button type="button" className="admin-sort-button" onClick={() => toggleSort("severity")}>
+                Severity{sortIndicator("severity")}
               </button>
             </th>
-            <th scope="col">
-              <button type="button" className="admin-sort-button" aria-sort={sortLabel("status")} onClick={() => toggleSort("status")}>
-                Status
+            <th scope="col" aria-sort={sortLabel("status")}>
+              <button type="button" className="admin-sort-button" onClick={() => toggleSort("status")}>
+                Status{sortIndicator("status")}
               </button>
             </th>
             <th scope="col">Details</th>

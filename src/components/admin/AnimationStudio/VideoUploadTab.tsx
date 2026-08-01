@@ -298,7 +298,11 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
       if (recordedUrl) URL.revokeObjectURL(recordedUrl);
       stopWebcam();
     };
-  }, [videoUrl, recordedUrl]);
+  // stopWebcam is declared below this effect (it itself calls stopHolistic),
+  // so it can't be listed here without a TDZ crash — its own dep array is
+  // stable ([stopHolistic], which never changes), so this is safe in practice.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoUrl, recordedUrl, stopHolistic]);
 
   const stopWebcam = useCallback(() => {
     stopHolistic();
@@ -355,6 +359,15 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
       setError(err instanceof Error ? err.message : "Camera access denied or unavailable.");
     } finally {
       setCameraLoading(false);
+    }
+  }, []);
+
+  // Declared before startRecording because startRecording's dep array
+  // references it, and a dep array is evaluated at render time, not deferred
+  // like a callback body — it needs stopRecording to already be a live binding.
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
     }
   }, []);
 
@@ -422,13 +435,7 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
         stopRecording();
       }
     }, 100);
-  }, []);
-
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
-    }
-  }, []);
+  }, [stopRecording]);
 
   const handleRecordedConfirm = useCallback(() => {
     if (!recordedBlob || !recordedUrl) return;
@@ -495,48 +502,11 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
     video.src = recordedUrl;
   }, [recordedBlob, recordedUrl, stopWebcam]);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile) processFile(droppedFile);
-  }, []);
-
-  const handleBrowse = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
-
-  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = e.target.files?.[0];
-    if (selected) processFile(selected);
-  }, []);
-
-  const processFile = useCallback((f: File) => {
-    setError("");
-    const allowedExts = ["mp4", "mov", "webm", "avi"];
-    const ext = f.name.split(".").pop()?.toLowerCase();
-    if (!ext || !allowedExts.includes(ext)) {
-      setError("Unsupported format. Use MP4, MOV, or WebM.");
-      return;
-    }
-    if (f.size > MAX_SIZE) {
-      setError(`File exceeds 500 MB limit (${(f.size / 1048576).toFixed(1)} MB).`);
-      return;
-    }
-    setUploadProgress(0);
-    const progressInterval = setInterval(() => {
-      setUploadProgress((prev) => Math.min(95, prev + Math.random() * 10));
-    }, 200);
-    const url = URL.createObjectURL(f);
-    setFile(f);
-    setVideoUrl(url);
-    setSource("file");
-    analyzeVideo(f, url, () => {
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-    });
-  }, []);
-
+  // Declaration order matters here: each useCallback's dependency array is
+  // evaluated during render, so a dep must already be a live binding at that
+  // point, not merely defined later in the file (that's fine for a reference
+  // inside a callback *body*, which only runs later, but not for a dep array).
+  // analyzeVideo -> processFile -> handleDrop/handleFileChange, in that order.
   const analyzeVideo = useCallback((f: File, url: string, onDone?: () => void) => {
     const video = document.createElement("video");
     video.preload = "metadata";
@@ -568,6 +538,48 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
     video.src = url;
   }, []);
 
+  const processFile = useCallback((f: File) => {
+    setError("");
+    const allowedExts = ["mp4", "mov", "webm", "avi"];
+    const ext = f.name.split(".").pop()?.toLowerCase();
+    if (!ext || !allowedExts.includes(ext)) {
+      setError("Unsupported format. Use MP4, MOV, or WebM.");
+      return;
+    }
+    if (f.size > MAX_SIZE) {
+      setError(`File exceeds 500 MB limit (${(f.size / 1048576).toFixed(1)} MB).`);
+      return;
+    }
+    setUploadProgress(0);
+    const progressInterval = setInterval(() => {
+      setUploadProgress((prev) => Math.min(95, prev + Math.random() * 10));
+    }, 200);
+    const url = URL.createObjectURL(f);
+    setFile(f);
+    setVideoUrl(url);
+    setSource("file");
+    analyzeVideo(f, url, () => {
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+    });
+  }, [analyzeVideo]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile) processFile(droppedFile);
+  }, [processFile]);
+
+  const handleBrowse = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (selected) processFile(selected);
+  }, [processFile]);
+
   const handleExtract = useCallback(() => {
     if (metadata) onVideoReady(metadata);
   }, [metadata, onVideoReady]);
@@ -588,7 +600,7 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
     recordedFramesRef.current = [];
     recordedAssetRef.current = null;
     stopWebcam();
-  }, [videoUrl, recordedUrl]);
+  }, [videoUrl, recordedUrl, stopWebcam]);
 
   const formatDuration = (sec: number): string => {
     const m = Math.floor(sec / 60);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
@@ -465,12 +465,30 @@ export function AnimationLibraryPage() {
   );
 }
 
+/** Escape closes the dialog, and focus moves onto it on open so screen readers announce it and Tab doesn't leak to the page behind. */
+function useModalDialog(onClose: () => void) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    containerRef.current?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return containerRef;
+}
+
 function PreviewModal({ asset, onClose }: { asset: AnimationLibraryAsset; onClose: () => void }) {
   const versionId = (asset.publishedVersion ?? asset.latestVersion)?.id;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [clips, setClips] = useState<AnimationClip[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("skeleton");
+  const dialogRef = useModalDialog(onClose);
+  const titleId = "al-preview-title";
 
   useEffect(() => {
     if (!versionId) {
@@ -497,9 +515,9 @@ function PreviewModal({ asset, onClose }: { asset: AnimationLibraryAsset; onClos
 
   return (
     <div className="al-modal-overlay" onClick={onClose}>
-      <div className="al-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="al-modal" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} ref={dialogRef} onClick={(e) => e.stopPropagation()}>
         <div className="al-modal-header">
-          <h2>{asset.gloss}</h2>
+          <h2 id={titleId}>{asset.gloss}</h2>
           <button onClick={onClose} aria-label="Close preview"><X size={20} /></button>
         </div>
 
@@ -535,6 +553,8 @@ function EditMetadataModal({ asset, onClose, onSaved }: { asset: AnimationLibrar
   const [language, setLanguage] = useState(current?.language ?? "fsl");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const dialogRef = useModalDialog(onClose);
+  const titleId = "al-edit-title";
 
   const save = useCallback(async () => {
     if (!current) return;
@@ -553,9 +573,9 @@ function EditMetadataModal({ asset, onClose, onSaved }: { asset: AnimationLibrar
 
   return (
     <div className="al-modal-overlay" onClick={onClose}>
-      <div className="al-modal" style={{ maxWidth: 360 }} onClick={(e) => e.stopPropagation()}>
+      <div className="al-modal" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} ref={dialogRef} style={{ maxWidth: 360 }} onClick={(e) => e.stopPropagation()}>
         <div className="al-modal-header">
-          <h2>{asset.gloss}</h2>
+          <h2 id={titleId}>{asset.gloss}</h2>
           <button onClick={onClose} aria-label="Close"><X size={20} /></button>
         </div>
         {error && <div className="al-error"><AlertTriangle size={16} /><span>{error}</span></div>}

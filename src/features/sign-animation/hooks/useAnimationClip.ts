@@ -107,6 +107,10 @@ export function useAnimationQueue(
     return () => {
       cancelled = true;
     };
+  // gestureLabels is intentionally omitted: callers pass a fresh array literal
+  // each render, so depending on it directly would reload on every render.
+  // labelsKey is the stable, content-based proxy for it.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [labelsKey]);
 
   return {
