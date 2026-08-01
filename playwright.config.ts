@@ -37,16 +37,64 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      /* The camera specs get their own project below — they need browser-level
+       * launch flags that would apply to every other spec if set here. */
+      testIgnore: /camera-recognition\.spec\.ts/,
+    },
+    {
+      /**
+       * Drives the real capture loop against a synthetic camera, so
+       * getUserMedia -> detectForVideo -> handedness -> the 30fps throttle ->
+       * the sequence buffer -> the model can be exercised without hardware.
+       *
+       * The video file is a launch flag, so it is fixed per browser instance:
+       * one project per fixture rather than switching mid-run. Fixtures are
+       * generated (npm run e2e:fixtures) and gitignored — Y4M is uncompressed
+       * and each is ~40MB.
+       */
+      name: 'camera-letter',
+      testMatch: /camera-recognition\.spec\.ts/,
+      grep: /@letter/,
+      use: {
+        ...devices['Desktop Chrome'],
+        permissions: ['camera'],
+        launchOptions: {
+          args: [
+            '--use-fake-device-for-media-stream',
+            '--use-fake-ui-for-media-stream',
+            '--use-file-for-fake-video-capture=e2e/fixtures/letter-b.y4m',
+          ],
+        },
+      },
+    },
+    {
+      name: 'camera-gesture',
+      testMatch: /camera-recognition\.spec\.ts/,
+      grep: /@gesture/,
+      use: {
+        ...devices['Desktop Chrome'],
+        permissions: ['camera'],
+        launchOptions: {
+          args: [
+            '--use-fake-device-for-media-stream',
+            '--use-fake-ui-for-media-stream',
+            '--use-file-for-fake-video-capture=e2e/fixtures/thank-you.y4m',
+          ],
+        },
+      },
     },
 
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
+      /* The fake-camera flags are Chromium-only. */
+      testIgnore: /camera-recognition\.spec\.ts/,
     },
 
     {
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
+      testIgnore: /camera-recognition\.spec\.ts/,
     },
 
     /* Test against mobile viewports. */
