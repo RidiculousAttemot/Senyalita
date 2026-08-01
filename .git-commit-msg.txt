@@ -1,37 +1,11 @@
-a11y: fix aria-sort placement, and clear every remaining lint warning
+Animation Dataset Manager: retry on load failure, honest empty states
 
-AdminDataTable: aria-sort belongs on <th> (role=columnheader), not on
-the nested <button> (role=button, which does not support aria-sort).
-Screen readers were never announcing sort state correctly. Added a
-visible up/down glyph next to the active sort column too, so the state
-isn't screen-reader-only.
+The initial fetch had no retry - a failed load left the page stuck on
+a generic "Failed to load dataset" with no way to recover short of a
+full page refresh. Extracted the fetch into loadDataset() and wired a
+Retry button to it.
 
-Animation Library's new Preview/Edit Metadata modals: added
-role="dialog", aria-modal, aria-labelledby, Escape-to-close, and focus
-on open (via a small shared useModalDialog hook) - none of that existed
-when I wrote them last session.
-
-VideoUploadTab: fixed all 6 react-hooks/exhaustive-deps warnings. Two
-of them (startRecording -> stopRecording, and processFile/handleDrop/
-handleFileChange -> processFile/analyzeVideo) needed the referenced
-function moved earlier in the file first - a dependency array is
-evaluated at render time, not deferred like a callback body, so listing
-a const declared further down would throw "Cannot access before
-initialization" the first time the component rendered. Caught this by
-reasoning through evaluation order, not by running it, so double-checked
-with typecheck + full test run after every change. A third case (the
-unmount cleanup effect wanting stopWebcam) has the same hazard and
-isn't safely reorderable without moving a lot of surrounding code, so
-that one keeps an explicit eslint-disable with the reason written down
-instead.
-
-useAnimationClip.ts's one remaining warning (gestureLabels) was already
-intentional - labelsKey is the correct stable proxy for an array a
-caller passes as a fresh literal every render - so left the behavior
-alone and just added the disable comment explaining why, matching the
-pattern used elsewhere in this file.
-
-`npm run lint` now reports zero warnings repo-wide, down from 11 (all
-of which had been outstanding since the first admin-review session).
-typecheck, full test suite (283 passed, same 1 pre-existing unrelated
-failure) and build all still green.
+Empty state used to say "No matching assets found" whether there were
+zero recordings at all or the search just didn't match anything -
+distinguished the two so the message actually tells the admin what to
+do next (record/upload vs. try a different search).

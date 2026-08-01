@@ -42,7 +42,9 @@ export function AnimationDatasetManager() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number | null>(null);
 
-  useEffect(() => {
+  const loadDataset = useCallback(() => {
+    setLoading(true);
+    setError("");
     fetch("/api/assets/dataset")
       .then((r) => r.json())
       .then((data: DatasetResponse) => {
@@ -56,9 +58,13 @@ export function AnimationDatasetManager() {
         }
         setBestPicks(picks);
       })
-      .catch(() => setError("Failed to load dataset"))
+      .catch(() => setError("Failed to load the dataset. Check your connection and try again."))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    loadDataset();
+  }, [loadDataset]);
 
   const filteredAssets = useMemo(() => {
     if (!search) return assets;
@@ -228,7 +234,14 @@ export function AnimationDatasetManager() {
         </div>
       </div>
 
-      {error && <div className="ad-error">{error}</div>}
+      {error && (
+        <div className="ad-error">
+          <span>{error}</span>
+          <button type="button" onClick={loadDataset} style={{ marginLeft: 10, color: "#fca5a5", textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontSize: 13 }}>
+            Retry
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="ad-loading">
@@ -247,7 +260,12 @@ export function AnimationDatasetManager() {
 
             <div className="ad-list">
               {Object.entries(groupedAssets).length === 0 ? (
-                <div className="ad-empty">No matching assets found</div>
+                <div className="ad-empty">
+                  {assets.length === 0 ? "No dataset recordings yet." : "No results for that search."}
+                  <p style={{ fontSize: 12, marginTop: 6 }}>
+                    {assets.length === 0 ? "Record or upload in Animation Studio to add recordings." : "Try a different label or filename."}
+                  </p>
+                </div>
               ) : (
                 Object.entries(groupedAssets).sort(([a], [b]) => a.localeCompare(b)).map(([label, labelAssets]) => (
                   <div key={label}>
