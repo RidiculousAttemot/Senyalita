@@ -1,4 +1,21 @@
-import * as tf from "@tensorflow/tfjs";
+/**
+ * Selective TensorFlow.js imports, not the `@tensorflow/tfjs` union bundle.
+ *
+ * The union package pulls tfjs-converter and tfjs-data alongside core, layers
+ * and every backend. Neither is reachable from this code: the model is a
+ * LayersModel loaded from memory, so `loadGraphModel` and the whole data
+ * pipeline API ship as dead weight. Measured on a clean production build, the
+ * tfjs chunks were 1477 KB raw / 260 KB gzip.
+ *
+ * The two backend imports are side-effect registrations, not values — WebGL is
+ * the fast path and CPU is the fallback for machines without a usable WebGL
+ * context. Dropping the CPU one would make this fail outright rather than
+ * degrade on those machines.
+ */
+import * as tf from "@tensorflow/tfjs-core";
+import "@tensorflow/tfjs-backend-webgl";
+import "@tensorflow/tfjs-backend-cpu";
+import { loadLayersModel, type LayersModel } from "@tensorflow/tfjs-layers";
 import { InferenceResult } from "./types";
 import { getCache, setCache, getCachedResult } from "./cache";
 export { getCachedResult };
@@ -53,7 +70,7 @@ const loadModel = async (): Promise<boolean> => {
         weightData,
       };
 
-      const model = await tf.loadLayersModel(tf.io.fromMemory(artifacts));
+      const model = await loadLayersModel(tf.io.fromMemory(artifacts));
 
       const warmupInput = tf.zeros([1, 35, FEATURE_DIMENSION]);
       model.predict(warmupInput);
@@ -89,7 +106,7 @@ const infer = async (features: Float32Array): Promise<InferenceResult | null> =>
   try {
     const timesteps = features.length / FEATURE_DIMENSION;
     const input = tf.tensor3d(features, [1, timesteps, FEATURE_DIMENSION]);
-    const output = (cache.model as tf.LayersModel).predict(input) as tf.Tensor;
+    const output = (cache.model as LayersModel).predict(input) as tf.Tensor;
     const probabilities = await output.data();
 
     const probsArray = Array.from(probabilities);
