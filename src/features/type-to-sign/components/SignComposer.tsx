@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, ClipboardPaste, Loader2, Mic, Volume2, X } from "lucide-react";
+import { AlertCircle, ArrowRight, ClipboardPaste, Loader2, Mic, Volume2, X } from "lucide-react";
 import type { DetectedLanguage } from "@/features/translation-pipeline/types";
 
 const LANGUAGE_LABEL: Record<DetectedLanguage, string> = {
@@ -21,6 +21,7 @@ interface SignComposerProps {
   onListen: () => void;
   isListening: boolean;
   speechSupported: boolean;
+  dictationError?: string | null;
   loading: boolean;
   detectedLanguage: DetectedLanguage | null;
   coverage: number | null;
@@ -28,7 +29,7 @@ interface SignComposerProps {
 
 export function SignComposer({
   value, onChange, onSubmit, onSpeak, onListen,
-  isListening, speechSupported, loading, detectedLanguage, coverage,
+  isListening, speechSupported, dictationError, loading, detectedLanguage, coverage,
 }: SignComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -127,6 +128,13 @@ export function SignComposer({
           Clear
         </ComposerChip>
       </div>
+
+      {dictationError && (
+        <div role="alert" className="mx-6 mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/80 px-3.5 py-2.5">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+          <p className="text-[12px] leading-snug text-amber-800">{dictationError}</p>
+        </div>
+      )}
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-senyalita-border/70 bg-white/60 px-6 py-4">
         <p className="text-[11px] tabular-nums text-senyalita-muted">

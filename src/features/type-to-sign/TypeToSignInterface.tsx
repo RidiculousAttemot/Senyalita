@@ -28,6 +28,7 @@ export function TypeToSignInterface() {
   const [sequenceKey, setSequenceKey] = useState(0);
   const [isListening, setIsListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
+  const [dictationError, setDictationError] = useState<string | null>(null);
 
   const fingerspellingRef = useRef(new FingerspellingEngine());
   const recognitionRef = useRef<any>(null);
@@ -200,18 +201,55 @@ export function TypeToSignInterface() {
       return;
     }
 
+    setDictationError(null);
     const recognition = new SpeechRecognition();
-    recognition.lang = "tl-PH";
+    // Forcing "tl-PH" made every English utterance (and plenty of Filipino
+    // ones — browser support for it is patchy) come back empty or error out
+    // with no visible sign why. The browser's own language is far more likely
+    // to match what the user is actually about to say.
+    recognition.lang = typeof navigator !== "undefined" ? navigator.language : "en-US";
     recognition.interimResults = false;
     recognition.onresult = (event: any) => {
-      const transcript = event.results?.[0]?.[0]?.transcript;
-      if (transcript) setMessage((prev) => (prev ? `${prev} ${transcript}` : transcript));
+      // Iterating from resultIndex (rather than assuming everything lives at
+      // results[0]) is what the API actually specifies; reading only index 0
+      // silently dropped later segments whenever the recognizer split one
+      // utterance into more than one result.
+      let finalTranscript = "";
+      for (let i = event.resultIndex ?? 0; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) finalTranscript += result[0]?.transcript ?? "";
+      }
+      finalTranscript = finalTranscript.trim();
+      if (finalTranscript) setMessage((prev) => (prev ? `${prev} ${finalTranscript}` : finalTranscript));
     };
     recognition.onend = () => setIsListening(false);
-    recognition.onerror = () => setIsListening(false);
+    recognition.onerror = (event: any) => {
+      setIsListening(false);
+      // Every one of these previously failed identically: the button flicked
+      // back to "Dictate" and nothing appeared, with no way to tell a denied
+      // permission from silence from an unsupported language.
+      const messages: Record<string, string> = {
+        "not-allowed": "Microphone access was blocked. Allow microphone permission for this site and try again.",
+        "service-not-allowed": "Microphone access was blocked. Allow microphone permission for this site and try again.",
+        "no-speech": "No speech detected. Click Dictate and start speaking right away.",
+        "audio-capture": "No microphone was found. Check your device and try again.",
+        network: "Speech recognition needs an internet connection.",
+        "language-not-supported": "Speech recognition isn't available in your browser's language on this device.",
+        aborted: "", // user-initiated stop; nothing to report
+      };
+      const description = messages[event?.error] ?? "Couldn't start dictation. Try again, or type instead.";
+      if (description) setDictationError(description);
+    };
     recognitionRef.current = recognition;
-    recognition.start();
-    setIsListening(true);
+    try {
+      recognition.start();
+      setIsListening(true);
+    } catch {
+      // Most commonly: start() called while a previous session was still
+      // tearing down. Safe to just let the user try again.
+      setDictationError("Couldn't start dictation. Try again.");
+      setIsListening(false);
+    }
   }, [isListening]);
 
   const translationResult = useMemo(() => {
@@ -253,6 +291,7 @@ export function TypeToSignInterface() {
           onListen={handleListen}
           isListening={isListening}
           speechSupported={speechSupported}
+          dictationError={dictationError}
           loading={loading}
           detectedLanguage={resultRef.current?.language.language ?? null}
           coverage={stage === "done" ? resultRef.current?.metrics.coverage ?? null : null}
