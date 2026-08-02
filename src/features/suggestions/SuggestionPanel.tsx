@@ -3,12 +3,19 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, CornerDownLeft, Delete, X } from "lucide-react";
 import type { Suggestion } from "./suggestionEngine";
+import type { VocabularyEntry } from "./vocabulary";
 
 const KIND_LABEL: Record<Suggestion["kind"], string> = {
   exact: "exact",
   phrase: "phrase",
   prefix: "completion",
   fuzzy: "corrected",
+};
+
+/** Signers move between both languages mid-word, so every candidate is tagged rather than assumed. */
+const LANGUAGE_LABEL: Record<VocabularyEntry["language"], string> = {
+  english: "EN",
+  filipino: "FIL",
 };
 
 interface SuggestionPanelProps {
@@ -104,6 +111,11 @@ export function SuggestionPanel({
                 </span>
               </span>
               <span className="flex shrink-0 items-center gap-2">
+                {top.language && (
+                  <span className="rounded-full bg-senyalita-accent/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-senyalita-accent">
+                    {LANGUAGE_LABEL[top.language]}
+                  </span>
+                )}
                 <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-senyalita-muted">
                   {KIND_LABEL[top.kind]}
                 </span>
@@ -125,11 +137,16 @@ export function SuggestionPanel({
                 key={suggestion.phrase}
                 type="button"
                 onClick={() => onAccept(suggestion.phrase)}
-                title={`${KIND_LABEL[suggestion.kind]}${
+                title={`${suggestion.language ? `${LANGUAGE_LABEL[suggestion.language]} · ` : ""}${KIND_LABEL[suggestion.kind]}${
                   suggestion.distance ? ` · ${suggestion.distance} letter correction` : ""
                 }`}
-                className="rounded-full border border-senyalita-border bg-white px-3 py-1.5 font-mono text-xs font-semibold text-senyalita-muted transition-all duration-150 hover:-translate-y-0.5 hover:border-senyalita-primary/40 hover:bg-senyalita-primary/5 hover:text-senyalita-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary"
+                className="flex items-center gap-1.5 rounded-full border border-senyalita-border bg-white px-3 py-1.5 font-mono text-xs font-semibold text-senyalita-muted transition-all duration-150 hover:-translate-y-0.5 hover:border-senyalita-primary/40 hover:bg-senyalita-primary/5 hover:text-senyalita-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary"
               >
+                {suggestion.language && (
+                  <span className="rounded-full bg-senyalita-accent/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-senyalita-accent">
+                    {LANGUAGE_LABEL[suggestion.language]}
+                  </span>
+                )}
                 {suggestion.phrase}
               </button>
             ))}

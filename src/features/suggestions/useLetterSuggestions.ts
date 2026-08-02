@@ -15,7 +15,7 @@ const MULTI_CHARACTER_LABELS = new Set(["NG"]);
  * already-recognised labels in, so this survives a future move to word-level
  * recognition unchanged.
  */
-export function useLetterSuggestions(limit = 6) {
+export function useLetterSuggestions(limit = 3) {
   const [letters, setLetters] = useState("");
   const [usage, setUsage] = useState<UsageCounts>({});
 
