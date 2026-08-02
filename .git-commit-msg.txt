@@ -1,0 +1,39 @@
+fix: stop telemetry 401 spam, and fix video playback AbortErrors
+
+RealtimeMetrics: every recognized gesture attempted a Supabase insert
+that failed with "Invalid API key" (401), logged to console, and tried
+again on the next gesture -- forever, since a bad key doesn't fix
+itself by retrying. Added a module-scoped circuit breaker: on the
+first auth-shaped failure (invalid api key / jwt), telemetry disables
+itself for the rest of the session instead of repeating the same
+failure on every sign.
+
+This does NOT fix the underlying cause -- NEXT_PUBLIC_SUPABASE_ANON_KEY
+in the Vercel project settings does not match the current Supabase
+project's anon key (a rotation/redeploy likely updated one but not the
+other). That has to be corrected in the Vercel dashboard; no code
+change can fix a wrong deployed secret. Recognition itself is
+unaffected either way -- this key only gates telemetry logging.
+
+SignAnimationPlayer: every direct videoRef.current.play() call (in
+handlePause/handleReplay, and the play/seekToClip imperative handle
+methods) was missing a .catch(), so any interruption -- a pause(), a
+src change, or the element leaving the DOM, which happens on every
+Human/Skeleton/Split/Overlay switch since each mode renders its own
+<video> -- surfaced as "Uncaught (in promise) AbortError". Centralised
+into safePlayVideo(), which also skips issuing play() on an
+already-playing element (one call aborting another in-flight call is
+itself a common source of the same error).
+
+Also fixed why Human mode could render nothing at all after a failed
+video load: the canvas re-attach effect keyed on [viewMode,
+renderWidth, renderHeight] but not on videoFailed, so when a video
+failed after mount and the JSX swapped in a fallback <canvas>, the
+renderer was never pointed at it -- it stayed permanently blank
+instead of drawing the skeleton fallback.
+
+Left alone: the one CSS 404 in the log (a5dedfd4b6f977ad.css) is a
+stale-asset-reference from a browser tab left open across a Vercel
+redeploy -- the old build's hashed filename no longer exists once a
+new deploy replaces it. A hard refresh resolves it; there's no code
+fix for a page that was loaded before the deploy that just happened.

@@ -23,6 +23,20 @@ export type { ViewMode } from "../types";
 /** View modes drawn from extracted landmarks rather than the avatar renderer. */
 const LANDMARK_MODES = new Set<ViewMode>(["skeleton", "split", "overlay"]);
 
+/**
+ * play() returns a Promise that rejects with AbortError whenever anything
+ * interrupts it — a pause(), a src change, or the element leaving the DOM
+ * (which happens on every view-mode switch here, since each mode renders its
+ * own <video>). All of those are routine in this player, not failures, so an
+ * uncaught rejection was showing up as a console error on nearly every mode
+ * switch or replay. Guarding on `paused` also avoids issuing an overlapping
+ * play() that would abort a call already in flight.
+ */
+function safePlayVideo(video: HTMLVideoElement | null | undefined): void {
+  if (!video || !video.paused) return;
+  video.play().catch(() => { /* interrupted by pause/src-change/unmount — expected, not fatal */ });
+}
+
 export interface SignAnimationPlayerHandle {
   play: () => void;
   pause: () => void;
@@ -252,8 +266,8 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
             // seeking every frame would re-decode constantly. Only resume while
             // the engine itself is running, so a finished or paused sequence
             // cannot leave the recording rolling on.
-            if (video.paused && playStateRef.current.isPlaying && !playStateRef.current.isPaused) {
-              video.play().catch(() => { /* autoplay refusal is non-fatal */ });
+            if (playStateRef.current.isPlaying && !playStateRef.current.isPaused) {
+              safePlayVideo(video);
             }
             if (Math.abs(delta) > 0.08) {
               video.currentTime = time + offset;
@@ -412,7 +426,10 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
 
   // Each view mode renders its own canvas element, so the renderers have to be
   // re-pointed at the live one and repainted — otherwise switching mode after
-  // playback has finished shows an empty stage.
+  // playback has finished shows an empty stage. Also re-runs when videoFailed
+  // flips true: the JSX swaps in a fresh fallback <canvas> at that point, and
+  // without this in the deps it never gets attached, so the fallback stayed
+  // blank instead of drawing the skeleton.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -423,7 +440,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
       advancedRendererRef.current?.attach(canvas);
       advancedRendererRef.current?.setOptions({ width: renderWidth, height: renderHeight });
     }
-  }, [viewMode, renderWidth, renderHeight]);
+  }, [viewMode, renderWidth, renderHeight, videoFailed]);
 
   // A video revealed part-way through a sequence starts at zero, so line it up
   // with the landmark playhead and match the engine's play/pause state.
@@ -433,7 +450,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
     const state = playStateRef.current;
     video.currentTime = state.currentTime + (currentClipAsset?.sourceOffsetSeconds ?? 0);
     if (state.isPlaying && !state.isPaused) {
-      video.play().catch(() => { /* autoplay refusal is non-fatal */ });
+      safePlayVideo(video);
     } else {
       video.pause();
     }
@@ -494,7 +511,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
     if (playState.isPaused) {
       engine.resume();
       setPlayState((prev) => ({ ...prev, isPaused: false }));
-      videoRef.current?.play();
+      safePlayVideo(videoRef.current);
     } else {
       engine.pause();
       setPlayState((prev) => ({ ...prev, isPaused: true }));
@@ -509,7 +526,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
     setPlayState((prev) => ({ ...prev, isPaused: false, isPlaying: true }));
     if (videoRef.current) {
       videoRef.current.currentTime = 0;
-      videoRef.current.play();
+      safePlayVideo(videoRef.current);
     }
   }, []);
 
@@ -532,7 +549,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
       if (s.isPaused) {
         engineRef.current?.resume();
         setPlayState((prev) => ({ ...prev, isPaused: false }));
-        videoRef.current?.play();
+        safePlayVideo(videoRef.current);
       } else if (!s.isPlaying) {
         engineRef.current?.replay();
         nonManualRef.current?.reset();
@@ -540,7 +557,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
         setPlayState((prev) => ({ ...prev, isPaused: false, isPlaying: true }));
         if (videoRef.current) {
           videoRef.current.currentTime = 0;
-          videoRef.current.play();
+          safePlayVideo(videoRef.current);
         }
       }
     },
@@ -559,7 +576,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
       setPlayState((prev) => ({ ...prev, isPaused: false, isPlaying: true }));
       if (videoRef.current) {
         videoRef.current.currentTime = 0;
-        videoRef.current.play();
+        safePlayVideo(videoRef.current);
       }
     },
     seekTo: (clipIndex: number, timeSeconds: number) => {
