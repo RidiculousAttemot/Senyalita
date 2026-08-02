@@ -12,6 +12,10 @@ type Props = {
   bufferLength: number;
   bufferCap: number;
   minimumFrames: number;
+  /** "idle" until motion crosses the threshold; gates every buffer reset. */
+  motionState?: string;
+  /** Peak per-frame motion vs the threshold that decides idle/gesturing. */
+  motionPeak?: { peak: number; threshold: number };
 };
 
 export const DebugOverlay = ({
@@ -22,6 +26,8 @@ export const DebugOverlay = ({
   bufferLength,
   bufferCap,
   minimumFrames,
+  motionState,
+  motionPeak,
 }: Props) => {
   const [visible, setVisible] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -107,6 +113,25 @@ export const DebugOverlay = ({
             <td style={{ color: "#aaa" }}>Min frames</td>
             <td style={{ textAlign: "right" }}>{minimumFrames}</td>
           </tr>
+          {motionState !== undefined && (
+            <tr>
+              <td style={{ color: "#aaa" }}>Motion</td>
+              <td style={{ textAlign: "right", color: motionState === "gesturing" ? "#4ade80" : "#f87171" }}>
+                {motionState}
+              </td>
+            </tr>
+          )}
+          {motionPeak !== undefined && (
+            <tr>
+              {/* The number that decides everything: below threshold the
+                  detector stays idle, so the buffer is never cleared between
+                  letters and the prediction stays frozen on the previous one. */}
+              <td style={{ color: "#aaa" }}>Peak / thresh</td>
+              <td style={{ textAlign: "right", color: motionPeak.peak > motionPeak.threshold ? "#4ade80" : "#f87171" }}>
+                {motionPeak.peak.toFixed(4)} / {motionPeak.threshold.toFixed(3)}
+              </td>
+            </tr>
+          )}
           <tr>
             <td style={{ color: "#aaa" }}>Stage</td>
             <td style={{ textAlign: "right" }}>{recognitionState.stage}</td>

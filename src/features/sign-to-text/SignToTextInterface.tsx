@@ -579,7 +579,7 @@ export function SignToTextInterface() {
 
         {settings.showDetails && (
           <div className="overflow-hidden rounded-[22px] border border-senyalita-border bg-white/70 backdrop-blur-xl">
-            <DebugOverlay recognitionState={recognition.state} mediapipeFps={mediapipeFps} captureFps={captureFps} inferenceTimeMs={recognition.inferenceTimeMs} bufferLength={recognition.bufferLength} bufferCap={recognition.bufferCap} minimumFrames={recognition.minimumFrames} />
+            <DebugOverlay recognitionState={recognition.state} mediapipeFps={mediapipeFps} captureFps={captureFps} inferenceTimeMs={recognition.inferenceTimeMs} bufferLength={recognition.bufferLength} bufferCap={recognition.bufferCap} minimumFrames={recognition.minimumFrames} motionState={recognition.motionState} motionPeak={recognition.motionPeak} />
             <div className="border-t border-senyalita-border/70 bg-senyalita-warm/60 p-4">
               <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-senyalita-muted">Camera debug</p>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-senyalita-muted">

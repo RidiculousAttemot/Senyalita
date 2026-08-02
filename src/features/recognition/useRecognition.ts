@@ -33,6 +33,8 @@ export type RecognitionControls = {
   inferenceTimeMs: number;
   frozenPrediction: RealPredictionResult | null;
   motionState: MotionState;
+  /** Diagnostic: peak per-frame motion vs the threshold that gates gesturing. */
+  motionPeak: { peak: number; threshold: number };
   mode: RecognitionMode;
   setMode: (mode: RecognitionMode) => void;
 };
@@ -60,6 +62,7 @@ export const useRecognition = (
   const onPredictionRef = useRef(onPrediction);
   const [frozenPrediction, setFrozenPrediction] = useState<RealPredictionResult | null>(null);
   const [motionState, setMotionState] = useState<MotionState>("idle");
+  const [motionPeak, setMotionPeak] = useState<{ peak: number; threshold: number }>({ peak: 0, threshold: 0 });
   const [mode, setModeState] = useState<RecognitionMode>("auto");
   const freezeCounterRef = useRef(0);
   const noMotionCounterRef = useRef(0);
@@ -250,6 +253,7 @@ export const useRecognition = (
         }
         if (now - lastUiUpdateRef.current > UI_UPDATE_INTERVAL_MS) {
           setMotionState(newState);
+          setMotionPeak(motionDetectorRef.current.getRecentPeakMotion());
         }
       }
     },
@@ -307,6 +311,7 @@ export const useRecognition = (
     inferenceTimeMs,
     frozenPrediction,
     motionState,
+    motionPeak,
     mode,
     setMode,
   };

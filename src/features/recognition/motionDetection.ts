@@ -48,6 +48,29 @@ export class MotionDetector {
     return this.phase;
   }
 
+  /**
+   * Highest per-frame motion in the recent window, and the threshold it is
+   * measured against.
+   *
+   * Exposed for diagnosis: MOTION_THRESHOLD was tuned for phrase signs, where
+   * the whole hand travels across the body. Fingerspelling reshapes the fingers
+   * while the wrist stays put, and this metric is the mean displacement across
+   * all 21 landmarks — so the near-stationary palm and wrist pull the average
+   * down. If letters never cross the threshold the detector never leaves "idle",
+   * which means the buffer is never cleared between them and the prediction
+   * stays frozen on the previous letter.
+   *
+   * Reading the real value while fingerspelling is the only way to tune this
+   * honestly; the alternative is guessing at a constant that also governs
+   * motion-sign segmentation.
+   */
+  getRecentPeakMotion(): { peak: number; threshold: number } {
+    const peak = this.frameHistory.length
+      ? Math.max(...this.frameHistory.map((f) => f.motion))
+      : 0;
+    return { peak, threshold: MOTION_THRESHOLD };
+  }
+
   update(left: HandData | null, right: HandData | null): MotionState {
     const now = performance.now();
     const dt = this.lastFrameTime > 0 ? now - this.lastFrameTime : 16;
