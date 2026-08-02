@@ -62,6 +62,13 @@ export default defineConfig({
           args: [
             '--use-fake-device-for-media-stream',
             '--use-fake-ui-for-media-stream',
+            // Software WebGL. Without it this browser has no usable WebGL
+            // context, and MediaPipe's GPU delegate *hangs* rather than
+            // throwing — so createHandLandmarker's CPU fallback never fires and
+            // the page sits at "initializing" forever. A missing GPU must fail
+            // fast here, not deadlock.
+            '--enable-unsafe-swiftshader',
+            '--ignore-gpu-blocklist',
             '--use-file-for-fake-video-capture=e2e/fixtures/letter-b.y4m',
           ],
         },
@@ -78,6 +85,13 @@ export default defineConfig({
           args: [
             '--use-fake-device-for-media-stream',
             '--use-fake-ui-for-media-stream',
+            // Software WebGL. Without it this browser has no usable WebGL
+            // context, and MediaPipe's GPU delegate *hangs* rather than
+            // throwing — so createHandLandmarker's CPU fallback never fires and
+            // the page sits at "initializing" forever. A missing GPU must fail
+            // fast here, not deadlock.
+            '--enable-unsafe-swiftshader',
+            '--ignore-gpu-blocklist',
             '--use-file-for-fake-video-capture=e2e/fixtures/thank-you.y4m',
           ],
         },
