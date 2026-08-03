@@ -23,7 +23,7 @@ import path from "node:path";
  */
 
 const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3000";
-const FIXTURES = path.join(process.cwd(), "e2e", "fixtures");
+const FIXTURES = path.join(process.cwd(), "tmp", "camera-fixtures");
 
 const fixturesReady = existsSync(path.join(FIXTURES, "letter-b.y4m"))
   && existsSync(path.join(FIXTURES, "thank-you.y4m"));

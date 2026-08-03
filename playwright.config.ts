@@ -69,7 +69,7 @@ export default defineConfig({
             // fast here, not deadlock.
             '--enable-unsafe-swiftshader',
             '--ignore-gpu-blocklist',
-            '--use-file-for-fake-video-capture=e2e/fixtures/letter-b.y4m',
+            '--use-file-for-fake-video-capture=tmp/camera-fixtures/letter-b.y4m',
           ],
         },
       },
@@ -92,7 +92,7 @@ export default defineConfig({
             // fast here, not deadlock.
             '--enable-unsafe-swiftshader',
             '--ignore-gpu-blocklist',
-            '--use-file-for-fake-video-capture=e2e/fixtures/thank-you.y4m',
+            '--use-file-for-fake-video-capture=tmp/camera-fixtures/thank-you.y4m',
           ],
         },
       },

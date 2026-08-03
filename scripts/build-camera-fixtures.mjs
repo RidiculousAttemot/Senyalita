@@ -5,7 +5,13 @@
  * loop without a physical camera.
  *
  * Y4M is uncompressed — a 3s 640x480 clip is ~40MB — so these are generated
- * into e2e/fixtures/ and gitignored rather than committed.
+ * rather than committed.
+ *
+ * They live in tmp/, not e2e/, deliberately. src/lib/__tests__/ignoredSource.test.ts
+ * asserts that nothing under e2e/ is git-ignored — a guard added after an
+ * unanchored ignore rule hid a directory of admin pages from every clone — and
+ * it says in as many words not to add exceptions to it. Generated 40MB binaries
+ * are not source, so they belong in the scratch tree that is already ignored.
  *
  *   npm run e2e:fixtures
  *
@@ -21,7 +27,7 @@ import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import ffmpeg from "ffmpeg-static";
 
-const OUT_DIR = path.join(process.cwd(), "e2e", "fixtures");
+const OUT_DIR = path.join(process.cwd(), "tmp", "camera-fixtures");
 
 const WIDTH = 640;
 const HEIGHT = 480;

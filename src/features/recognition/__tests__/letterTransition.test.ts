@@ -109,6 +109,45 @@ const framesToSwitch = (from: number[][], to: number[][], clearOnSwitch: boolean
   return Infinity;
 };
 
+/**
+ * Replays the sign-end trigger from useRecognition: arm on a confident read,
+ * then clear once confidence has collapsed for SIGN_END_FRAMES samples.
+ */
+const framesToSwitchWithTrigger = (from: number[][], to: number[][]) => {
+  const DROP_RATIO = 0.7, END_FRAMES = 2, MIN_PEAK = 0.6;
+  const buffer = new SequenceBuffer();
+  const smoother = new PredictionSmoother();
+  const append = (frame: number[]) => {
+    const [left, right] = toHands(frame);
+    buffer.append(left, right);
+  };
+
+  let peak = 0, low = 0;
+  const step = () => {
+    const sample = buffer.sampleTemporal();
+    if (!sample) return null;
+    const r = smoother.smooth(predict(sample));
+    if (r.confidence >= peak) { peak = r.confidence; low = 0; }
+    else if (peak >= MIN_PEAK && r.confidence < peak * DROP_RATIO) {
+      low += 1;
+      if (low >= END_FRAMES) {
+        buffer.reset(); smoother.reset(); peak = 0; low = 0;
+      }
+    } else low = 0;
+    return r;
+  };
+
+  for (let i = 0; i < 120; i += 1) append(from[0]);
+  for (let i = 0; i < 6; i += 1) step();
+
+  for (let i = 1; i <= 150; i += 1) {
+    append(to[0]);
+    const r = step();
+    if (r?.label === "b") return i;
+  }
+  return Infinity;
+};
+
 describe("letter-to-letter transition", () => {
   it("measures how long a new letter takes with and without a clear", () => {
     if (letters.size < 2) {
@@ -128,5 +167,26 @@ describe("letter-to-letter transition", () => {
     // Clearing must be strictly better, and fast enough to feel live.
     expect(cleared).toBeLessThan(stale);
     expect(cleared * (1000 / 30)).toBeLessThan(500);
+  });
+
+  it("the confidence-collapse trigger fires without being told when to clear", () => {
+    if (letters.size < 2) {
+      console.log("dataset unavailable — skipping");
+      return;
+    }
+    const from = letters.get("a")!;
+    const to = letters.get("b")!;
+
+    const stale = framesToSwitch(from, to, false);
+    const triggered = framesToSwitchWithTrigger(from, to);
+    const ms = (f: number) => (f === Infinity ? "never" : `${Math.round(f * (1000 / 30))}ms`);
+
+    console.log(`\n  a -> b, no trigger:               ${stale} frames (${ms(stale)})`);
+    console.log(`  a -> b, confidence-collapse only: ${triggered} frames (${ms(triggered)})\n`);
+
+    // The point of the trigger: it detects the switch itself, with no motion
+    // signal and no keypress. Fingerspelling gives neither.
+    expect(triggered).toBeLessThan(stale);
+    expect(triggered * (1000 / 30)).toBeLessThan(600);
   });
 });

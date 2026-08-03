@@ -85,5 +85,3 @@ Thumbs.db
 /playwright/.cache/
 /playwright/.auth/
 
-# Y4M camera fixtures for e2e (uncompressed, ~40MB each) — regenerate with npm run e2e:fixtures
-e2e/fixtures/

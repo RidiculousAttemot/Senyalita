@@ -22,6 +22,21 @@ const EARLY_CONFIDENCE_THRESHOLD = 0.85;
 const STABLE_FREEZE_FRAMES = 8;
 const UI_UPDATE_INTERVAL_MS = 300;
 
+/**
+ * Detecting that a settled sign has ended, by confidence collapse.
+ *
+ * Fingerspelling cannot use MotionDetector for this: a letter-to-letter
+ * reshape spread over 5-20 frames produces 0.003-0.012 mean landmark motion,
+ * entirely under MOTION_THRESHOLD (0.015), while merely *holding* a letter
+ * produces up to 0.019 at p95. The noise exceeds the signal, so no value of
+ * that threshold separates them and lowering it clears the buffer mid-letter.
+ */
+const SIGN_END_DROP_RATIO = 0.7;
+/** Consecutive low samples required — at 100ms inference, ~200ms of hysteresis. */
+const SIGN_END_FRAMES = 2;
+/** Never armed by a low-confidence read, only by one worth calling settled. */
+const SIGN_END_MIN_PEAK = 0.6;
+
 export type RecognitionControls = {
   state: RecognitionState;
   appendFrame: (left: HandData | null, right: HandData | null) => void;
@@ -73,6 +88,9 @@ export const useRecognition = (
   const stableCountRef = useRef(0);
   const lastResultRef = useRef<string | null>(null);
   const lastUiUpdateRef = useRef(0);
+  /** Highest confidence seen for the sign currently in the buffer. */
+  const peakConfidenceRef = useRef(0);
+  const lowConfidenceCountRef = useRef(0);
   onPredictionRef.current = onPrediction;
 
   const setMode = useCallback((newMode: RecognitionMode) => {
@@ -131,6 +149,40 @@ export const useRecognition = (
 
             const translated = translateResult(temporalResult);
             const smoothed = smootherRef.current?.smooth(translated) ?? translated;
+
+            // A settled sign ending shows up as a confidence collapse long
+            // before the label changes. Measured a -> b against the served
+            // model: settled on "a" at 90.7%, frame 1 already 56.7%, but the
+            // label does not flip to "b" until frame 71 (2367ms) — and it
+            // emits "y", "n", "m" on the way there.
+            //
+            // So clearing when the *label* changes is circular: the trigger
+            // arrives exactly as late as the delay it is meant to remove.
+            // Confidence is the same signal, 70 frames earlier.
+            //
+            // Only armed after a genuinely confident read, and only after
+            // consecutive low samples, so a momentary dip while holding a
+            // letter does not wipe the evidence for it.
+            if (smoothed.confidence >= peakConfidenceRef.current) {
+              peakConfidenceRef.current = smoothed.confidence;
+              lowConfidenceCountRef.current = 0;
+            } else if (
+              peakConfidenceRef.current >= SIGN_END_MIN_PEAK
+              && smoothed.confidence < peakConfidenceRef.current * SIGN_END_DROP_RATIO
+            ) {
+              lowConfidenceCountRef.current += 1;
+              if (lowConfidenceCountRef.current >= SIGN_END_FRAMES) {
+                bufferRef.current?.reset();
+                smootherRef.current?.reset();
+                peakConfidenceRef.current = 0;
+                lowConfidenceCountRef.current = 0;
+                lastResultRef.current = null;
+                stableLabelRef.current = null;
+                stableCountRef.current = 0;
+              }
+            } else {
+              lowConfidenceCountRef.current = 0;
+            }
 
             const motionState = motionDetectorRef.current?.getState() ?? "idle";
             const gesturePhase = motionDetectorRef.current?.getPhase() ?? "none";
@@ -238,6 +290,8 @@ export const useRecognition = (
           bufferRef.current?.reset();
           smootherRef.current?.reset();
           lastResultRef.current = null;
+          peakConfidenceRef.current = 0;
+          lowConfidenceCountRef.current = 0;
           // reset() dropped the frame appended above; it belongs to the new sign.
           bufferRef.current?.append(left, right);
           bufferRef.current?.markGestureStart();
@@ -301,6 +355,10 @@ export const useRecognition = (
     stableLabelRef.current = null;
     stableCountRef.current = 0;
     lastResultRef.current = null;
+    // The buffer is empty, so the peak it was measured against is stale — a
+    // leftover peak would arm the sign-end trigger against the next sign.
+    peakConfidenceRef.current = 0;
+    lowConfidenceCountRef.current = 0;
     setState({ stage: "predicting", result: null });
   }, []);
 
@@ -316,6 +374,8 @@ export const useRecognition = (
     stableLabelRef.current = null;
     stableCountRef.current = 0;
     noMotionCounterRef.current = 0;
+    peakConfidenceRef.current = 0;
+    lowConfidenceCountRef.current = 0;
   }, []);
 
   return {
