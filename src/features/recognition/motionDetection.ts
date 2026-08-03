@@ -2,6 +2,27 @@ import type { HandData } from "./buffer";
 
 const MOTION_THRESHOLD = 0.015;
 const IDLE_THRESHOLD = 0.005;
+
+/**
+ * Motion that means "the hand is reshaping into a different letter".
+ *
+ * Deliberately separate from MOTION_THRESHOLD. That one decides whether a
+ * *phrase* gesture is underway, where the whole hand travels across the body,
+ * and it also bounds how spans are opened and closed for motion signs. Dropping
+ * it to letter scale would make every span start earlier and end later, which
+ * nothing in the suite would catch and which THANK YOU's accuracy depends on.
+ *
+ * Measured from the deployed app with the debug overlay:
+ *
+ *   holding one letter still (noise floor)  ~0.0005
+ *   reshaping from one letter to the next   ~0.003
+ *   MOTION_THRESHOLD                         0.015   — 5x above the signal
+ *
+ * 0.0015 sits 3x above the noise floor and 2x below the transition, which is
+ * why fingerspelling never moved the detector out of "idle": the reset that
+ * clears the previous letter is gated on a threshold tuned for arm movement.
+ */
+const RESHAPE_THRESHOLD = 0.0015;
 /**
  * Still frames required before a gesture is called finished. Exported so the
  * sequence buffer can trim the same trailing stillness off the gesture span.
@@ -26,6 +47,8 @@ export class MotionDetector {
   private frameHistory: Array<{ motion: number; time: number }> = [];
   private phaseStableCount = 0;
   private lastFrameTime = 0;
+  /** Whether motion is currently above RESHAPE_THRESHOLD, for edge detection. */
+  private reshaping = false;
 
   reset(): void {
     this.prevLeft = null;
@@ -38,6 +61,25 @@ export class MotionDetector {
     this.frameHistory = [];
     this.phaseStableCount = 0;
     this.lastFrameTime = 0;
+    this.reshaping = false;
+  }
+
+  /**
+   * True on the frame the hand *starts* reshaping — a rising edge, not a level.
+   *
+   * Level would be wrong: motion stays above the threshold for the whole
+   * transition, so the caller would clear the buffer on every frame of it and
+   * never accumulate the new letter. The edge fires once, at the moment the
+   * previous letter's frames stop being evidence for anything.
+   */
+  consumeReshapeStart(): boolean {
+    const peak = this.frameHistory.length
+      ? this.frameHistory[this.frameHistory.length - 1].motion
+      : 0;
+    const above = peak > RESHAPE_THRESHOLD;
+    const rising = above && !this.reshaping;
+    this.reshaping = above;
+    return rising;
   }
 
   getState(): MotionState {

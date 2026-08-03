@@ -243,6 +243,26 @@ export const useRecognition = (
           bufferRef.current?.markGestureStart();
         } else if (previousState === "gesturing" && newState === "idle") {
           bufferRef.current?.markGestureEnd(IDLE_FRAMES);
+        } else if (motionDetectorRef.current.consumeReshapeStart()) {
+          // Fingerspelling never reaches MOTION_THRESHOLD, so the branch above
+          // never fires for letters and the window kept the previous one.
+          // Measured from the deployed app: reshaping between letters peaks at
+          // ~0.003 against a 0.015 threshold, with a ~0.0005 noise floor while
+          // a letter is held.
+          //
+          // No markGestureStart() here. A letter is not a gesture span — spans
+          // are resampled to fill the trained window, which is right for a
+          // phrase captured as real video and wrong for a letter, whose
+          // training windows were a static image replicated across every slot.
+          bufferRef.current?.reset();
+          smootherRef.current?.reset();
+          lastResultRef.current = null;
+          freezeCounterRef.current = 0;
+          setFrozenPrediction(null);
+          stableLabelRef.current = null;
+          stableCountRef.current = 0;
+          // reset() dropped the frame appended above; it belongs to the new letter.
+          bufferRef.current?.append(left, right);
         }
 
         if (newState === "gesturing") {
