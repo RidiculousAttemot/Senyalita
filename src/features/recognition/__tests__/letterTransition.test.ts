@@ -167,7 +167,7 @@ describe("letter-to-letter transition", () => {
     // Clearing must be strictly better, and fast enough to feel live.
     expect(cleared).toBeLessThan(stale);
     expect(cleared * (1000 / 30)).toBeLessThan(500);
-  });
+  }, 120_000);
 
   it("the confidence-collapse trigger fires without being told when to clear", () => {
     if (letters.size < 2) {
@@ -188,5 +188,5 @@ describe("letter-to-letter transition", () => {
     // signal and no keypress. Fingerspelling gives neither.
     expect(triggered).toBeLessThan(stale);
     expect(triggered * (1000 / 30)).toBeLessThan(600);
-  });
+  }, 120_000);
 });

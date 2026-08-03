@@ -19,8 +19,33 @@ export const HAND_CAPTURE_CONSTRAINTS: MediaStreamConstraints = {
   audio: false,
 };
 
+/**
+ * One hand, not two — the single biggest lever on detection cost.
+ *
+ * MediaPipe runs its landmark model once per tracked hand, so `numHands: 2`
+ * costs roughly double. Measured on /translate against a software-rendered GPU
+ * (a reasonable stand-in for a weak phone):
+ *
+ *   numHands 2, 480px input -> 631ms per detection, 1 FPS
+ *   numHands 1, 480px input -> 342ms per detection, 3 FPS
+ *   numHands 1, 320px input -> 360ms per detection, 2 FPS
+ *
+ * Input resolution is a red herring: MediaPipe resizes to 224x224 internally,
+ * so shrinking the frame below that buys nothing and 320 measured no better
+ * than 480.
+ *
+ * THE TRADE: two-handed signs lose their second hand. Sign-to-Text is
+ * alphabet-scoped — FSL fingerspelling is one-handed and the UI treats every
+ * prediction as a single character (README, "The model") — so this costs
+ * nothing on the deployed workflow. It would degrade the two-handed phrases
+ * among the model's 105 non-letter classes if that path is ever surfaced, and
+ * this is the line to revisit first if so.
+ *
+ * The feature vector is unchanged at 126 (two hands x 21 x 3); the absent hand
+ * is zero-filled, exactly as it already is whenever only one hand is in frame.
+ */
 export const HAND_LANDMARKER_OPTIONS = {
-  numHands: 2,
+  numHands: 1,
   runningMode: "VIDEO" as const,
   minHandDetectionConfidence: 0.6,
   minHandPresenceConfidence: 0.6,

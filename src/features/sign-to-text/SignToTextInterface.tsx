@@ -17,6 +17,7 @@ import {
   HAND_CONNECTIONS,
   createHandLandmarker,
   createDetectionSurface,
+  getActiveDelegate,
 } from "./handLandmarkerConfig";
 import { CameraSettingsPanel, type CameraSettings } from "./CameraSettingsPanel";
 import { SuggestionPanel, useLetterSuggestions } from "@/features/suggestions";
@@ -57,6 +58,23 @@ export function SignToTextInterface() {
   const [status, setStatus] = useState<Status>("waiting");
   const [errorMessage, setErrorMessage] = useState("");
   const [mediapipeFps, setMediapipeFps] = useState(0);
+  /**
+   * What the camera actually delivers, and what each stage costs.
+   *
+   * "2 FPS" has at least four distinct causes and the badge alone cannot tell
+   * them apart: the camera itself delivering 2fps (phones drop frame rate hard
+   * in low light to lengthen exposure), MediaPipe detection being slow, the
+   * CPU delegate being silently selected, or inference crowding the main
+   * thread. Two fixes were shipped against guesses before this existed.
+   *
+   * mediapipeFps counts rAF passes where video.currentTime changed, so it is
+   * capped by camera delivery — a slow sensor and slow processing look
+   * identical in it.
+   */
+  const [camDiag, setCamDiag] = useState<{
+    width: number; height: number; frameRate: number; delegate: string | null;
+  } | null>(null);
+  const [detectMs, setDetectMs] = useState(0);
   // Rate landmarks actually enter the recognition buffer, which is what has to
   // match training — distinct from the MediaPipe detection rate above.
   const [captureFps, setCaptureFps] = useState(0);
@@ -190,6 +208,15 @@ export function SignToTextInterface() {
         return;
       }
       handLandmarkerRef.current = handLandmarker;
+      // What the camera actually agreed to, as opposed to what was requested.
+      const track = stream.getVideoTracks()[0];
+      const s = track?.getSettings?.() ?? {};
+      setCamDiag({
+        width: s.width ?? 0,
+        height: s.height ?? 0,
+        frameRate: Math.round(s.frameRate ?? 0),
+        delegate: getActiveDelegate(),
+      });
       let lastVideoTime = -1;
       // Landmarks are appended on a fixed ~30Hz cadence to match the rate the
       // training clips were extracted at (scripts/extract-holistic-videos.mjs
@@ -212,6 +239,13 @@ export function SignToTextInterface() {
           // overlay below still draws at full video resolution; only detection
           // is downscaled, and landmarks are normalised so it cannot tell.
           const results = handLandmarker.detectForVideo(detectionSurface(video), frameTimestamp);
+          // Cost of detection alone, separated from camera delivery rate.
+          // Throttled to the overlay cadence so measuring cannot itself cost
+          // a re-render per frame.
+          const detectElapsed = performance.now() - frameTimestamp;
+          if (frameTimestamp - lastOverlayTime >= OVERLAY_INTERVAL_MS) {
+            setDetectMs(Math.round(detectElapsed));
+          }
           const measuredFps = fpsTracker.record(frameTimestamp);
           if (measuredFps > 0) setMediapipeFps(measuredFps);
           const leftIndex = results.handedness.findIndex((handedness) => handedness[0]?.categoryName?.toLowerCase() === "left");
@@ -417,6 +451,25 @@ export function SignToTextInterface() {
                 {status === "active" && mediapipeFps > 0
                   ? <span className="tabular-nums">{mediapipeFps} FPS</span>
                   : cameraStatusLabel[status]}
+                {/*
+                  Always visible, not behind the debug toggle. "2 FPS" has four
+                  distinct causes that this badge alone cannot separate, and a
+                  phone is exactly where devtools are least reachable — these
+                  three numbers name the cause from a screenshot:
+
+                    cam 30  -> camera is fine, the cost is downstream
+                    cam  2  -> the sensor is delivering 2fps, usually low light
+                    det NNN -> milliseconds per MediaPipe detection
+                    CPU     -> GPU delegate unavailable, ~10x slower
+                */}
+                {status === "active" && camDiag && (
+                  <span className="tabular-nums font-normal text-white/70">
+                    · cam {camDiag.frameRate || "?"} {camDiag.width}×{camDiag.height}
+                    {" · det "}{detectMs}ms
+                    {" · inf "}{Math.round(recognition.inferenceTimeMs)}ms
+                    {camDiag.delegate ? ` · ${camDiag.delegate}` : ""}
+                  </span>
+                )}
               </span>
               {status === "active" && (
                 <span className="hidden rounded-full bg-black/45 px-3 py-1.5 text-[11px] font-semibold text-white ring-1 ring-inset ring-white/15 backdrop-blur-md sm:inline-flex">

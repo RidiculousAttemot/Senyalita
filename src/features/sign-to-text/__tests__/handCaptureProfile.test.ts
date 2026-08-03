@@ -24,15 +24,23 @@ describe("hand capture profile", () => {
    * None of these are `exact`, so getUserMedia still succeeds on a device that
    * cannot meet them — it returns the closest available instead of failing.
    */
-  it("requests a front camera sized for two complete hands", () => {
+  it("requests a capped front camera and tracks a single hand", () => {
     expect(HAND_CAPTURE_CONSTRAINTS.video).toMatchObject({
       facingMode: "user",
       width: { ideal: 640, max: 960 },
       height: { ideal: 480, max: 720 },
       frameRate: { ideal: 30, max: 30 },
     });
+    // One hand, not two. MediaPipe runs its landmark model once per tracked
+    // hand, so this is the single biggest lever on detection cost — measured
+    // 631ms -> 342ms per detection on a software-rendered GPU, 1 FPS -> 3.
+    //
+    // The trade is that two-handed signs lose their second hand. Sign-to-Text
+    // is alphabet-scoped and FSL fingerspelling is one-handed, so it costs
+    // nothing on the deployed workflow; it is the first line to revisit if the
+    // model's two-handed phrase classes are ever surfaced.
     expect(HAND_LANDMARKER_OPTIONS).toMatchObject({
-      numHands: 2,
+      numHands: 1,
       runningMode: "VIDEO",
       minHandDetectionConfidence: 0.6,
       minHandPresenceConfidence: 0.6,
