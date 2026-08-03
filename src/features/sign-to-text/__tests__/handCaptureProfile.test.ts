@@ -11,18 +11,26 @@ describe("hand capture profile", () => {
    * scaled to [-1,1]) before reaching the model, so extra capture resolution
    * is discarded and only costs decode time.
    *
-   * The frame rate is deliberately left unconstrained. Recognition appends to
-   * its buffer on a fixed ~30Hz cadence to match the rate training clips were
-   * extracted at; asking the camera for 60fps would double the decode and
-   * detection work and then throw half of it away.
+   * Both dimensions and the frame rate now carry a `max`, because `ideal` is a
+   * hint a camera may ignore. On a mid-range Android the phone returned a much
+   * larger, faster stream and detection cost 500-1000ms per frame — 1-2 FPS,
+   * against the 30 the model needs, so recognition could not work at all.
+   *
+   * This test previously asserted the frame rate was left *unconstrained*,
+   * with a comment explaining that 60fps would "double the decode and
+   * detection work and then throw half of it away". That reasoning was right;
+   * leaving it unconstrained simply did not enforce it. `max: 30` does.
+   *
+   * None of these are `exact`, so getUserMedia still succeeds on a device that
+   * cannot meet them — it returns the closest available instead of failing.
    */
   it("requests a front camera sized for two complete hands", () => {
     expect(HAND_CAPTURE_CONSTRAINTS.video).toMatchObject({
       facingMode: "user",
-      width: { ideal: 640 },
-      height: { ideal: 480 },
+      width: { ideal: 640, max: 960 },
+      height: { ideal: 480, max: 720 },
+      frameRate: { ideal: 30, max: 30 },
     });
-    expect(HAND_CAPTURE_CONSTRAINTS.video).not.toHaveProperty("frameRate");
     expect(HAND_LANDMARKER_OPTIONS).toMatchObject({
       numHands: 2,
       runningMode: "VIDEO",

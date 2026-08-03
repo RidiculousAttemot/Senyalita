@@ -1,8 +1,20 @@
+/**
+ * `ideal` is only a hint — a phone is free to ignore it and hand back 1080p at
+ * 60fps, which is what made detection cost 500-1000ms per frame on mid-range
+ * Android (1-2 FPS, against the 30 the model needs).
+ *
+ * `max` is honoured much more consistently, and neither is an `exact`
+ * constraint, so getUserMedia still succeeds on a device that cannot hit these
+ * — it just returns the closest it can. Capping the frame rate matters as much
+ * as the resolution: at 60fps half the frames are discarded by the capture
+ * throttle anyway, after the camera has already paid to produce them.
+ */
 export const HAND_CAPTURE_CONSTRAINTS: MediaStreamConstraints = {
   video: {
     facingMode: "user",
-    width: { ideal: 640 },
-    height: { ideal: 480 },
+    width: { ideal: 640, max: 960 },
+    height: { ideal: 480, max: 720 },
+    frameRate: { ideal: 30, max: 30 },
   },
   audio: false,
 };

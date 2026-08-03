@@ -16,6 +16,7 @@ import {
   CAPTURE_INTERVAL_MS,
   HAND_CONNECTIONS,
   createHandLandmarker,
+  createDetectionSurface,
 } from "./handLandmarkerConfig";
 import { CameraSettingsPanel, type CameraSettings } from "./CameraSettingsPanel";
 import { SuggestionPanel, useLetterSuggestions } from "@/features/suggestions";
@@ -196,6 +197,7 @@ export function SignToTextInterface() {
       // frames into the model's 120-frame window and halve its real duration.
       let lastAppendTime = -Infinity;
       let lastOverlayTime = -Infinity;
+      const detectionSurface = createDetectionSurface();
       const fpsTracker = createFrameRateTracker(performance.now());
       const captureTracker = createFrameRateTracker(performance.now());
       const drawLandmarks = () => {
@@ -204,7 +206,12 @@ export function SignToTextInterface() {
         if (video.currentTime !== lastVideoTime) {
           lastVideoTime = video.currentTime;
           const frameTimestamp = performance.now();
-          const results = handLandmarker.detectForVideo(video, frameTimestamp);
+          // Detect on a downscaled copy. `width: { ideal: 640 }` is a hint the
+          // camera may ignore, and a phone handing back 1080p made each detect
+          // cost 500-1000ms — 1-2 FPS against the 30 the model needs. The
+          // overlay below still draws at full video resolution; only detection
+          // is downscaled, and landmarks are normalised so it cannot tell.
+          const results = handLandmarker.detectForVideo(detectionSurface(video), frameTimestamp);
           const measuredFps = fpsTracker.record(frameTimestamp);
           if (measuredFps > 0) setMediapipeFps(measuredFps);
           const leftIndex = results.handedness.findIndex((handedness) => handedness[0]?.categoryName?.toLowerCase() === "left");

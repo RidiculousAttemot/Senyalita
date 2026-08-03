@@ -42,6 +42,57 @@ export const HAND_LANDMARKER_MODEL_URL = process.env.NEXT_PUBLIC_MEDIAPIPE_HAND_
 
 export const MEDIAPIPE_WASM_URL = "/mediapipe/wasm";
 
+/**
+ * Longest edge of the frame handed to MediaPipe.
+ *
+ * Detection cost scales with pixel count, and `width: { ideal: 640 }` is only a
+ * hint — a phone is free to hand back 1280x720 or 1920x1080, which is 4-9x the
+ * work per frame. On a mid-range Android this showed as 1-2 FPS, where the
+ * model needs 30 to match the rate its training clips were extracted at, so
+ * recognition could not work at all.
+ *
+ * 480px on the long edge keeps hands comfortably resolvable — MediaPipe's own
+ * hand model runs at 224x224 internally — while cutting the work enough to
+ * matter. Landmarks come back normalised to 0-1, so nothing downstream cares
+ * what resolution produced them.
+ */
+export const DETECT_MAX_EDGE = 480;
+
+/**
+ * Downscales into a reused offscreen canvas and returns it, or returns the
+ * video untouched when it is already small enough. Allocating a canvas per
+ * frame would trade one cost for another.
+ */
+export function createDetectionSurface() {
+  let canvas: HTMLCanvasElement | null = null;
+  let context: CanvasRenderingContext2D | null = null;
+
+  return (video: HTMLVideoElement): HTMLVideoElement | HTMLCanvasElement => {
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    if (!w || !h) return video;
+
+    const longest = Math.max(w, h);
+    if (longest <= DETECT_MAX_EDGE) return video;
+
+    const scale = DETECT_MAX_EDGE / longest;
+    const tw = Math.round(w * scale);
+    const th = Math.round(h * scale);
+
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      context = canvas.getContext("2d", { alpha: false, willReadFrequently: false });
+    }
+    if (!context) return video;
+    if (canvas.width !== tw || canvas.height !== th) {
+      canvas.width = tw;
+      canvas.height = th;
+    }
+    context.drawImage(video, 0, 0, tw, th);
+    return canvas;
+  };
+}
+
 /** Bone pairs for drawing a hand skeleton over 21 landmarks. */
 export const HAND_CONNECTIONS: Array<[number, number]> = [
   [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8],
@@ -54,6 +105,18 @@ export const HAND_CONNECTIONS: Array<[number, number]> = [
  * CPU. The fallback is load-bearing: GPU creation throws outright on machines
  * without a usable WebGL context, and without it the camera simply never starts.
  */
+let activeDelegate: "GPU" | "CPU" | null = null;
+
+/**
+ * Which delegate the running landmarker actually got.
+ *
+ * Worth surfacing: the CPU fallback is roughly an order of magnitude slower,
+ * and because the fallback is silent a device quietly running on CPU looks
+ * identical to one that is simply slow. On mobile that is the difference
+ * between "needs a smaller frame" and "needs a different approach entirely".
+ */
+export const getActiveDelegate = () => activeDelegate;
+
 export async function createHandLandmarker(
   landmarkerOptions: Record<string, unknown>,
 ) {
@@ -61,14 +124,22 @@ export async function createHandLandmarker(
   const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL);
 
   try {
-    return await HandLandmarker.createFromOptions(vision, {
+    const landmarker = await HandLandmarker.createFromOptions(vision, {
       baseOptions: { modelAssetPath: HAND_LANDMARKER_MODEL_URL, delegate: "GPU" },
       ...landmarkerOptions,
     });
+    activeDelegate = "GPU";
+    return landmarker;
   } catch {
-    return await HandLandmarker.createFromOptions(vision, {
+    const landmarker = await HandLandmarker.createFromOptions(vision, {
       baseOptions: { modelAssetPath: HAND_LANDMARKER_MODEL_URL, delegate: "CPU" },
       ...landmarkerOptions,
     });
+    activeDelegate = "CPU";
+    console.warn(
+      "[handLandmarker] GPU delegate unavailable, running on CPU. Expect roughly "
+      + "an order of magnitude slower detection.",
+    );
+    return landmarker;
   }
 }
