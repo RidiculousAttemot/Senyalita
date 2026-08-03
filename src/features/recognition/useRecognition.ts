@@ -88,6 +88,8 @@ export const useRecognition = (
   const stableCountRef = useRef(0);
   const lastResultRef = useRef<string | null>(null);
   const lastUiUpdateRef = useRef(0);
+  /** Guards against overlapping inference passes on slow devices. */
+  const inferenceInFlightRef = useRef(false);
   /** Highest confidence seen for the sign currently in the buffer. */
   const peakConfidenceRef = useRef(0);
   const lowConfidenceCountRef = useRef(0);
@@ -123,12 +125,33 @@ export const useRecognition = (
 
         inferenceTimerRef.current = setInterval(async () => {
           if (!modelReadyRef.current || !bufferRef.current) return;
+          // Never run two inferences at once.
+          //
+          // This callback is async and the timer does not wait for it. On
+          // desktop a pass takes 10-20ms against a 100ms tick, so they never
+          // overlapped and the missing guard was invisible. On mobile a pass
+          // can take 300-500ms: the timer keeps firing, passes pile up, and
+          // each one allocates tensors and runs a forward pass on the main
+          // thread — starving the camera's requestAnimationFrame loop.
+          //
+          // Reported as 2 FPS with signs never recognised. The camera was not
+          // slow; it was being crowded out by its own backlog.
+          //
+          // Skipping while busy also paces inference to whatever the device
+          // can actually sustain, instead of a rate chosen for a laptop.
+          if (inferenceInFlightRef.current) return;
 
           const currentMode = modeManagerRef.current?.getMode() ?? "auto";
 
           // Use adaptive sampling for early prediction
           const { sample, usedEarly, frameCount } = bufferRef.current.adaptiveSample(EARLY_CONFIDENCE_THRESHOLD);
           if (!sample) return;
+
+          // Claimed here, not above: `sample` is null whenever the buffer is
+          // below MINIMUM_FRAMES — at startup and after every clear — so
+          // claiming before that early return would strand the flag on the
+          // first tick and stop inference permanently.
+          inferenceInFlightRef.current = true;
 
           
 
@@ -238,6 +261,11 @@ export const useRecognition = (
             onPredictionRef.current?.(temporalResult, elapsed);
           } catch {
             if (!mounted) return;
+          } finally {
+            // Must release on every path. The catch above returns early when
+            // unmounted, so releasing after the try/catch instead of in a
+            // finally would leave the flag stuck and stop inference for good.
+            inferenceInFlightRef.current = false;
           }
         }, fastMode ? earlyInterval : interval);
       } else {
