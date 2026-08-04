@@ -378,6 +378,16 @@ export const useRecognition = (
   const clearSequence = useCallback(() => {
     bufferRef.current?.reset();
     smootherRef.current?.reset();
+    // The detector has to go back to idle too.
+    //
+    // Committing usually happens with the hand still up and moving, so the
+    // detector is mid-"gesturing". Leaving it there means the next sign never
+    // produces an idle -> gesturing edge, and that edge is what clears the
+    // window and calls markGestureStart. Without it the next sign accumulates
+    // into an unmarked window: harmless for a static letter, wrong for the
+    // number signs, which are video-trained and need a resampled span.
+    motionDetectorRef.current?.reset();
+    setMotionState("idle");
     setFrozenPrediction(null);
     freezeCounterRef.current = 0;
     stableLabelRef.current = null;

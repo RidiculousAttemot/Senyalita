@@ -7,12 +7,10 @@ const TOPK_COUNT = 5;
 export class PredictionSmoother {
   private history: InferenceResult[] = [];
   private lastStableLabel: string | null = null;
-  private lastStableConfidence = 0;
 
   reset(): void {
     this.history = [];
     this.lastStableLabel = null;
-    this.lastStableConfidence = 0;
   }
 
   smooth(result: InferenceResult): InferenceResult {
@@ -50,15 +48,26 @@ export class PredictionSmoother {
       this.lastStableLabel !== null &&
       bestLabel !== this.lastStableLabel
     ) {
-      const labelAvg = labelCounts.get(bestLabel) ?? 0;
-      const newConfidence = labelAvg / this.history.length;
-      if (newConfidence < this.lastStableConfidence + HYSTERESIS_THRESHOLD) {
+      // Both sides are vote shares of the same window.
+      //
+      // This compared a vote ratio against a stored `lastStableConfidence`,
+      // which held `avgConfidence` — a model probability. Different units, so
+      // the threshold scaled with how confident the incumbent had been rather
+      // than how much of the vote it held. With an incumbent at 0.95 the
+      // challenger needed a vote share above 1.05, which cannot exist: the
+      // label locked until something reset the smoother.
+      //
+      // Intent is unchanged — a challenger must lead by HYSTERESIS_THRESHOLD
+      // to take over — but now it is reachable: leading 4-1 in a 5-frame
+      // window is a 0.6 margin, comfortably clear of 0.10.
+      const challengerShare = (labelCounts.get(bestLabel) ?? 0) / this.history.length;
+      const incumbentShare = (labelCounts.get(this.lastStableLabel) ?? 0) / this.history.length;
+      if (challengerShare < incumbentShare + HYSTERESIS_THRESHOLD) {
         bestLabel = this.lastStableLabel;
       }
     }
 
     this.lastStableLabel = bestLabel;
-    this.lastStableConfidence = avgConfidence;
 
     const topKCounts = new Map<string, number>();
     for (const entry of this.history) {
