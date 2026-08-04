@@ -54,21 +54,22 @@ describe("runtime/training temporal alignment", () => {
     expect(shape![1]).toBe(`null,${TEMPORAL_STEPS},${FEATURE_DIMENSION}`);
   });
 
-  it("zero-pads the tail while the window is still filling", () => {
+  it("fills every step from real frames while the window is still filling", () => {
     const buffer = new SequenceBuffer();
     for (let i = 0; i < 10; i += 1) buffer.append(makeHand(0.5), null);
 
     const sample = buffer.sampleTemporal();
     expect(sample).not.toBeNull();
 
-    // Index 11 is the first trained index past the 10 captured frames.
-    const firstEmptyStep = TEMPORAL_FRAME_INDICES.findIndex((i) => i >= 10);
-    const tail = sample!.slice(firstEmptyStep * FEATURE_DIMENSION);
-    expect(tail.every((v) => v === 0)).toBe(true);
-
-    // Everything before it came from a real frame.
-    const head = sample!.slice(0, firstEmptyStep * FEATURE_DIMENSION);
-    expect(head.some((v) => v !== 0)).toBe(true);
+    // This asserted the opposite until the cost was measured: reading the
+    // trained indices out of a 10-frame window left 25 of 35 steps zero, an
+    // input no training sample resembles, and it cost 19.2% accuracy against
+    // 88.5% (partialWindow.test.ts). Since the buffer is cleared on every
+    // commit, reshape and confidence collapse, that was the common case.
+    for (let step = 0; step < TEMPORAL_STEPS; step += 1) {
+      const frame = sample!.slice(step * FEATURE_DIMENSION, (step + 1) * FEATURE_DIMENSION);
+      expect(frame.some((v) => v !== 0)).toBe(true);
+    }
   });
 
   it("keeps a 120-frame rolling window rather than truncating to 45", () => {

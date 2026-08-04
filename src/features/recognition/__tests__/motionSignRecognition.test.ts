@@ -286,30 +286,62 @@ describe("motion sign recognition", () => {
       .toEqual([]);
   });
 
-  // ---- Why the marking is load-bearing, not decoration ----
+  // ---- What marking a span is still worth ----
 
-  it("loses motion signs when the span is left unmarked", () => {
-    const confidences = gestures().map((sample) => {
+  it("recognises an unmarked gesture that fills its own capture", () => {
+    // This asserted the opposite while the unmarked path zero-padded its tail:
+    // the gesture occupied only its captured frames, the model saw roughly 3x
+    // the trained speed, and every fixture read under 50%. Spreading the whole
+    // capture across the window (buffer.ts sampleWindow) removes that, and a
+    // capture that *is* the gesture now needs no marking at all.
+    //
+    // Marking still earns its place — see the idle-padded case below, which is
+    // the one a live camera actually produces.
+    for (const sample of gestures()) {
       const prediction = predictFromSample(
         replayThroughBuffer(sample.capturedSequence),
       );
-      return { label: sample.label, prediction };
-    });
-
-    // Unmarked, the gesture occupies only its captured frames and the rest of
-    // the window is zero — the model sees roughly 3x the trained speed.
-    for (const { label, prediction } of confidences) {
       expect(
-        prediction.confidence,
-        `${label} unmarked reached ${(prediction.confidence * 100).toFixed(1)}% — `
-        + `if this is now high, the raw window no longer needs a marked span and `
-        + `the segmentation in useRecognition can be reconsidered`,
-      ).toBeLessThan(0.5);
+        prediction.label,
+        `${sample.label} unmarked -> ${prediction.label} `
+        + `@ ${(prediction.confidence * 100).toFixed(1)}%`,
+      ).toBe(sample.label);
     }
-    expect(confidences).toHaveLength(4);
   });
 
-  it("leaves the raw capture window untouched when no gesture is marked", () => {
+  it("still needs the span marked once idle frames surround the gesture", () => {
+    // A live camera never hands over a capture trimmed to the gesture: the
+    // buffer holds whatever the last 120 frames were, gesture and stillness
+    // together. Spreading that whole window spreads the stillness with it.
+    const marked: string[] = [];
+    const unmarked: string[] = [];
+    let lostWithoutSpan = 0;
+
+    for (const sample of gestures()) {
+      const withSpan = predictFromSample(
+        replayThroughBuffer(sample.capturedSequence, { segment: true, idlePadding: 20 }),
+      );
+      const withoutSpan = predictFromSample(
+        replayThroughBuffer(sample.capturedSequence, { idlePadding: 20 }),
+      );
+      marked.push(`${sample.label} -> ${withSpan.label} @ ${(withSpan.confidence * 100).toFixed(1)}%`);
+      unmarked.push(`${sample.label} -> ${withoutSpan.label} @ ${(withoutSpan.confidence * 100).toFixed(1)}%`);
+      if (withoutSpan.label !== sample.label) lostWithoutSpan += 1;
+    }
+
+    console.log(`\n  idle-padded, span marked:\n    ${marked.join("\n    ")}`);
+    console.log(`  idle-padded, span unmarked:\n    ${unmarked.join("\n    ")}\n`);
+
+    // Measured: GOOD MORNING -> GIRL @ 23.1% and THANK YOU -> j @ 23.0%
+    // unmarked, against 84.9% and 89.7% marked. If this ever reaches zero the
+    // segmentation in useRecognition is no longer paying for itself.
+    expect(
+      lostWithoutSpan,
+      `Every idle-padded gesture survived without a marked span:\n    ${unmarked.join("\n    ")}`,
+    ).toBeGreaterThan(0);
+  });
+
+  it("spreads the capture across every trained step when no gesture is marked", () => {
     const buffer = new SequenceBuffer();
     const frames = find("THANK YOU").capturedSequence;
     for (const frame of frames) {
@@ -317,14 +349,15 @@ describe("motion sign recognition", () => {
       buffer.append(left, right);
     }
 
-    // Trained index 0..39 fall inside the captured frames; the rest are past
-    // them and must still read as the zero tail training padded short clips to.
+    // Previously the steps past the captured frames read as a zero tail. They
+    // now read real frames, which is what took the alphabet from 19.2% to
+    // 88.5% at MINIMUM_FRAMES (partialWindow.test.ts).
     const sample = buffer.sampleTemporal()!;
-    const firstEmptyStep = TEMPORAL_FRAME_INDICES.findIndex((i) => i >= frames.length);
-    expect(firstEmptyStep).toBeGreaterThan(0);
-    expect(
-      sample.slice(firstEmptyStep * FEATURE_DIMENSION).every((v) => v === 0),
-    ).toBe(true);
+    expect(frames.length).toBeLessThan(SEQUENCE_LENGTH);
+    for (let step = 0; step < TEMPORAL_FRAME_INDICES.length; step += 1) {
+      const slice = sample.slice(step * FEATURE_DIMENSION, (step + 1) * FEATURE_DIMENSION);
+      expect(slice.some((v) => v !== 0)).toBe(true);
+    }
     expect(SEQUENCE_LENGTH).toBe(120);
   });
 });

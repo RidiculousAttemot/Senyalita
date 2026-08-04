@@ -19,20 +19,24 @@ import { normalizeLandmarks } from "./normalize";
  * - Gesture clips are real video, *time-normalised* — a 1.4s clip captured at
  *   30fps is interpolated so the movement spans the whole 120-frame window.
  *
- * Capturing at a true 30fps and zero-padding the tail reproduces the alphabet
- * layout but not the gesture layout: a 42-frame "THANK YOU" lands in slots
- * 0-41 and leaves 78 slots empty, so the model sees the movement at roughly
- * three times the speed it was trained on. Measured against the served model,
- * that drops THANK YOU from 88.3% to 9.0% (predicting DARK).
+ * Capturing at a true 30fps and zero-padding the tail reproduces neither. A
+ * 42-frame "THANK YOU" lands in slots 0-41 and leaves 78 slots empty, so the
+ * model sees the movement at roughly three times the speed it was trained on:
+ * measured against the served model, that drops THANK YOU from 88.3% to 9.0%
+ * (predicting DARK). A letter held for 5 frames fills three of the thirty-five
+ * trained steps and zeroes the other thirty-two, which drops the alphabet from
+ * 88.5% to 19.2% — see sampleWindow().
  *
- * So a gesture span is resampled to span the full window, mirroring training's
- * interpolation. Spans are marked externally by the caller from MotionDetector
- * transitions, because motion has to be measured on raw landmarks — this
- * buffer only ever sees wrist-centred, max-abs scaled features, a space in
- * which a hand travelling across the body registers no movement at all.
+ * So both paths stretch what was captured across the full window, mirroring
+ * training's interpolation, and differ only in what they stretch: a gesture
+ * stretches its marked span, everything else stretches the whole capture.
+ * Spans are marked externally by the caller from MotionDetector transitions,
+ * because motion has to be measured on raw landmarks — this buffer only ever
+ * sees wrist-centred, max-abs scaled features, a space in which a hand
+ * travelling across the body registers no movement at all.
  *
- * With no gesture marked the raw window is used unchanged, so the alphabet
- * path is byte-for-byte what it was.
+ * A full 120-frame window stretches to itself, so the case that always worked
+ * is arithmetically untouched.
  */
 export const SEQUENCE_LENGTH = 120;
 export const FEATURE_DIMENSION = 126;
@@ -180,23 +184,42 @@ export class SequenceBuffer {
   }
 
   /**
-   * Reads the trained indices out of a 120-slot window whose leading slots hold
-   * the captured frames and whose tail is zero — the same layout training used
-   * when it padded short clips.
+   * Spreads whatever has been captured across the trained window.
+   *
+   * This used to read the trained indices out of the raw window and leave the
+   * tail zero, on the theory that it matched the padding the dataset builder
+   * applies to short clips. It does not, and the difference is most of what a
+   * user experiences: the app clears this buffer on every commit, every
+   * letter-to-letter reshape and every confidence collapse, so a partly-full
+   * window is the normal case, not an edge one.
+   *
+   * With five frames captured, only trained indices 0, 4 and 7 land on real
+   * data — three of thirty-five steps, the other thirty-two zero. No training
+   * sample ever looked like that. Measured over the v4 test split, alphabet
+   * windows carry 102-120 non-zero slots of 120 and gesture windows always 120;
+   * the builder's zero-pad branch is reached by nothing that reaches the model.
+   *
+   * Measured against the served model, 26 letters, accuracy by fill level:
+   *
+   *   frames    zero-pad          spread
+   *        5    19.2% @ 40%       88.5% @ 83%
+   *       20    50.0% @ 60%       88.5% @ 83%
+   *       60    53.8% @ 68%       88.5% @ 83%
+   *       90    73.1% @ 59%       88.5% @ 83%
+   *      120    88.5% @ 83%       88.5% @ 83%
+   *
+   * So the old path needed the full 120 frames — four seconds at 30fps — after
+   * every clear before it matched what it could do immediately, and spent that
+   * time emitting confident-looking wrong letters. Worse, a wrong letter reads
+   * as low confidence, which re-arms the confidence-collapse trigger, which
+   * clears the buffer again.
+   *
+   * At a full window the two are arithmetically identical — the offset works
+   * out to round(index * 119 / 119) — so this cannot disturb the path that
+   * already worked, and the table's last row is the check.
    */
-  private sampleAtTrainedIndices(): Float32Array {
-    const sampled = new Float32Array(TEMPORAL_STEPS * FEATURE_DIMENSION);
-
-    for (let step = 0; step < TEMPORAL_STEPS; step += 1) {
-      const sourceIndex = TEMPORAL_FRAME_INDICES[step];
-      const frame = this.frames[sourceIndex];
-      // Past the captured frames the slot stays zero, matching the tail
-      // padding applied to short training clips.
-      if (!frame) continue;
-      sampled.set(frame, step * FEATURE_DIMENSION);
-    }
-
-    return sampled;
+  private sampleWindow(): Float32Array {
+    return this.resampleGesture({ start: 0, end: this.frames.length });
   }
 
   sampleTemporal(): Float32Array | null {
@@ -206,7 +229,7 @@ export class SequenceBuffer {
     const gesture = this.activeGesture();
     return gesture
       ? this.resampleGesture(gesture)
-      : this.sampleAtTrainedIndices();
+      : this.sampleWindow();
   }
 
   adaptiveSample(highConfidenceThreshold = EARLY_HIGH_CONFIDENCE): {
@@ -235,7 +258,7 @@ export class SequenceBuffer {
     return {
       sample: gesture
         ? this.resampleGesture(gesture)
-        : this.sampleAtTrainedIndices(),
+        : this.sampleWindow(),
       usedEarly: this.completedGesture === null
         && this.frames.length < SEQUENCE_LENGTH,
       frameCount: this.frames.length,
