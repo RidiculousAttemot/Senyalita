@@ -19,6 +19,7 @@ import {
   getActiveDelegate,
 } from "./handLandmarkerConfig";
 import { CameraSettingsPanel, type CameraSettings } from "./CameraSettingsPanel";
+import { isInScope, isNumberSign } from "./inScopeLabels";
 import { SuggestionPanel, useLetterSuggestions } from "@/features/suggestions";
 
 /** Amber reads clearly against skin tones, dim rooms and bright walls alike. */
@@ -123,7 +124,11 @@ export function SignToTextInterface() {
   const recognition = useRecognition(onPrediction);
   const { appendFrame, resetRecognition, clearSequence } = recognition;
 
-  const currentPrediction = recognition.frozenPrediction ?? (recognition.state.stage === "predicting" ? recognition.state.result : null);
+  // Sign-to-Text acts on 36 of the model's 131 classes — a-z and the ten
+  // number signs. The recognition layer still sees all of them; this is the
+  // single point where the app narrows. See inScopeLabels.ts to revert.
+  const rawPrediction = recognition.frozenPrediction ?? (recognition.state.stage === "predicting" ? recognition.state.result : null);
+  const currentPrediction = rawPrediction && isInScope(rawPrediction.label) ? rawPrediction : null;
 
   useEffect(() => {
     setTelemetrySessionToken(new CommunicationProfileManager().getToken());
@@ -146,7 +151,14 @@ export function SignToTextInterface() {
     if (!currentPrediction) return;
     const display = translateLabel(currentPrediction.label);
     setOutputText((previousText) => previousText + display);
-    suggestions.appendLabel(currentPrediction.label);
+    // Numbers reach the transcript but not the spelling buffer. The suggestion
+    // engine matches a run of characters against a word dictionary, so a digit
+    // mid-word can never match and would suppress suggestions until cleared.
+    // appendLabel would also mangle "10" — it slices the first character of
+    // anything outside MULTI_CHARACTER_LABELS ("NG"), so TEN became "1".
+    if (!isNumberSign(display)) {
+      suggestions.appendLabel(currentPrediction.label);
+    }
     speak(display);
     clearSequence();
   }, [clearSequence, currentPrediction, speak, suggestions]);
