@@ -2,14 +2,14 @@
  * The classes Sign-to-Text will act on.
  *
  * PRODUCT DECISION, NOT A MODEL LIMIT. The deployed model has all 131 classes
- * and keeps them: 26 letters, 105 phrase/word classes. This filter narrows what
- * the *app* accepts to the 36 that fingerspelling covers — a-z plus the ten
- * number signs — because the transcript, the suggestion engine and the commit
- * flow are all built around single characters.
+ * and keeps them: 26 letters + 10 numbers + 95 phrases. This list is the
+ * character vocabulary — the 36 that the transcript, the suggestion engine and
+ * the commit flow are built around.
  *
- * TO REVERT: delete the `isInScope` call in SignToTextInterface's
- * `currentPrediction`. Nothing else needs touching, and no model or dataset
- * change is involved.
+ * SUPERSEDED AS THE MECHANISM. The recognition mode now selects the allowed
+ * set (see recognitionModes.ts `allowedLabelsForMode`): Auto uses these 36,
+ * Alphabet Practice the 26 letters, Conversation the 95 phrases. This file
+ * remains the source of the character list and the number-handling rules.
  *
  * DELIBERATELY NOT IN features/recognition/. That layer stays capable of the
  * full 131 so /evaluation can keep measuring every class for the thesis

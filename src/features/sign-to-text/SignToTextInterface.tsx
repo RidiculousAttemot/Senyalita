@@ -1,8 +1,11 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { RealtimeMetrics, useRecognition, translateLabel } from "@/features/recognition";
+import {
+  RealtimeMetrics, useRecognition, translateLabel, getModelLabels,
+  allowedLabelsForMode, handsForMode, phraseLabelsFrom, DEFAULT_MODE, type RecognitionMode,
+} from "@/features/recognition";
 import { CommunicationProfileManager } from "@/features/profiles";
 import { Textarea } from "@/components/ui/textarea";
 import { Video, Zap, AlertTriangle, Settings, Copy, X, Power, Info, Volume2 } from "lucide-react";
@@ -115,29 +118,69 @@ export function SignToTextInterface() {
   // running camera keeps whatever it started with until it is restarted.
   const activeSensitivityRef = useRef<DetectionSensitivity | null>(null);
   const [activeSensitivity, setActiveSensitivity] = useState<DetectionSensitivity | null>(null);
+  // Same story for the mode: it sets numHands, which the detector bakes in.
+  const activeModeRef = useRef<RecognitionMode | null>(null);
+  const [activeMode, setActiveMode] = useState<RecognitionMode | null>(null);
   const [speakEnabled, setSpeakEnabled] = useState(true);
   const [commitShortcut, setCommitShortcut] = useState("Space");
   const [capturingShortcut, setCapturingShortcut] = useState(false);
   const [telemetrySessionToken, setTelemetrySessionToken] = useState<string | null>(null);
 
   const onPrediction = useCallback(() => {}, []);
-  // Restrict the model to the 36 in-scope classes rather than dropping
-  // predictions afterwards. Dropping meant the panel went blank whenever the
-  // model's top pick was one of the 105 phrase classes — which on noisy live
-  // frames is most of the time, and read as "it detects nothing".
-  const recognition = useRecognition(onPrediction, undefined, IN_SCOPE_SOURCE_LABEL_SET);
+  const [selectedMode, setSelectedMode] = useState<RecognitionMode>(DEFAULT_MODE);
+  // Read inside the camera-start closure, which captures its initial value.
+  const selectedModeRef = useRef(selectedMode);
+  selectedModeRef.current = selectedMode;
+  const [modelLabels, setModelLabels] = useState<readonly string[]>([]);
+
+  /**
+   * The mode decides which classes may be predicted, as a restriction on the
+   * argmax rather than a filter afterwards — discarding out-of-scope
+   * predictions leaves the panel blank whenever the model prefers a class the
+   * mode excludes.
+   *
+   * /evaluation deliberately passes nothing and keeps all 131 for the thesis
+   * numbers; the narrowing lives here, in the consumer.
+   */
+  const allowedLabels = useMemo(
+    () => (modelLabels.length ? allowedLabelsForMode(selectedMode, modelLabels) : IN_SCOPE_SOURCE_LABEL_SET),
+    [selectedMode, modelLabels],
+  );
+  const recognition = useRecognition(onPrediction, undefined, allowedLabels);
   const { appendFrame, resetRecognition, clearSequence } = recognition;
 
-  // Belt and braces only — the restriction above already guarantees an
-  // in-scope label, so this never drops anything in practice. It stays as an
-  // assertion that the two stay in step, not as the mechanism: making it the
-  // mechanism is what blanked the panel.
-  const rawPrediction = recognition.frozenPrediction ?? (recognition.state.stage === "predicting" ? recognition.state.result : null);
-  const currentPrediction = rawPrediction && isInScope(rawPrediction.label) ? rawPrediction : null;
+  // No post-filter. The mode restricts the argmax, so whatever arrives is
+  // already allowed — and a filter here would now be wrong as well as
+  // redundant, since Conversation mode legitimately predicts phrases.
+  const currentPrediction = recognition.frozenPrediction ?? (recognition.state.stage === "predicting" ? recognition.state.result : null);
 
   useEffect(() => {
     setTelemetrySessionToken(new CommunicationProfileManager().getToken());
   }, []);
+
+  // Conversation mode's allowed set is "everything that is not a letter or a
+  // number", which cannot be written down without the model's own vocabulary.
+  //
+  // Polled rather than hung off a stage transition: the labels land when the
+  // model resolves, which does not line up with any single render, and keying
+  // this to one transition left the phrase list permanently empty.
+  useEffect(() => {
+    if (modelLabels.length) return;
+    const tryLoad = () => {
+      const labels = getModelLabels();
+      if (labels.length) { setModelLabels(labels); return true; }
+      return false;
+    };
+    if (tryLoad()) return;
+    const timer = setInterval(() => { if (tryLoad()) clearInterval(timer); }, 400);
+    return () => clearInterval(timer);
+  }, [modelLabels.length]);
+
+  /** The phrases Conversation mode can actually produce, for the UI list. */
+  const supportedPhrases = useMemo(
+    () => (modelLabels.length ? phraseLabelsFrom(modelLabels).map(translateLabel).sort() : []),
+    [modelLabels],
+  );
 
   const speak = useCallback((text: string) => {
     if (!speakEnabled) return;
@@ -233,8 +276,19 @@ export function SignToTextInterface() {
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
       const sensitivity = settingsRef.current.sensitivity;
-      const handLandmarker = await createHandLandmarker(handLandmarkerOptionsFor(sensitivity));
+      // numHands is compiled into the detector, so the running camera keeps
+      // whatever it started with — same as sensitivity. Alphabet Practice
+      // tracks one hand for speed; every other mode tracks two, because
+      // phrases need the second and because one-hand tracking flips between
+      // hands when both are in frame, which reads as recognition failing.
+      const mode = selectedModeRef.current;
+      const handLandmarker = await createHandLandmarker({
+        ...handLandmarkerOptionsFor(sensitivity),
+        numHands: handsForMode(mode),
+      });
       activeSensitivityRef.current = sensitivity;
+      activeModeRef.current = mode;
+      setActiveMode(mode);
       setActiveSensitivity(sensitivity);
       if (cameraRunIdRef.current !== runId) {
         handLandmarker.close();
@@ -567,8 +621,16 @@ export function SignToTextInterface() {
                 <CameraSettingsPanel
                   settings={settings}
                   onChange={(key, value) => setSettings((prev) => ({ ...prev, [key]: value }))}
-                  mode={recognition.mode}
-                  onModeChange={recognition.setMode}
+                  mode={selectedMode}
+                  onModeChange={(m) => { setSelectedMode(m); recognition.setMode(m); }}
+                  supportedPhrases={supportedPhrases}
+                  // The mode sets numHands, which the detector bakes in at
+                  // creation, so switching it needs the same restart notice
+                  // sensitivity already gets.
+                  modePending={
+                    activeMode !== null
+                    && handsForMode(activeMode) !== handsForMode(selectedMode)
+                  }
                   sensitivityPending={activeSensitivity !== null && activeSensitivity !== settings.sensitivity}
                   cameraActive={status === "active" || status === "no-hand"}
                   onClose={() => setShowSettings(false)}

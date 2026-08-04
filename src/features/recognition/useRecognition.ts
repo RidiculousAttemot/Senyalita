@@ -65,7 +65,7 @@ export type OnPredictionCallback = (
  *
  * Restricting here rather than discarding downstream is deliberate: a consumer
  * that drops out-of-scope predictions shows nothing whenever the model prefers
- * a class it does not want, which with 105 phrase classes against 36 in scope
+ * a class it does not want, which with 95 phrase classes against 36 in scope
  * is most noisy frames.
  */
 export const useRecognition = (

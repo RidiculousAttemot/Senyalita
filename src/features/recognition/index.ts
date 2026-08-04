@@ -19,7 +19,7 @@ export { translateLabel, translateResult, classifyLabel, getRecognitionCategory 
 
 export { normalizeLandmarks } from "./normalize";
 
-export { loadModel, getCachedResult, infer } from "./model";
+export { loadModel, getCachedResult, getModelLabels, infer } from "./model";
 export type { InferenceResult, ModelLoadResult } from "./model";
 
 export { MotionDetector } from "./motionDetection";
@@ -35,6 +35,7 @@ export { RealtimeMetrics } from "./RealtimeMetrics";
 
 export { ModeManager, MODE_CONFIGS, DEFAULT_MODE } from "./recognitionModes";
 export type { RecognitionMode } from "./recognitionModes";
+export { allowedLabelsForMode, handsForMode, phraseLabelsFrom } from "./recognitionModes";
 
 export { PredictionExplainer } from "./explainer";
 export type { ExplanationResult, PredictionExplanationInput } from "./explainer";

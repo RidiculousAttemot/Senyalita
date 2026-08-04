@@ -105,7 +105,7 @@ const loadModel = async (): Promise<boolean> => {
  * This restricts rather than filters, and the difference is the whole point.
  * Dropping a prediction whose argmax falls outside the allowed set means the
  * UI shows nothing at all whenever the model prefers an out-of-scope class —
- * and with 105 phrase classes against 36 in scope, that is most noisy frames.
+ * and with 95 phrase classes against 36 in scope, that is most noisy frames.
  * Constraining the argmax always yields the best allowed answer instead.
  */
 const infer = async (

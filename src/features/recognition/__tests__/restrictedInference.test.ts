@@ -10,7 +10,7 @@ import { IN_SCOPE_SOURCE_LABEL_SET } from "@/features/sign-to-text/inScopeLabels
  * Restricting the argmax must always yield an in-scope answer.
  *
  * The first version of the letters-and-numbers scope filtered AFTER
- * prediction: if the model's top class was one of the 105 phrases, the
+ * prediction: if the model's top class was one of the 95 phrases, the
  * prediction was discarded and the UI showed nothing. Reported as "it doesn't
  * detect anything".
  *

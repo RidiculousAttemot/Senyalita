@@ -21,6 +21,10 @@ interface CameraSettingsPanelProps {
   onModeChange: (mode: RecognitionMode) => void;
   /** Sensitivity is baked into the MediaPipe detector when the camera starts. */
   sensitivityPending: boolean;
+  /** True when the chosen mode needs a different hand count than the running one. */
+  modePending?: boolean;
+  /** Phrases Conversation mode can produce, shown so the choice is informed. */
+  supportedPhrases?: readonly string[];
   cameraActive: boolean;
   onClose: () => void;
 }
@@ -29,7 +33,7 @@ const MODE_ORDER: RecognitionMode[] = ["auto", "alphabet-practice", "conversatio
 const SENSITIVITY_ORDER: DetectionSensitivity[] = ["relaxed", "balanced", "strict"];
 
 export function CameraSettingsPanel({
-  settings, onChange, mode, onModeChange, sensitivityPending, cameraActive, onClose,
+  settings, onChange, mode, onModeChange, sensitivityPending, modePending, supportedPhrases, cameraActive, onClose,
 }: CameraSettingsPanelProps) {
   return (
     <motion.div
@@ -107,6 +111,51 @@ export function CameraSettingsPanel({
             </button>
           ))}
         </div>
+
+        {modePending && cameraActive && (
+          <p className="mt-2 rounded-md bg-amber-400/12 px-2.5 py-1.5 text-[10px] leading-snug text-amber-200/90">
+            Restart the camera to apply — this mode tracks a different number of hands,
+            which is fixed when the detector starts.
+          </p>
+        )}
+
+        {/*
+          The supported set, shown only where it is not obvious. Letters are
+          self-evident (a-z); the 95 phrase classes are not, and a user who
+          cannot see them is guessing at what the mode will recognise.
+        */}
+        {mode === "conversation" && supportedPhrases && supportedPhrases.length > 0 && (
+          <div className="mt-3">
+            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
+              Supported phrases ({supportedPhrases.length})
+            </p>
+            <div className="max-h-40 overflow-y-auto rounded-lg bg-black/25 p-2">
+              <ul className="flex flex-wrap gap-1">
+                {supportedPhrases.map((phrase) => (
+                  <li
+                    key={phrase}
+                    className="rounded bg-white/8 px-1.5 py-0.5 text-[10px] font-medium text-white/75"
+                  >
+                    {phrase}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+
+        {mode === "alphabet-practice" && (
+          <p className="mt-2 text-[10px] leading-snug text-white/50">
+            Letters a–z only. Tracks one hand, which is faster on phones —
+            fingerspelling is one-handed.
+          </p>
+        )}
+
+        {mode === "auto" && (
+          <p className="mt-2 text-[10px] leading-snug text-white/50">
+            Letters a–z and the numbers 1–10. Tracks both hands.
+          </p>
+        )}
       </div>
 
       <div className="border-t border-white/10 px-4 py-3">

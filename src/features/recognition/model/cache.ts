@@ -38,3 +38,14 @@ export function getCachedResult(): ModelLoadResult {
     classes: cache.status === "ready" ? cache.labels.length : undefined,
   };
 }
+
+/**
+ * The loaded model's label list, or empty until it is ready.
+ *
+ * Consumers need this to build a mode's allowed set — Conversation mode is
+ * "everything that is not a letter or a number", which cannot be written down
+ * without knowing what the model actually exposes.
+ */
+export function getModelLabels(): readonly string[] {
+  return cache.labels;
+}
