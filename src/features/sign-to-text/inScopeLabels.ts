@@ -30,6 +30,18 @@ export const IN_SCOPE_SOURCE_LABELS: readonly string[] = [
 ];
 
 /**
+ * The same list as a Set, for `useRecognition`'s `allowedLabels`.
+ *
+ * This is where the narrowing actually happens: the model's argmax is taken
+ * over these classes only, so an in-scope answer always exists. The first
+ * version of this feature filtered *after* prediction instead, which meant the
+ * UI went blank whenever the model's top pick was one of the 105 phrase
+ * classes — most noisy frames — and looked like recognition had stopped
+ * working entirely.
+ */
+export const IN_SCOPE_SOURCE_LABEL_SET: ReadonlySet<string> = new Set(IN_SCOPE_SOURCE_LABELS);
+
+/**
  * What actually arrives at the UI.
  *
  * Predictions are display-mapped before they leave the recognition layer

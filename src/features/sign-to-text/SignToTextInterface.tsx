@@ -19,7 +19,7 @@ import {
   getActiveDelegate,
 } from "./handLandmarkerConfig";
 import { CameraSettingsPanel, type CameraSettings } from "./CameraSettingsPanel";
-import { isInScope, isNumberSign } from "./inScopeLabels";
+import { isInScope, isNumberSign, IN_SCOPE_SOURCE_LABEL_SET } from "./inScopeLabels";
 import { SuggestionPanel, useLetterSuggestions } from "@/features/suggestions";
 
 /** Amber reads clearly against skin tones, dim rooms and bright walls alike. */
@@ -121,12 +121,17 @@ export function SignToTextInterface() {
   const [telemetrySessionToken, setTelemetrySessionToken] = useState<string | null>(null);
 
   const onPrediction = useCallback(() => {}, []);
-  const recognition = useRecognition(onPrediction);
+  // Restrict the model to the 36 in-scope classes rather than dropping
+  // predictions afterwards. Dropping meant the panel went blank whenever the
+  // model's top pick was one of the 105 phrase classes — which on noisy live
+  // frames is most of the time, and read as "it detects nothing".
+  const recognition = useRecognition(onPrediction, undefined, IN_SCOPE_SOURCE_LABEL_SET);
   const { appendFrame, resetRecognition, clearSequence } = recognition;
 
-  // Sign-to-Text acts on 36 of the model's 131 classes — a-z and the ten
-  // number signs. The recognition layer still sees all of them; this is the
-  // single point where the app narrows. See inScopeLabels.ts to revert.
+  // Belt and braces only — the restriction above already guarantees an
+  // in-scope label, so this never drops anything in practice. It stays as an
+  // assertion that the two stay in step, not as the mechanism: making it the
+  // mechanism is what blanked the panel.
   const rawPrediction = recognition.frozenPrediction ?? (recognition.state.stage === "predicting" ? recognition.state.result : null);
   const currentPrediction = rawPrediction && isInScope(rawPrediction.label) ? rawPrediction : null;
 

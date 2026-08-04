@@ -59,10 +59,23 @@ export type OnPredictionCallback = (
   inferenceTimeMs: number
 ) => void;
 
+/**
+ * @param allowedLabels Restricts which classes can be predicted, by raw model
+ * label. Omit it — as /evaluation does — and all 131 compete.
+ *
+ * Restricting here rather than discarding downstream is deliberate: a consumer
+ * that drops out-of-scope predictions shows nothing whenever the model prefers
+ * a class it does not want, which with 105 phrase classes against 36 in scope
+ * is most noisy frames.
+ */
 export const useRecognition = (
   onPrediction?: OnPredictionCallback,
-  fastMode?: boolean
+  fastMode?: boolean,
+  allowedLabels?: ReadonlySet<string>,
 ): RecognitionControls => {
+  // Read inside the interval callback, which closes over its initial value.
+  const allowedLabelsRef = useRef(allowedLabels);
+  allowedLabelsRef.current = allowedLabels;
   const [state, setState] = useState<RecognitionState>({
     stage: "loading-model"
   });
@@ -158,7 +171,7 @@ export const useRecognition = (
           const inferStart = performance.now();
 
           try {
-            const temporalResult = await infer(sample);
+            const temporalResult = await infer(sample, allowedLabelsRef.current);
             if (!temporalResult || !mounted) return;
             const elapsed = performance.now() - inferStart;
 

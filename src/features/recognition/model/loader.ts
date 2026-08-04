@@ -97,7 +97,21 @@ const loadModel = async (): Promise<boolean> => {
   return loadPromise;
 };
 
-const infer = async (features: Float32Array): Promise<InferenceResult | null> => {
+/**
+ * @param allowedLabels When given, the argmax and topK are taken over only
+ * these classes. Omit it and every class competes, which is what /evaluation
+ * needs to keep scoring all 131.
+ *
+ * This restricts rather than filters, and the difference is the whole point.
+ * Dropping a prediction whose argmax falls outside the allowed set means the
+ * UI shows nothing at all whenever the model prefers an out-of-scope class —
+ * and with 105 phrase classes against 36 in scope, that is most noisy frames.
+ * Constraining the argmax always yields the best allowed answer instead.
+ */
+const infer = async (
+  features: Float32Array,
+  allowedLabels?: ReadonlySet<string>,
+): Promise<InferenceResult | null> => {
   const cache = getCache();
   if (cache.status !== "ready" || !cache.model) {
     return null;
@@ -110,13 +124,27 @@ const infer = async (features: Float32Array): Promise<InferenceResult | null> =>
     const probabilities = await output.data();
 
     const probsArray = Array.from(probabilities);
-    let labelId = 0;
-    for (let i = 1; i < probsArray.length; i++) {
-      if (probsArray[i] > probsArray[labelId]) labelId = i;
+    const isAllowed = (index: number) =>
+      !allowedLabels || allowedLabels.has(cache.labels[index] ?? "");
+
+    let labelId = -1;
+    for (let i = 0; i < probsArray.length; i++) {
+      if (!isAllowed(i)) continue;
+      if (labelId < 0 || probsArray[i] > probsArray[labelId]) labelId = i;
+    }
+    // An allowed set naming nothing the model knows would leave no candidate;
+    // fall back to the unrestricted argmax rather than return nothing.
+    if (labelId < 0) {
+      labelId = 0;
+      for (let i = 1; i < probsArray.length; i++) {
+        if (probsArray[i] > probsArray[labelId]) labelId = i;
+      }
     }
     const confidence = probsArray[labelId];
 
-    const indexed = probsArray.map((p, i) => ({ index: i, probability: p }));
+    const indexed = probsArray
+      .map((p, i) => ({ index: i, probability: p }))
+      .filter((item) => isAllowed(item.index));
     indexed.sort((a, b) => b.probability - a.probability);
     const topK = indexed.slice(0, 5).map((item) => ({
       label: cache.labels[item.index] ?? "?",
