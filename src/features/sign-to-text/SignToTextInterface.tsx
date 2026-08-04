@@ -16,7 +16,6 @@ import {
   CAPTURE_INTERVAL_MS,
   HAND_CONNECTIONS,
   createHandLandmarker,
-  createDetectionSurface,
   getActiveDelegate,
 } from "./handLandmarkerConfig";
 import { CameraSettingsPanel, type CameraSettings } from "./CameraSettingsPanel";
@@ -37,6 +36,23 @@ interface HandOverlay {
 // from the path it is measuring.
 /** Hand-label badges only need to keep up with the eye, not the camera. */
 const OVERLAY_INTERVAL_MS = 100;
+
+/**
+ * Idle time left after each detect, as a fraction of what it cost.
+ *
+ * 1.0 means "rest as long as you just worked" — a 50% duty cycle. Measured on
+ * /translate against a software-rendered GPU, 30s samples:
+ *
+ *   ratio  FPS  main-thread p95
+ *   off     4     316ms   unusable — touch and scroll visibly stick
+ *   0.5     2     291ms   no throughput gained, still janky
+ *   1.0     2      19ms   responsive
+ *
+ * 0.5 was the obvious compromise and measured strictly worse than 1.0: the
+ * same frame rate for fifteen times the input delay. Detection is coarse
+ * enough that a half-gap still lets passes land back-to-back.
+ */
+const DETECT_IDLE_RATIO = 1;
 
 type Status = "waiting" | "starting" | "active" | "no-hand" | "error";
 
@@ -223,22 +239,40 @@ export function SignToTextInterface() {
       // uses ffmpeg fps=30). A 60fps camera would otherwise pack twice the
       // frames into the model's 120-frame window and halve its real duration.
       let lastAppendTime = -Infinity;
+      // Duty-cycle budget for the synchronous detect call — see drawLandmarks.
+      let lastDetectEnd = -Infinity;
+      let lastDetectCost = 0;
       let lastOverlayTime = -Infinity;
-      const detectionSurface = createDetectionSurface();
       const fpsTracker = createFrameRateTracker(performance.now());
       const captureTracker = createFrameRateTracker(performance.now());
       const drawLandmarks = () => {
         if (cameraRunIdRef.current !== runId || !videoRef.current || videoRef.current.paused || videoRef.current.ended) return;
         const video = videoRef.current;
+        // Leave the main thread as much idle time as the last detection
+        // consumed, so the browser can paint, scroll and handle touch between
+        // passes.
+        //
+        // detectForVideo is synchronous and blocks. On a device where it costs
+        // ~600ms, running it on every available frame pins the main thread at
+        // 100% — the page stops responding to touch and the whole UI judders,
+        // which is the reported lag. No amount of shaving closes 600ms down to
+        // the 33ms that 30fps needs, so the choice is not "fast or slow" but
+        // "slow and responsive, or slow and frozen".
+        //
+        // Self-scaling: a laptop at ~15ms yields a 15ms gap, well inside the
+        // 33ms frame budget, so nothing changes there. Only devices that are
+        // actually struggling back off.
+        const sinceDetect = performance.now() - lastDetectEnd;
+        if (sinceDetect < lastDetectCost * DETECT_IDLE_RATIO) {
+          animationFrameRef.current = window.requestAnimationFrame(drawLandmarks);
+          return;
+        }
         if (video.currentTime !== lastVideoTime) {
           lastVideoTime = video.currentTime;
           const frameTimestamp = performance.now();
-          // Detect on a downscaled copy. `width: { ideal: 640 }` is a hint the
-          // camera may ignore, and a phone handing back 1080p made each detect
-          // cost 500-1000ms — 1-2 FPS against the 30 the model needs. The
-          // overlay below still draws at full video resolution; only detection
-          // is downscaled, and landmarks are normalised so it cannot tell.
-          const results = handLandmarker.detectForVideo(detectionSurface(video), frameTimestamp);
+          const results = handLandmarker.detectForVideo(video, frameTimestamp);
+          lastDetectEnd = performance.now();
+          lastDetectCost = lastDetectEnd - frameTimestamp;
           // Cost of detection alone, separated from camera delivery rate.
           // Throttled to the overlay cadence so measuring cannot itself cost
           // a re-render per frame.
