@@ -740,7 +740,14 @@ export function SignToTextInterface() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-senyalita-border/70 bg-white/60 px-5 py-4">
             <div className="min-w-0">
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-senyalita-muted">Recognition model</p>
-              <p className="mt-1 truncate text-sm font-semibold text-senyalita-dark">
+              {/* data-prediction carries the bare label so a test can read what
+                  the model said without parsing the human-facing string, which
+                  also holds a confidence percentage and localised copy. */}
+              <p
+                className="mt-1 truncate text-sm font-semibold text-senyalita-dark"
+                data-testid="recognition-readout"
+                data-prediction={currentPrediction ? translateLabel(currentPrediction.label) : ""}
+              >
                 {recognition.state.stage === "loading-model" ? "Loading on-device model"
                   : recognition.state.stage === "error" ? recognition.state.message
                   : currentPrediction ? `${translateLabel(currentPrediction.label)} · ${Math.round(currentPrediction.confidence * 100)}%`
@@ -804,6 +811,7 @@ export function SignToTextInterface() {
             <Textarea
               value={outputText}
               readOnly
+              data-testid="transcript"
               aria-live="polite"
               className="min-h-[80px] resize-none rounded-2xl border border-senyalita-border bg-white px-4 py-3.5 text-[17px] leading-relaxed text-senyalita-dark shadow-none placeholder:text-slate-400 focus-visible:ring-0"
               placeholder="Detected signs appear here when you add them."

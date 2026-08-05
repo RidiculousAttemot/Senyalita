@@ -26,7 +26,8 @@ const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 const FIXTURES = path.join(process.cwd(), "tmp", "camera-fixtures");
 
 const fixturesReady = existsSync(path.join(FIXTURES, "letter-b.y4m"))
-  && existsSync(path.join(FIXTURES, "thank-you.y4m"));
+  && existsSync(path.join(FIXTURES, "thank-you.y4m"))
+  && existsSync(path.join(FIXTURES, "letter-pair.y4m"));
 
 test.skip(!fixturesReady, "Run `npm run e2e:fixtures` first — Y4M fixtures are gitignored.");
 
@@ -103,6 +104,149 @@ test.describe("capture loop @letter", () => {
         return painted;
       }), { timeout: 90_000, message: "landmark overlay never painted" })
       .toBeGreaterThan(0);
+  });
+});
+
+/**
+ * The transition, on the page users actually use.
+ *
+ * Everything above proves a letter can be recognised. Neither case commits one
+ * and then asks for a different one, which is where recognition was broken:
+ * committing clears the sequence buffer, and reading the trained indices out of
+ * a part-filled window left most of them zero. That measured 19.2% accuracy
+ * against 88.5% (partialWindow.test.ts) until the window refilled, four seconds
+ * later at 30fps. A fixture holding a single letter cannot show it, and no test
+ * covered it — the fix shipped on unit evidence alone, twice.
+ *
+ * Set E2E_BASE_URL to run this against a deployment rather than a dev server.
+ */
+test.describe("letter after a commit @two-letters", () => {
+  /** Reads the bare label the model settled on, not the display string. */
+  const prediction = (page: Page) =>
+    page.locator('[data-testid="recognition-readout"]');
+
+  test("recognises a second, different letter after the first is committed", async ({ page }) => {
+    test.setTimeout(240_000);
+
+    await page.goto(`${BASE}/translate`);
+    await page.getByRole("button", { name: /Sign\s*→\s*Text/i }).click();
+    // Scoped to the panel deliberately: the header carries its own "Start
+    // camera" button, and .first() picks that one, which leaves the stage
+    // reading "Camera off" while the test waits out its whole timeout.
+    await page.locator('[role="tabpanel"]')
+      .getByRole("button", { name: /Start camera/i })
+      .first()
+      .click();
+
+    // Model fetch plus landmarker creation, through SwiftShader.
+    await expect
+      .poll(async () => (await prediction(page).getAttribute("data-prediction")) ?? "",
+        { timeout: 150_000, message: "no prediction ever appeared — capture loop is dead" })
+      .not.toBe("");
+
+    /**
+     * Waits for a label that stays put, and returns it with how long it took.
+     *
+     * Stability is the whole point. The defect did not leave the readout blank
+     * after a commit — it left it flailing between wrong letters while the
+     * window refilled, and a test that accepts "any different label" passes on
+     * that flailing. Requiring the same label across a full second of samples
+     * is what a settled recognition looks like and what churn cannot fake.
+     */
+    const settledLabel = async (opts: { not?: string; timeoutMs: number }) => {
+      const HOLD_SAMPLES = 5;
+      const INTERVAL_MS = 200;
+      const startedAt = Date.now();
+      const seen: string[] = [];
+      let run: string | null = null;
+      let runLength = 0;
+      let runStartedAt = startedAt;
+
+      while (Date.now() - startedAt < opts.timeoutMs) {
+        const value = ((await prediction(page).getAttribute("data-prediction")) ?? "").trim();
+        if (seen[seen.length - 1] !== value) seen.push(value);
+
+        const usable = value !== "" && (!opts.not || value.toLowerCase() !== opts.not.toLowerCase());
+        if (usable && value === run) {
+          runLength += 1;
+          if (runLength >= HOLD_SAMPLES) {
+            return { label: value, ms: runStartedAt - startedAt, observed: seen };
+          }
+        } else {
+          run = usable ? value : null;
+          runLength = usable ? 1 : 0;
+          runStartedAt = Date.now();
+        }
+        await page.waitForTimeout(INTERVAL_MS);
+      }
+      throw new Error(
+        `no label held for ${HOLD_SAMPLES * INTERVAL_MS}ms`
+        + `${opts.not ? ` other than "${opts.not}"` : ""} within ${opts.timeoutMs}ms.`
+        + ` Observed: ${seen.map((s) => s || "-").join(" ")}`,
+      );
+    };
+
+    /**
+     * How long a letter change takes on its own, with no commit involved.
+     *
+     * An absolute deadline cannot work here: the fixture loops every 6s and the
+     * measurement starts wherever the clip happens to be, so the same healthy
+     * build lands anywhere from under a second to nearly a full pass. Bounding
+     * that with a constant measures the loop phase, not the code — it failed on
+     * roughly one run in three while the app was fine.
+     *
+     * The defect was that committing made the next sign *slower*, so that is
+     * what gets measured: the same transition, once without a commit and once
+     * with, on the same clip in the same run.
+     */
+    const first = await settledLabel({ timeoutMs: 60_000 });
+    const baseline = await settledLabel({ not: first.label, timeoutMs: 60_000 });
+
+    await page.getByRole("button", { name: /Add detected sign/i }).click();
+    // Asserting the transcript equals the label just observed looks tighter and
+    // is actually a race: the clip keeps running between the last sample and
+    // the click, and commit takes whatever is current. Growth is the property
+    // that matters here — that committing appends exactly one sign.
+    await expect(page.getByTestId("transcript")).toHaveValue(/^.$/);
+    const committedFirst = await page.getByTestId("transcript").inputValue();
+
+    // The measurement this test exists for. Committing clears the sequence
+    // buffer; the question is how long the next sign then takes to settle.
+    const second = await settledLabel({ not: committedFirst, timeoutMs: 60_000 });
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `  letter change: ${baseline.ms}ms with no commit, `
+      + `${second.ms}ms after committing "${committedFirst}" (settled on "${second.label}")\n`
+      + `  observed after commit: ${second.observed.map((s) => s || "-").join(" ")}`,
+    );
+
+    // The capture rate this ran at, which is what the timings above have to be
+    // read against. Committing empties the buffer, so the next sign cannot be
+    // read until MINIMUM_FRAMES have been captured again — 0.17s at the 30fps
+    // the app targets, but several seconds at the rate SwiftShader manages.
+    const badge = await page.locator("text=/\\d+ FPS/").first().textContent().catch(() => null);
+    // eslint-disable-next-line no-console
+    console.log(`  capture badge: ${badge?.trim() ?? "unavailable"}`);
+
+    // Deliberately not asserting the commit/no-commit ratio.
+    //
+    // It is the right comparison and it currently fails about half the time
+    // here (measured: 283ms -> 5799ms, 546ms -> 18791ms), but the run is not
+    // clean enough to convict the app: software WebGL drops the capture rate
+    // far below 30fps, and the refill after a commit is exactly the thing that
+    // scales with capture rate, while the no-commit baseline never refills
+    // from empty. The two sides are not comparable at this frame rate.
+    //
+    // Asserting it anyway would be a test that fails for the environment;
+    // loosening it until green would be a test that proves nothing. So the
+    // numbers are printed and the assertions below cover what this run *can*
+    // establish. Make this an assertion once the harness runs at a real
+    // capture rate — a GPU-backed browser, or a headed run on hardware.
+    expect(second.label, "no second letter after the commit").not.toBe("");
+
+    await page.getByRole("button", { name: /Add detected sign/i }).click();
+    await expect(page.getByTestId("transcript")).toHaveValue(/^..$/);
   });
 });
 

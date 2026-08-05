@@ -149,6 +149,20 @@ describe("partial window", () => {
       }
     }
 
+    // Which letters the served model actually gets right on a full window.
+    // Recorded because it is the list any camera fixture has to be chosen
+    // from: a clip of a letter the model misreads makes an e2e test look like
+    // a pipeline failure when it is a known classification limit.
+    const wrong: string[] = [];
+    for (const [label, frame] of letters) {
+      const buffer = new SequenceBuffer();
+      const [left, right] = toHands(frame);
+      for (let n = 0; n < SEQUENCE_LENGTH; n += 1) buffer.append(left, right);
+      const p = predict(buffer.sampleTemporal()!);
+      if (p.label !== label) wrong.push(`${label}->${p.label}`);
+    }
+    console.log(`\n  misread at a full window: ${wrong.length ? wrong.join("  ") : "none"}`);
+
     const total = letters.size;
     const pct = (n: number) => `${((n / total) * 100).toFixed(1)}%`;
     console.log(`\n  ${total} letters, accuracy by buffer fill\n`);

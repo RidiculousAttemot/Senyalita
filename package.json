@@ -24,7 +24,7 @@
     "export:unified-tfjs": "node scripts/export-unified-bilstm-tfjs.mjs",
     "knip": "knip",
     "e2e:fixtures": "node scripts/build-camera-fixtures.mjs",
-    "e2e:camera": "playwright test --project=camera-letter --project=camera-gesture"
+    "e2e:camera": "playwright test --project=camera-letter --project=camera-two-letters --project=camera-gesture"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.35",

@@ -55,31 +55,89 @@ const targets = [
     source: firstFileIn(path.join("datasets", "raw", "fsl_105", "clips", "7"), [".mov", ".mp4"]),
     describe: "THANK YOU (fsl_105 label id 7)",
   },
+  {
+    /**
+     * Two different letters back to back, for the transition the single-letter
+     * fixture cannot reach: commit one sign, then recognise a different one.
+     *
+     * That path is where recognition actually failed. Committing clears the
+     * sequence buffer, and reading the trained indices out of a part-filled
+     * window used to leave most of them zero — 19.2% accuracy against 88.5%
+     * (partialWindow.test.ts), for the four seconds it took the window to
+     * refill. A fixture holding one letter can never show it.
+     *
+     * Chromium loops the file, so the second letter always follows the first
+     * with no gap.
+     *
+     * The pair is chosen for stability of classification, not for the letters
+     * themselves. These are raw phone recordings, not processed dataset
+     * samples: the "a" clip tried first reads as e/f/c and never holds one
+     * label long enough to commit, which makes the test look like a pipeline
+     * failure. The model itself is fine on canonical "a" — it misreads only
+     * f, k and u on the v4 test split (partialWindow.test.ts).
+     */
+    name: "letter-pair.y4m",
+    fit: "pad",
+    sources: [
+      firstFileIn(path.join("datasets", "raw", "user_videos", "b"), [".mp4", ".mov"]),
+      firstFileIn(path.join("datasets", "raw", "user_videos", "l"), [".mp4", ".mov"]),
+    ],
+    describe: "letter b then letter l (user_videos/b + /l)",
+  },
 ];
 
 mkdirSync(OUT_DIR, { recursive: true });
 
+/**
+ * Two ways to reach 640x480, and the difference is not cosmetic.
+ *
+ * "crop" fills the frame by scaling up and cutting the overflow away. The
+ * capture footage is portrait, so a landscape crop of it discards the top and
+ * bottom — including, for some signs, part of the hand. A letter whose
+ * distinguishing feature is the thumb can arrive looking like a different
+ * letter, and the test then reports a model error that is really a fixture
+ * error.
+ *
+ * "pad" scales the whole frame down to fit and letterboxes the remainder, so
+ * nothing is discarded.
+ */
+const fitFilter = (fit) => (fit === "pad"
+  ? `scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=decrease,`
+    + `pad=${WIDTH}:${HEIGHT}:(ow-iw)/2:(oh-ih)/2:black,fps=${FPS}`
+  : `scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=increase,`
+    + `crop=${WIDTH}:${HEIGHT},fps=${FPS}`);
+
 let built = 0;
-for (const { name, source, describe } of targets) {
+for (const { name, source, sources, describe, fit } of targets) {
   const out = path.join(OUT_DIR, name);
-  if (!source) {
+  const inputs = sources ?? [source];
+  if (inputs.some((s) => !s)) {
     console.error(`SKIP  ${name} — no source found for ${describe}`);
     continue;
   }
   console.log(`build ${name}  <- ${describe}`);
-  execFileSync(
-    ffmpeg,
-    [
-      "-y",
-      "-i", source,
-      "-t", String(SECONDS),
-      "-vf", `scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=increase,crop=${WIDTH}:${HEIGHT},fps=${FPS}`,
-      "-pix_fmt", "yuv420p",
-      "-an",
-      out,
-    ],
-    { stdio: ["ignore", "ignore", "pipe"] },
-  );
+
+  // One input is a straight transcode; several are trimmed to the same
+  // geometry first and then concatenated, which is the only way the filter
+  // graph will accept clips that differ in size or frame rate.
+  const args = ["-y"];
+  for (const input of inputs) args.push("-i", input);
+  if (inputs.length === 1) {
+    args.push("-t", String(SECONDS), "-vf", fitFilter(fit));
+  } else {
+    const chain = inputs
+      .map((_, i) => `[${i}:v]trim=duration=${SECONDS},setpts=PTS-STARTPTS,${fitFilter(fit)}[v${i}]`)
+      .join(";");
+    const joined = inputs.map((_, i) => `[v${i}]`).join("");
+    args.push(
+      "-filter_complex",
+      `${chain};${joined}concat=n=${inputs.length}:v=1:a=0[out]`,
+      "-map", "[out]",
+    );
+  }
+  args.push("-pix_fmt", "yuv420p", "-an", out);
+
+  execFileSync(ffmpeg, args, { stdio: ["ignore", "ignore", "pipe"] });
   console.log(`      ${(statSync(out).size / 1e6).toFixed(1)}MB`);
   built += 1;
 }

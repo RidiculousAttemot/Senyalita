@@ -75,6 +75,29 @@ export default defineConfig({
       },
     },
     {
+      /**
+       * Two letters in one clip, so the test can commit one sign and then
+       * require a different one — the transition the single-letter fixture
+       * cannot reach, and the one that was actually broken.
+       */
+      name: 'camera-two-letters',
+      testMatch: /camera-recognition\.spec\.ts/,
+      grep: /@two-letters/,
+      use: {
+        ...devices['Desktop Chrome'],
+        permissions: ['camera'],
+        launchOptions: {
+          args: [
+            '--use-fake-device-for-media-stream',
+            '--use-fake-ui-for-media-stream',
+            '--enable-unsafe-swiftshader',
+            '--ignore-gpu-blocklist',
+            '--use-file-for-fake-video-capture=tmp/camera-fixtures/letter-pair.y4m',
+          ],
+        },
+      },
+    },
+    {
       name: 'camera-gesture',
       testMatch: /camera-recognition\.spec\.ts/,
       grep: /@gesture/,
