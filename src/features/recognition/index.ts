@@ -35,7 +35,9 @@ export { RealtimeMetrics } from "./RealtimeMetrics";
 
 export { ModeManager, MODE_CONFIGS, DEFAULT_MODE } from "./recognitionModes";
 export type { RecognitionMode } from "./recognitionModes";
-export { allowedLabelsForMode, handsForMode, phraseLabelsFrom } from "./recognitionModes";
+export { allowedLabelsForMode, handsForMode, MODE_ORDER } from "./recognitionModes";
+export { partitionLabels, assertPartition, numberDisplay } from "./labelPartition";
+export type { LabelPartition } from "./labelPartition";
 
 export { PredictionExplainer } from "./explainer";
 export type { ExplanationResult, PredictionExplanationInput } from "./explainer";

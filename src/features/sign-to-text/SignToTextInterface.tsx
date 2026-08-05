@@ -4,7 +4,8 @@ import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   RealtimeMetrics, useRecognition, translateLabel, getModelLabels,
-  allowedLabelsForMode, handsForMode, phraseLabelsFrom, DEFAULT_MODE, type RecognitionMode,
+  allowedLabelsForMode, handsForMode, partitionLabels, assertPartition, numberDisplay,
+  DEFAULT_MODE, type RecognitionMode,
 } from "@/features/recognition";
 import { CommunicationProfileManager } from "@/features/profiles";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,7 +23,7 @@ import {
   getActiveDelegate,
 } from "./handLandmarkerConfig";
 import { CameraSettingsPanel, type CameraSettings } from "./CameraSettingsPanel";
-import { isInScope, isNumberSign, IN_SCOPE_SOURCE_LABEL_SET } from "./inScopeLabels";
+import { isNumberSign } from "./inScopeLabels";
 import { SuggestionPanel, useLetterSuggestions } from "@/features/suggestions";
 
 /** Amber reads clearly against skin tones, dim rooms and bright walls alike. */
@@ -143,15 +144,18 @@ export function SignToTextInterface() {
    * numbers; the narrowing lives here, in the consumer.
    */
   const allowedLabels = useMemo(
-    () => (modelLabels.length ? allowedLabelsForMode(selectedMode, modelLabels) : IN_SCOPE_SOURCE_LABEL_SET),
+    // Undefined until the model reports its labels. No hardcoded fallback:
+    // inference returns null while the model is loading, so there is no window
+    // in which an unrestricted prediction could reach the UI.
+    () => (modelLabels.length ? allowedLabelsForMode(selectedMode, modelLabels) : undefined),
     [selectedMode, modelLabels],
   );
   const recognition = useRecognition(onPrediction, undefined, allowedLabels);
   const { appendFrame, resetRecognition, clearSequence } = recognition;
 
   // No post-filter. The mode restricts the argmax, so whatever arrives is
-  // already allowed — and a filter here would now be wrong as well as
-  // redundant, since Conversation mode legitimately predicts phrases.
+  // already allowed — and a filter here would be wrong as well as redundant,
+  // since Phrase Signs mode legitimately predicts phrases.
   const currentPrediction = recognition.frozenPrediction ?? (recognition.state.stage === "predicting" ? recognition.state.result : null);
 
   useEffect(() => {
@@ -176,11 +180,17 @@ export function SignToTextInterface() {
     return () => clearInterval(timer);
   }, [modelLabels.length]);
 
-  /** The phrases Conversation mode can actually produce, for the UI list. */
-  const supportedPhrases = useMemo(
-    () => (modelLabels.length ? phraseLabelsFrom(modelLabels).map(translateLabel).sort() : []),
-    [modelLabels],
-  );
+  /**
+   * Every list the panel shows, derived from the model rather than written by
+   * hand, and checked to cover the label set exactly. A hardcoded list drifts
+   * silently — that is how the numbers row came to advertise 0-9 against a
+   * model whose number classes are ONE..TEN.
+   */
+  const partition = useMemo(() => {
+    const p = partitionLabels(modelLabels);
+    if (modelLabels.length) assertPartition(modelLabels, p);
+    return p;
+  }, [modelLabels]);
 
   const speak = useCallback((text: string) => {
     if (!speakEnabled) return;
@@ -623,7 +633,6 @@ export function SignToTextInterface() {
                   onChange={(key, value) => setSettings((prev) => ({ ...prev, [key]: value }))}
                   mode={selectedMode}
                   onModeChange={(m) => { setSelectedMode(m); recognition.setMode(m); }}
-                  supportedPhrases={supportedPhrases}
                   // The mode sets numHands, which the detector bakes in at
                   // creation, so switching it needs the same restart notice
                   // sensitivity already gets.
@@ -864,24 +873,58 @@ export function SignToTextInterface() {
           </p>
         </section>
 
-        <section className="rounded-[22px] border border-senyalita-border bg-white/70 p-5 backdrop-blur-xl">
-          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-[0.14em] text-senyalita-muted">Supported characters</h2>
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Letters</p>
-          <div className="mb-4 flex flex-wrap gap-1.5">
-            {"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((letter) => (
-              <span key={letter} className="flex h-6 w-6 items-center justify-center rounded-md border border-senyalita-primary/15 bg-senyalita-primary/[0.07] font-mono text-[11px] font-bold text-senyalita-primary">
-                {letter}
-              </span>
-            ))}
-          </div>
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Numbers</p>
-          <div className="flex flex-wrap gap-1.5">
-            {"0123456789".split("").map((number) => (
-              <span key={number} className="flex h-6 w-6 items-center justify-center rounded-md border border-senyalita-border bg-white font-mono text-[11px] font-bold text-senyalita-muted">
-                {number}
-              </span>
-            ))}
-          </div>
+        {/*
+          Follows the selected mode, and every entry is derived from the
+          model's own labels — see labelPartition.ts. The previous version
+          hardcoded "0123456789", which advertised a ZERO the model has no
+          class for and omitted TEN, which it has.
+
+          Fixed min-height so switching modes does not shift the layout.
+        */}
+        <section className="min-h-[196px] rounded-[22px] border border-senyalita-border bg-white/70 p-5 backdrop-blur-xl">
+          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-[0.14em] text-senyalita-muted">
+            {selectedMode === "phrase-signs"
+              ? `Supported phrase signs (${partition.phrases.length})`
+              : "Supported characters"}
+          </h2>
+
+          {selectedMode === "phrase-signs" ? (
+            <div className="max-h-[148px] overflow-y-auto pr-1">
+              <ul className="flex flex-wrap gap-1.5">
+                {partition.phrases.map((phrase) => (
+                  <li
+                    key={phrase}
+                    className="rounded-md border border-senyalita-border bg-white px-1.5 py-0.5 text-[11px] font-medium text-senyalita-muted"
+                  >
+                    {translateLabel(phrase)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <>
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                Letters ({partition.letters.length})
+              </p>
+              <div className="mb-4 flex flex-wrap gap-1.5">
+                {partition.letters.map((letter) => (
+                  <span key={letter} className="flex h-6 w-6 items-center justify-center rounded-md border border-senyalita-primary/15 bg-senyalita-primary/[0.07] font-mono text-[11px] font-bold uppercase text-senyalita-primary">
+                    {letter}
+                  </span>
+                ))}
+              </div>
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                Numbers ({partition.numbers.length})
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {partition.numbers.map((label) => (
+                  <span key={label} className="flex h-6 min-w-6 items-center justify-center rounded-md border border-senyalita-border bg-white px-1 font-mono text-[11px] font-bold text-senyalita-muted">
+                    {numberDisplay(label)}
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
         </section>
       </motion.aside>
     </div>

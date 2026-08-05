@@ -1,70 +1,64 @@
-export type RecognitionMode = "auto" | "alphabet-practice" | "conversation";
+import { partitionLabels } from "./labelPartition";
+
+/**
+ * Two modes, deliberately — there is no "auto".
+ *
+ * Auto-switching decided the vocabulary on the model's behalf, which makes
+ * behaviour unpredictable exactly when it matters most: a live demo. The mode
+ * is now an explicit choice, and it IS the scope filter — alphabet restricts
+ * predictions to letters and numbers, phrase-signs to the phrase classes.
+ *
+ * features/recognition/ stays capable of the whole label set: omit the
+ * restriction entirely and every class competes, which is what /evaluation
+ * relies on to measure all 131.
+ */
+export type RecognitionMode = "alphabet" | "phrase-signs";
 
 export type ModeConfig = {
   label: string;
   description: string;
-  recommended: boolean;
+  /** Shown as a badge, and paired with an honest caveat below the mode. */
+  beta?: boolean;
+  /** Sets expectations where accuracy is known to be uneven. */
+  caveat?: string;
 };
 
 export const MODE_CONFIGS: Record<RecognitionMode, ModeConfig> = {
-  auto: { label: "Auto", description: "System automatically chooses the best approach", recommended: true },
-  "alphabet-practice": { label: "Alphabet Practice", description: "Optimized for letters and handshapes", recommended: false },
-  conversation: { label: "Conversation Mode", description: "Optimized for phrases and communication gestures", recommended: false },
+  alphabet: {
+    label: "Alphabet",
+    description: "Letters a–z and numbers 1–10",
+  },
+  "phrase-signs": {
+    label: "Phrase Signs",
+    description: "Words and phrases signed as single gestures",
+    beta: true,
+    caveat: "Experimental — accuracy varies by sign.",
+  },
 };
 
-export const DEFAULT_MODE: RecognitionMode = "auto";
+/** Alphabet is the default because it is the path that works. */
+export const DEFAULT_MODE: RecognitionMode = "alphabet";
 
-/** a-z, as the model spells them. */
-export const ALPHABET_LABELS: readonly string[] = "abcdefghijklmnopqrstuvwxyz".split("");
-
-/**
- * The ten number signs, by their model label.
- *
- * They display as digits ("ONE" -> "1"), but every layer below the UI works in
- * source labels. There is no ZERO class — see inScopeLabels.ts.
- */
-export const NUMBER_LABELS: readonly string[] = [
-  "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN",
-];
-
-const CHARACTER_LABELS = new Set<string>([...ALPHABET_LABELS, ...NUMBER_LABELS]);
-
-/**
- * Everything that is neither a letter nor a number: 95 phrase classes.
- *
- * 131 total = 26 letters + 10 numbers + 95 phrases. Worth stating because the
- * numbers are easy to miscount as phrases — they are multi-character labels
- * ("ONE".."TEN") sitting among them.
- */
-export function phraseLabelsFrom(allLabels: readonly string[]): string[] {
-  return allLabels.filter((l) => !CHARACTER_LABELS.has(l));
-}
+export const MODE_ORDER: readonly RecognitionMode[] = ["alphabet", "phrase-signs"];
 
 /**
  * Which classes may be predicted in each mode.
  *
- * This is a restriction on the argmax, not a filter applied afterwards —
- * discarding out-of-scope predictions leaves the UI blank whenever the model
- * prefers a class the mode excludes.
+ * A restriction on the argmax, not a filter applied afterwards — discarding
+ * out-of-scope predictions leaves the UI blank whenever the model prefers a
+ * class the mode excludes, which is most noisy frames.
  *
- * Auto covers letters and numbers because that is what the transcript and the
- * suggestion engine are built around; phrases are opt-in via Conversation,
- * where the supported set is shown so the choice is informed rather than
- * guessed at.
+ * Derived from the model's own labels so it cannot disagree with what the
+ * panel advertises.
  */
 export function allowedLabelsForMode(
   mode: RecognitionMode,
   allLabels: readonly string[],
 ): ReadonlySet<string> {
-  switch (mode) {
-    case "alphabet-practice":
-      return new Set(ALPHABET_LABELS);
-    case "conversation":
-      return new Set(phraseLabelsFrom(allLabels));
-    case "auto":
-    default:
-      return CHARACTER_LABELS;
-  }
+  const { letters, numbers, phrases } = partitionLabels(allLabels);
+  return mode === "phrase-signs"
+    ? new Set(phrases)
+    : new Set([...letters, ...numbers]);
 }
 
 /**
@@ -73,16 +67,13 @@ export function allowedLabelsForMode(
  * MediaPipe runs its landmark model once per tracked hand, so two costs
  * roughly double — measured 342ms vs 631ms per detection on a weak GPU. But
  * tracking one hand while two are in frame makes the detector flip between
- * them, which reads as recognition failing outright whenever both hands are
- * visible.
+ * them, which reads as recognition failing outright.
  *
- * So only Alphabet Practice takes the cheap path: FSL fingerspelling is
- * one-handed, and that mode exists for drilling letters. Auto and Conversation
- * track both, because phrases need the second hand and because a user resting
- * two hands in frame must not break recognition.
+ * Alphabet takes the cheap path because FSL fingerspelling is one-handed.
+ * Phrase signs need the second hand.
  */
 export function handsForMode(mode: RecognitionMode): 1 | 2 {
-  return mode === "alphabet-practice" ? 1 : 2;
+  return mode === "alphabet" ? 1 : 2;
 }
 
 export class ModeManager {
@@ -98,16 +89,5 @@ export class ModeManager {
 
   reset(): void {
     this.mode = DEFAULT_MODE;
-  }
-
-  getWeight(mode: RecognitionMode, category: "alphabet" | "phrase"): number {
-    switch (mode) {
-      case "auto":
-        return 1.0;
-      case "alphabet-practice":
-        return category === "alphabet" ? 1.3 : 0.9;
-      case "conversation":
-        return category === "phrase" ? 1.3 : 0.9;
-    }
   }
 }

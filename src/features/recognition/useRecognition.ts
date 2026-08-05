@@ -8,7 +8,7 @@ import { PredictionSmoother } from "./smoothing";
 import { MotionDetector, MotionState, IDLE_FRAMES } from "./motionDetection";
 import { translateResult, getRecognitionCategory } from "./translation";
 import { loadModel, infer, getCachedResult } from "./model";
-import { ModeManager, type RecognitionMode } from "./recognitionModes";
+import { ModeManager, DEFAULT_MODE, type RecognitionMode } from "./recognitionModes";
 import { RecognitionPriorityManager } from "./priority";
 
 
@@ -91,7 +91,7 @@ export const useRecognition = (
   const [frozenPrediction, setFrozenPrediction] = useState<RealPredictionResult | null>(null);
   const [motionState, setMotionState] = useState<MotionState>("idle");
   const [motionPeak, setMotionPeak] = useState<{ peak: number; threshold: number }>({ peak: 0, threshold: 0 });
-  const [mode, setModeState] = useState<RecognitionMode>("auto");
+  const [mode, setModeState] = useState<RecognitionMode>(DEFAULT_MODE);
   const freezeCounterRef = useRef(0);
   const noMotionCounterRef = useRef(0);
   const [bufferLength, setBufferLength] = useState(0);
@@ -154,7 +154,6 @@ export const useRecognition = (
           // can actually sustain, instead of a rate chosen for a laptop.
           if (inferenceInFlightRef.current) return;
 
-          const currentMode = modeManagerRef.current?.getMode() ?? "auto";
 
           // Use adaptive sampling for early prediction
           const { sample, usedEarly, frameCount } = bufferRef.current.adaptiveSample(EARLY_CONFIDENCE_THRESHOLD);
@@ -420,7 +419,7 @@ export const useRecognition = (
     modeManagerRef.current?.reset();
     setFrozenPrediction(null);
     setMotionState("idle");
-    setModeState("auto");
+    setModeState(DEFAULT_MODE);
     setState({ stage: "predicting", result: null });
     stableLabelRef.current = null;
     stableCountRef.current = 0;

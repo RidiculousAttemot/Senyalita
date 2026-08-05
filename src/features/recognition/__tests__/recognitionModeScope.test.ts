@@ -4,18 +4,19 @@ import { describe, expect, it } from "vitest";
 import {
   allowedLabelsForMode,
   handsForMode,
-  phraseLabelsFrom,
-  ALPHABET_LABELS,
-  NUMBER_LABELS,
+  MODE_CONFIGS,
+  MODE_ORDER,
+  DEFAULT_MODE,
 } from "../recognitionModes";
+import { partitionLabels, assertPartition, numberDisplay } from "../labelPartition";
 
 /**
- * The mode selects both the vocabulary and the hand count.
+ * The mode is the scope filter, and every list it drives comes from the model.
  *
- * Hand count matters as much as the labels: tracking one hand while two are in
- * frame makes MediaPipe flip between them, which reads as recognition failing
- * outright. Only Alphabet Practice takes that trade, because fingerspelling is
- * one-handed and the mode exists for drilling letters.
+ * The supported-characters panel used to hardcode "0123456789" — advertising a
+ * ZERO the model has no class for, and omitting TEN, which it has. Nothing
+ * failed, because nothing compared the list to the model. These tests are that
+ * comparison.
  */
 
 const LABELS: string[] = JSON.parse(
@@ -25,57 +26,99 @@ const LABELS: string[] = JSON.parse(
   ),
 ).labels;
 
-describe("recognition mode scope", () => {
-  it("partitions the model's 131 classes without gaps or overlap", () => {
-    const letters = ALPHABET_LABELS.length;
-    const numbers = NUMBER_LABELS.length;
-    const phrases = phraseLabelsFrom(LABELS).length;
+describe("label partition", () => {
+  it("covers the model's label set exactly", () => {
+    const partition = partitionLabels(LABELS);
+    expect(() => assertPartition(LABELS, partition)).not.toThrow();
 
-    expect(letters).toBe(26);
-    expect(numbers).toBe(10);
-    expect(letters + numbers + phrases).toBe(LABELS.length);
+    const total = partition.letters.length + partition.numbers.length + partition.phrases.length;
+    expect(total).toBe(LABELS.length);
     expect(LABELS.length).toBe(131);
   });
 
-  it("auto covers letters and numbers, the app's character vocabulary", () => {
-    const allowed = allowedLabelsForMode("auto", LABELS);
-    expect(allowed.size).toBe(36);
-    for (const l of ALPHABET_LABELS) expect(allowed.has(l)).toBe(true);
-    for (const n of NUMBER_LABELS) expect(allowed.has(n)).toBe(true);
-    expect(allowed.has("THANK YOU")).toBe(false);
+  it("splits 26 letters, 10 numbers, 95 phrases", () => {
+    const { letters, numbers, phrases } = partitionLabels(LABELS);
+    expect(letters).toHaveLength(26);
+    expect(numbers).toHaveLength(10);
+    expect(phrases).toHaveLength(95);
   });
 
-  it("alphabet practice is letters only", () => {
-    const allowed = allowedLabelsForMode("alphabet-practice", LABELS);
-    expect(allowed.size).toBe(26);
-    expect(allowed.has("a")).toBe(true);
-    expect(allowed.has("ONE")).toBe(false);
-    expect(allowed.has("THANK YOU")).toBe(false);
+  it("has no ZERO, and does have TEN", () => {
+    // The exact bug the hardcoded "0123456789" row shipped.
+    const { numbers } = partitionLabels(LABELS);
+    expect(numbers).toContain("TEN");
+    expect(LABELS).not.toContain("ZERO");
+    expect(LABELS).not.toContain("0");
+    expect(numbers.map(numberDisplay)).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]);
   });
 
-  it("conversation is phrases only, and covers the ones users expect", () => {
-    const allowed = allowedLabelsForMode("conversation", LABELS);
-    expect(allowed.size).toBe(95);
-    for (const p of ["THANK YOU", "GOOD MORNING", "HELLO", "RICE", "BLUE"]) {
-      expect(allowed.has(p), `${p} should be available in conversation`).toBe(true);
+  it("orders numbers by count, not alphabetically", () => {
+    // Sorted as strings, EIGHT would come first and TWO last.
+    const { numbers } = partitionLabels(LABELS);
+    expect(numbers[0]).toBe("ONE");
+    expect(numbers[9]).toBe("TEN");
+  });
+
+  it("throws when a group goes missing rather than failing silently", () => {
+    const partition = partitionLabels(LABELS);
+    expect(() => assertPartition([...LABELS, "NEW CLASS"], partition)).toThrow(/does not cover/);
+    expect(() => assertPartition(LABELS, { ...partition, numbers: [] })).toThrow();
+  });
+
+  it("puts every non-letter, non-number label in phrases", () => {
+    const { phrases } = partitionLabels(LABELS);
+    for (const p of ["THANK YOU", "GOOD MORNING", "HELLO", "RICE", "BLUE", "MONDAY"]) {
+      expect(phrases, `${p} should be a phrase`).toContain(p);
     }
-    // A phrase mode that still admits letters would let a stray "a" beat the
-    // phrase the user is actually signing.
+  });
+});
+
+describe("recognition modes", () => {
+  it("offers exactly two, with no auto", () => {
+    expect(MODE_ORDER).toEqual(["alphabet", "phrase-signs"]);
+    expect(Object.keys(MODE_CONFIGS)).toHaveLength(2);
+    expect(MODE_CONFIGS).not.toHaveProperty("auto");
+  });
+
+  it("defaults to alphabet, the path that works", () => {
+    expect(DEFAULT_MODE).toBe("alphabet");
+  });
+
+  it("marks phrase signs as beta with an honest caveat, and alphabet as neither", () => {
+    expect(MODE_CONFIGS["phrase-signs"].beta).toBe(true);
+    expect(MODE_CONFIGS["phrase-signs"].caveat).toMatch(/experimental/i);
+    expect(MODE_CONFIGS.alphabet.beta).toBeFalsy();
+    expect(MODE_CONFIGS.alphabet.caveat).toBeUndefined();
+  });
+
+  it("alphabet allows the 36 character classes", () => {
+    const allowed = allowedLabelsForMode("alphabet", LABELS);
+    expect(allowed.size).toBe(36);
+    expect(allowed.has("a")).toBe(true);
+    expect(allowed.has("ONE")).toBe(true);
+    expect(allowed.has("TEN")).toBe(true);
+    expect(allowed.has("THANK YOU")).toBe(false);
+  });
+
+  it("phrase signs allows the 95 phrase classes and no characters", () => {
+    const allowed = allowedLabelsForMode("phrase-signs", LABELS);
+    expect(allowed.size).toBe(95);
+    expect(allowed.has("THANK YOU")).toBe(true);
+    // A phrase mode admitting letters would let a stray "a" beat the phrase
+    // actually being signed.
     expect(allowed.has("a")).toBe(false);
     expect(allowed.has("ONE")).toBe(false);
   });
 
-  it("every mode leaves at least one class predictable", () => {
-    // An empty allowed set makes infer fall back to the unrestricted argmax,
-    // which would silently defeat the whole mechanism.
-    for (const mode of ["auto", "alphabet-practice", "conversation"] as const) {
-      expect(allowedLabelsForMode(mode, LABELS).size).toBeGreaterThan(0);
-    }
+  it("the two modes together cover the model exactly once", () => {
+    const alphabet = allowedLabelsForMode("alphabet", LABELS);
+    const phrases = allowedLabelsForMode("phrase-signs", LABELS);
+    expect(alphabet.size + phrases.size).toBe(LABELS.length);
+    for (const l of alphabet) expect(phrases.has(l)).toBe(false);
   });
 
-  it("tracks two hands except in alphabet practice", () => {
-    expect(handsForMode("auto")).toBe(2);
-    expect(handsForMode("conversation")).toBe(2);
-    expect(handsForMode("alphabet-practice")).toBe(1);
+  it("tracks one hand for alphabet, two for phrase signs", () => {
+    expect(handsForMode("alphabet")).toBe(1);
+    expect(handsForMode("phrase-signs")).toBe(2);
   });
 });
