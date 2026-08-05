@@ -15,6 +15,7 @@ import { TransitionEngine } from "./TransitionEngine";
 import { FingerspellingEngine } from "./FingerspellingEngine";
 import { SmartAnimationResolver } from "./SmartAnimationResolver";
 import { AnimationCache, PlaybackAnalytics } from "./AnimationCache";
+import { computeVideoSync } from "./videoSync";
 import type { AnimationClip, PlaybackState, AvatarTheme, GestureAnimationAsset, AnimationInspectorData, ViewMode } from "../types";
 import { AVATAR_THEMES } from "../types";
 
@@ -144,6 +145,8 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
   // onFrame is installed once, so mutable props it reads must go through refs.
   const viewModeRef = useRef(viewMode);
   viewModeRef.current = viewMode;
+  const speedRef = useRef(speed);
+  speedRef.current = speed;
   const [currentAsset, setCurrentAsset] = useState<GestureAnimationAsset | null>(null);
   const [driftFrames, setDriftFrames] = useState(0);
   const driftFramesRef = useRef(0);
@@ -261,16 +264,25 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
             // from the recording, so the video is offset to the same instant.
             const offset = clip?.asset.sourceOffsetSeconds ?? 0;
             videoTime = video.currentTime;
-            const delta = videoTime - (time + offset);
-            // Let the element run at its own rate and only correct real drift;
-            // seeking every frame would re-decode constantly. Only resume while
-            // the engine itself is running, so a finished or paused sequence
-            // cannot leave the recording rolling on.
+            const target = time + offset;
+            const delta = videoTime - target;
+            // Only resume while the engine itself is running, so a finished or
+            // paused sequence cannot leave the recording rolling on.
             if (playStateRef.current.isPlaying && !playStateRef.current.isPaused) {
               safePlayVideo(video);
             }
-            if (Math.abs(delta) > 0.08) {
-              video.currentTime = time + offset;
+            // Correct with the rate and keep seeking for real jumps only.
+            // Seeking was previously the only correction, and because the
+            // element's rate was never matched to the playback speed the drift
+            // was permanent: 60 seeks per 10s at 0.5x, 120 at 2x, measured in
+            // videoSync.test.ts. A seek flushes the decoder, so the recording
+            // stepped between stills instead of playing.
+            const correction = computeVideoSync(videoTime, target, speedRef.current);
+            if (correction.action === "seek") {
+              video.currentTime = correction.to;
+            }
+            if (video.playbackRate !== correction.rate) {
+              video.playbackRate = correction.rate;
             }
             const fpsForDrift = clip?.asset.fps || 30;
             setDriftFrames(Math.round(delta * fpsForDrift));
@@ -449,6 +461,9 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
     if (!video) return;
     const state = playStateRef.current;
     video.currentTime = state.currentTime + (currentClipAsset?.sourceOffsetSeconds ?? 0);
+    // Every mode switch renders a different <video>, and a fresh element always
+    // starts at rate 1 regardless of the speed the sequence is playing at.
+    video.playbackRate = speed;
     if (state.isPlaying && !state.isPaused) {
       safePlayVideo(video);
     } else {
@@ -456,7 +471,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
     }
     // The offset belongs in the deps: two clips can share one recording while
     // starting at different points in it, which would otherwise seek stale.
-  }, [viewMode, videoSrc, currentClipAsset?.sourceOffsetSeconds]);
+  }, [viewMode, videoSrc, speed, currentClipAsset?.sourceOffsetSeconds]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -499,6 +514,10 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
 
   useEffect(() => {
     engineRef.current?.setSpeed(speed);
+    // The engine's clock is scaled by speed; the element's is not unless it is
+    // told. Applied here as well as in the sync loop so the rate is right even
+    // while paused, when no frames are running to correct it.
+    if (videoRef.current) videoRef.current.playbackRate = speed;
   }, [speed]);
 
   useEffect(() => {
@@ -524,9 +543,13 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
     nonManualRef.current?.reset();
     coarticulationRef.current?.reset();
     setPlayState((prev) => ({ ...prev, isPaused: false, isPlaying: true }));
-    if (videoRef.current) {
-      videoRef.current.currentTime = 0;
-      safePlayVideo(videoRef.current);
+    const video = videoRef.current;
+    if (video) {
+      // replay() reloads the sequence from clip 0, so line the recording up
+      // with that clip's offset into it rather than the raw start of the file.
+      video.currentTime = clipsRef.current[0]?.asset.sourceOffsetSeconds ?? 0;
+      video.playbackRate = speedRef.current;
+      safePlayVideo(video);
     }
   }, []);
 
