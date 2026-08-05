@@ -888,7 +888,15 @@ export function SignToTextInterface() {
               : "Supported characters"}
           </h2>
 
-          {selectedMode === "phrase-signs" ? (
+          {/*
+            The lists come from the model, so they do not exist until it has
+            loaded — on a slow connection that left the section blank, which
+            reads as broken rather than pending. Hardcoding them to fill the
+            gap is what put "0123456789" here in the first place.
+          */}
+          {modelLabels.length === 0 ? (
+            <p className="text-[11px] text-slate-400">Loading supported signs…</p>
+          ) : selectedMode === "phrase-signs" ? (
             <div className="max-h-[148px] overflow-y-auto pr-1">
               <ul className="flex flex-wrap gap-1.5">
                 {partition.phrases.map((phrase) => (
