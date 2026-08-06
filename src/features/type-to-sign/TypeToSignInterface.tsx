@@ -9,6 +9,7 @@ import { FingerspellingEngine } from "@/features/sign-animation/player/Fingerspe
 import type { AnimationClip } from "@/features/sign-animation/types";
 import { globalLoader } from "@/features/sign-animation/hooks/useAnimationClip";
 import { useProgressiveSignTranslation } from "./useProgressiveSignTranslation";
+import type { FallbackProgress } from "./useProgressiveSignTranslation";
 import { SignComposer } from "./components/SignComposer";
 import { SignStageViewer } from "./components/SignStageViewer";
 import {
@@ -58,6 +59,7 @@ export function TypeToSignInterface() {
   const resolveFallback = useCallback(async (
     item: AnimationPlanItem,
     index: number,
+    progress: FallbackProgress,
   ): Promise<AnimationClip[] | null> => {
     const engine = fingerspellingRef.current;
     // Grammar rules can expand one word into a multi-word gloss
@@ -83,9 +85,21 @@ export function TypeToSignInterface() {
     // Distinct, not per-position: PROGRAMMING repeats R, G and M, and the
     // loader is a cache keyed by gloss but has no in-flight dedupe, so issuing
     // the same character twice concurrently would fetch 3.3MB twice.
-    const distinct = [...new Set(spelled.flat())];
+    const characters = spelled.flat();
+    const distinct = [...new Set(characters)];
+
+    // Counted in signs the viewer will see, not in fetches. PROGRAMMING is 11
+    // signs from 8 requests, and a bar that ran to 8 of 11 would stall at 73%
+    // for no reason the reader could tell.
+    progress.setSigns(characters.length);
+    const occurrences = (c: string) => characters.filter((x) => x === c).length;
+
     const assets = new Map(await Promise.all(
-      distinct.map(async (c) => [c, await globalLoader.load(c)] as const),
+      distinct.map(async (c) => {
+        const asset = await globalLoader.load(c);
+        progress.signsLoaded(occurrences(c));
+        return [c, asset] as const;
+      }),
     ));
 
     for (const characters of spelled) {

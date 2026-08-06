@@ -13,12 +13,33 @@ export type TranslationStage = "idle" | "translating" | "loading" | "done" | "er
 export interface ProgressiveTranslationState {
   stage: TranslationStage;
   clips: AnimationClip[];
-  /** How many words have resolved (found or fallen back), regardless of
-   * display order — for a "Loading signs: N of M" readout. */
+  /**
+   * Signs loaded / signs expected, for a "Loading sign N of M" readout.
+   *
+   * Counted in signs rather than words, because the two differ by an order of
+   * magnitude exactly where the wait is longest: one word can fingerspell into
+   * a dozen signs, and a readout that said "1 of 1" for the whole of it was
+   * indistinguishable from a stuck one.
+   *
+   * A word is worth one sign until its resolver says otherwise, so `totalCount`
+   * can rise once fingerspelling reports how many letters it is about to load.
+   */
   loadedCount: number;
   totalCount: number;
   error: string | null;
   fallbackWords: string[];
+}
+
+/**
+ * Handed to `resolveFallback` so an expansion can report its own size and
+ * progress. Without it the hook can only count the word as a single unit,
+ * which is the granularity the loader had before.
+ */
+export interface FallbackProgress {
+  /** How many signs this word will contribute. Call before loading starts. */
+  setSigns: (count: number) => void;
+  /** Mark `count` of them loaded. */
+  signsLoaded: (count?: number) => void;
 }
 
 export interface UseProgressiveSignTranslationOptions {
@@ -33,6 +54,7 @@ export interface UseProgressiveSignTranslationOptions {
   resolveFallback?: (
     item: AnimationPlanItem,
     index: number,
+    progress: FallbackProgress,
   ) => AnimationClip | AnimationClip[] | null | Promise<AnimationClip | AnimationClip[] | null>;
   /** Fired once per submission with the raw pipeline result, before any
    * asset loading starts — for callers that log analytics off it. */
@@ -93,8 +115,30 @@ export function useProgressiveSignTranslation(options: UseProgressiveSignTransla
     // expands one gloss into multiple letter clips.
     const settled: SettledSlot<AnimationClip[]>[] = items.map(() => ({ done: false, value: null }));
     let flushedTo = 0;
-    let settledCount = 0;
     const fallbackWords: string[] = [];
+
+    // One sign per word until a resolver reports an expansion. Kept per word
+    // rather than as running totals so a late `setSigns` can correct a word's
+    // share without double-counting what it already reported loaded.
+    const signsPerItem = items.map(() => 1);
+    const signsDone = items.map(() => 0);
+    const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+    const pushCounts = () => {
+      if (isStale()) return;
+      setState((s) => ({ ...s, loadedCount: sum(signsDone), totalCount: sum(signsPerItem) }));
+    };
+    const progressFor = (index: number): FallbackProgress => ({
+      setSigns: (count) => {
+        signsPerItem[index] = Math.max(1, count);
+        // A word cannot report more loaded than it will produce.
+        signsDone[index] = Math.min(signsDone[index], signsPerItem[index]);
+        pushCounts();
+      },
+      signsLoaded: (count = 1) => {
+        signsDone[index] = Math.min(signsPerItem[index], signsDone[index] + count);
+        pushCounts();
+      },
+    });
 
     const resolveItem = async (item: AnimationPlanItem, index: number): Promise<AnimationClip[]> => {
       // A published asset for the typed word outranks whatever the dictionary
@@ -122,7 +166,7 @@ export function useProgressiveSignTranslation(options: UseProgressiveSignTransla
           return [{ id: `anim-${item.animationKey}-${index}-${Date.now()}`, gesture: item.gloss, asset }];
         }
       }
-      const fallback = (await optionsRef.current.resolveFallback?.(item, index)) ?? null;
+      const fallback = (await optionsRef.current.resolveFallback?.(item, index, progressFor(index))) ?? null;
       if (!fallback) return [];
       fallbackWords.push(item.gloss);
       return Array.isArray(fallback) ? fallback : [fallback];
@@ -136,7 +180,8 @@ export function useProgressiveSignTranslation(options: UseProgressiveSignTransla
       setState((s) => ({
         ...s,
         clips: flat.length > 0 ? [...s.clips, ...flat] : s.clips,
-        loadedCount: settledCount,
+        loadedCount: sum(signsDone),
+        totalCount: sum(signsPerItem),
       }));
     };
 
@@ -144,7 +189,12 @@ export function useProgressiveSignTranslation(options: UseProgressiveSignTransla
       const clips = await resolveItem(item, index);
       if (isStale()) return;
       settled[index] = { done: true, value: clips };
-      settledCount++;
+      // A word that produced clips without reporting per-sign progress — the
+      // published-asset path, or a fallback that never called setSigns —
+      // settles all of its share at once. Resolvers that did report are
+      // already at their total, so this is a no-op for them.
+      signsPerItem[index] = Math.max(1, clips.length || 1);
+      signsDone[index] = signsPerItem[index];
       optionsRef.current.onItemResolved?.(item, index, clips);
       flush();
     }));
@@ -154,7 +204,8 @@ export function useProgressiveSignTranslation(options: UseProgressiveSignTransla
       ...s,
       stage: s.clips.length > 0 ? "done" : "error",
       error: s.clips.length > 0 ? null : "No signs could be found for this phrase.",
-      loadedCount: items.length,
+      loadedCount: sum(signsDone),
+      totalCount: sum(signsPerItem),
       fallbackWords,
     }));
   }, []);
