@@ -25,6 +25,17 @@ export type { ViewMode } from "../types";
 const LANDMARK_MODES = new Set<ViewMode>(["skeleton", "split", "overlay"]);
 
 /**
+ * How often per-frame playback values are pushed into React.
+ *
+ * 10Hz. The only thing that renders them is a progress bar, which already
+ * eases between values over 50ms, so a finer cadence buys nothing visible and
+ * costs a full re-render of the player and the stage around it. The engine
+ * itself still advances every frame — this throttles the reporting, not the
+ * playback, and anything needing the exact playhead reads currentTimeRef.
+ */
+const UI_PUSH_INTERVAL_MS = 100;
+
+/**
  * play() returns a Promise that rejects with AbortError whenever anything
  * interrupts it — a pause(), a src change, or the element leaving the DOM
  * (which happens on every view-mode switch here, since each mode renders its
@@ -137,9 +148,16 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
   });
   const playStateRef = useRef(playState);
   playStateRef.current = playState;
-  const [fps, setFps] = useState(0);
-  const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
-  const [totalFrames, setTotalFrames] = useState(0);
+  /**
+   * The playhead at full rate, because `playState.currentTime` no longer is.
+   *
+   * Anything that has to be exact — seeking the recording after a mode switch,
+   * the imperative getPlayState — reads this; only the progress bar reads the
+   * throttled state.
+   */
+  const currentTimeRef = useRef(0);
+  /** Last time per-frame values were pushed into React. See UI_PUSH_INTERVAL_MS. */
+  const lastUiPushRef = useRef(0);
 
   const currentAssetRef = useRef<GestureAnimationAsset | null>(null);
   // onFrame is installed once, so mutable props it reads must go through refs.
@@ -148,9 +166,10 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
   const speedRef = useRef(speed);
   speedRef.current = speed;
   const [currentAsset, setCurrentAsset] = useState<GestureAnimationAsset | null>(null);
-  const [driftFrames, setDriftFrames] = useState(0);
+  // A ref, not state: the only consumer is the renderer's debug readout, so
+  // holding it in state re-rendered the whole player every frame to produce a
+  // value that never reached the DOM.
   const driftFramesRef = useRef(0);
-  driftFramesRef.current = driftFrames;
   // Follows the clip actually playing, so a multi-sign sequence swaps to each
   // sign's own recording instead of pinning the first one.
   const currentClipAsset = currentAsset ?? clips[0]?.asset;
@@ -229,26 +248,37 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
     engine.setCallbacks({
       onFrame: (frame, time, clip, frameIndex) => {
         try {
-          perf.recordFrame(performance.now());
-          setPlayState((prev) => ({ ...prev, currentTime: time }));
-          if (frameIndex !== undefined) {
-            setCurrentFrameIndex(frameIndex);
+          const now = performance.now();
+          perf.recordFrame(now);
+          currentTimeRef.current = time;
+
+          // Per-frame values reach React on a fixed cadence rather than on
+          // every tick. This callback runs on the engine's requestAnimationFrame
+          // loop, so it was pushing four state updates per frame — currentTime,
+          // the frame index, the drift, and onProgress into the parent — and
+          // re-rendering this component and the stage around it ~60 times a
+          // second, next to a 1080p decode on the same thread. Two of those
+          // values were never read by any render at all.
+          const pushUi = now - lastUiPushRef.current >= UI_PUSH_INTERVAL_MS;
+          if (pushUi) {
+            lastUiPushRef.current = now;
+            setPlayState((prev) => (prev.currentTime === time ? prev : { ...prev, currentTime: time }));
           }
+
           if (clip) {
-            const st = engine.getState();
-            callbacksRef.current.onProgress?.({
-              clipTime: time,
-              clipDuration: clip.asset.duration / 1000,
-              index: st.currentIndex,
-              total: st.queueLength,
-              fps: clip.asset.fps,
-            });
+            if (pushUi) {
+              const st = engine.getState();
+              callbacksRef.current.onProgress?.({
+                clipTime: time,
+                clipDuration: clip.asset.duration / 1000,
+                index: st.currentIndex,
+                total: st.queueLength,
+                fps: clip.asset.fps,
+              });
+            }
             if (currentAssetRef.current !== clip.asset) {
               currentAssetRef.current = clip.asset;
               setCurrentAsset(clip.asset);
-            }
-            if (totalFrames !== clip.asset.totalFrames) {
-              setTotalFrames(clip.asset.totalFrames);
             }
           }
 
@@ -285,7 +315,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
               video.playbackRate = correction.rate;
             }
             const fpsForDrift = clip?.asset.fps || 30;
-            setDriftFrames(Math.round(delta * fpsForDrift));
+            driftFramesRef.current = Math.round(delta * fpsForDrift);
           }
 
           if (LANDMARK_MODES.has(viewModeRef.current)) {
@@ -305,7 +335,17 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
                 videoTime,
               });
             }
-          } else {
+          } else if (canvasRef.current) {
+            // Guarded on the canvas being mounted, which in this branch it
+            // usually is not. "human" is the one mode that renders a <video>
+            // *instead of* a <canvas>, so canvasRef is null and the renderer is
+            // still attached to whichever canvas existed before the switch —
+            // detached from the document, but just as expensive to rasterise
+            // into. Every frame of every recording was paying for an avatar
+            // nobody could see, on the same thread decoding 1080p at 13Mbit/s.
+            //
+            // The fallback canvas that appears when a recording fails to load
+            // is a real canvas, so this keeps drawing for that case.
             let processedFrame = frame;
 
             if (transitionRef.current) {
@@ -460,7 +500,9 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
     const video = videoRef.current;
     if (!video) return;
     const state = playStateRef.current;
-    video.currentTime = state.currentTime + (currentClipAsset?.sourceOffsetSeconds ?? 0);
+    // currentTimeRef, not state: the state copy is throttled to UI_PUSH_INTERVAL_MS
+    // and would line the recording up with a playhead of up to 100ms ago.
+    video.currentTime = currentTimeRef.current + (currentClipAsset?.sourceOffsetSeconds ?? 0);
     // Every mode switch renders a different <video>, and a fresh element always
     // starts at rate 1 regardless of the speed the sequence is playing at.
     video.playbackRate = speed;
@@ -542,6 +584,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
     engineRef.current?.replay();
     nonManualRef.current?.reset();
     coarticulationRef.current?.reset();
+    currentTimeRef.current = 0;
     setPlayState((prev) => ({ ...prev, isPaused: false, isPlaying: true }));
     const video = videoRef.current;
     if (video) {
@@ -557,6 +600,8 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
     engineRef.current?.stop();
     coarticulationRef.current?.reset();
     nonManualRef.current?.reset();
+    // The engine is stopped, so no frame will arrive to correct this.
+    currentTimeRef.current = 0;
     setPlayState((prev) => ({
       ...prev, isPlaying: false, isPaused: false, currentGesture: null, currentTime: 0,
     }));
@@ -577,6 +622,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
         engineRef.current?.replay();
         nonManualRef.current?.reset();
         coarticulationRef.current?.reset();
+        currentTimeRef.current = 0;
         setPlayState((prev) => ({ ...prev, isPaused: false, isPlaying: true }));
         if (videoRef.current) {
           videoRef.current.currentTime = 0;
@@ -596,6 +642,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
       engineRef.current?.seekToClip(index);
       nonManualRef.current?.reset();
       coarticulationRef.current?.reset();
+      currentTimeRef.current = 0;
       setPlayState((prev) => ({ ...prev, isPaused: false, isPlaying: true }));
       if (videoRef.current) {
         videoRef.current.currentTime = 0;
@@ -606,13 +653,15 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
       engineRef.current?.seekToClip(clipIndex, timeSeconds);
       nonManualRef.current?.reset();
       coarticulationRef.current?.reset();
+      currentTimeRef.current = timeSeconds;
       setPlayState((prev) => ({ ...prev, isPaused: false, isPlaying: true }));
       const video = videoRef.current;
       if (video) {
         video.currentTime = timeSeconds + (currentAssetRef.current?.sourceOffsetSeconds ?? 0);
       }
     },
-    getPlayState: () => playStateRef.current,
+    // Exact playhead, not the throttled copy — callers use this to seek.
+    getPlayState: () => ({ ...playStateRef.current, currentTime: currentTimeRef.current }),
     setViewMode: (mode: ViewMode) => {
       // View mode is controlled via props
     },
