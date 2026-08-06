@@ -5,7 +5,8 @@
 
 import "server-only";
 import { createSupabaseServerClient } from "../server";
-import { ForbiddenError, UnauthenticatedError } from "@/server/http/errors";
+import { ForbiddenError, NotFoundError, UnauthenticatedError } from "@/server/http/errors";
+import { isAdminEnabled } from "@/lib/admin/availability";
 
 export const getCurrentUser = async () => {
   const supabase = await createSupabaseServerClient();
@@ -22,6 +23,17 @@ export const getCurrentUser = async () => {
  * call this without a try/catch keep their existing error-boundary behaviour.
  */
 export const requireAdmin = async (): Promise<{ id: string; email?: string }> => {
+  // Second layer, deliberately redundant with the middleware.
+  //
+  // The middleware is the gate that actually runs first, but it depends on a
+  // matcher pattern -- one edit to that regex and every privileged route below
+  // is reachable again with nothing to notice. This check sits in the function
+  // every admin route already calls, so the gate travels with the privilege
+  // rather than with a routing config.
+  //
+  // NotFound, not Forbidden: the answer must not differ from a missing route.
+  if (!isAdminEnabled()) throw new NotFoundError("Not found");
+
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new UnauthenticatedError();

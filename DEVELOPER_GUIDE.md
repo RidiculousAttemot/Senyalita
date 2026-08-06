@@ -460,6 +460,60 @@ Camera pages need HTTPS or `localhost` (`getUserMedia` requirement).
 `.env.example` lists required vars; Supabase URL + anon key are the only ones needed
 for a working app.
 
+### 8.1 Deployment topology — the admin is local-only
+
+**The admin does not exist on the deployed site.** `/admin/*` and `/api/admin/*` both
+return **404** in production. This is intentional, and the reason it costs nothing is
+that the admin is a *content-authoring tool*, not a runtime dependency:
+
+```
+  localhost  ──[ upload → extract → publish ]──►  Supabase  ◄──[ read ]──  deployed site
+   (admin)                                     (assets + Storage)          (public app)
+```
+
+Sign-to-Text and Text-to-Sign read published assets from Supabase at request time. The
+data is **shared, not per-environment**, so publishing from localhost is visible on the
+deployed site immediately — no deploy, no rebuild. That is the supported authoring
+workflow.
+
+**Running admin locally.** Set the flag in `.env.local`:
+
+```bash
+ADMIN_ENABLED=true
+```
+
+You still need an admin Supabase session (`app_metadata.role === "admin"`); the flag
+controls whether the surface *exists*, not who may use it.
+
+**What happens in production.** The flag is unset on Vercel, so:
+
+| | |
+|---|---|
+| `/admin/*` | `404` — **not** a redirect to `/admin/login` |
+| `/api/admin/*` | `404`, on every method |
+| `/api/animations`, `/api/animations/<gloss>` | unaffected — these are public and the app depends on them |
+
+A 404 rather than a login redirect is deliberate: a redirect advertises that an admin
+panel exists and points at its door.
+
+**How the flag works.** `src/lib/admin/availability.ts` — explicit, and **default off**,
+so a missing variable fails closed. Only `true` or `1` enable it; `yes`, `on`, `TRUE`
+and anything else are off. It deliberately does **not** read `NODE_ENV`: that reads as
+"development mode" rather than "the admin is reachable", and the two come apart the
+moment someone runs a production build locally.
+
+Two layers enforce it, deliberately redundant:
+
+1. **`src/middleware.ts`** — gates before the session is touched. Covers both the pages
+   and the API routes.
+2. **`requireAdmin()`** — throws `NotFoundError` when the flag is off. The middleware
+   depends on a matcher regex; one edit to it would re-expose every privileged route
+   with nothing to notice, so the gate also travels with the privilege itself.
+
+`e2e/admin-gate.spec.ts` asserts the production 404 **route by route**, enumerating from
+disk rather than from a hardcoded list — so a newly added admin route cannot quietly
+ship exposed.
+
 ---
 
 ## 9. The offline training pipeline

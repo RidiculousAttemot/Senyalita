@@ -184,6 +184,12 @@ test.describe("admin navigation integrity", () => {
     // that is what the two tests above are for. What it does prove is that the
     // running server has these routes compiled and guarded, rather than
     // erroring or leaking the page.
+    //
+    // SCOPE: this is a LOCAL assertion, and only holds because .env.local sets
+    // ADMIN_ENABLED=true. On a deployed environment the flag is unset and every
+    // route here returns 404 instead — asserted route by route in
+    // admin-gate.spec.ts, which enumerates from disk rather than from this nav
+    // list so a route that is never linked still cannot ship exposed.
     // Warm up first: the login page is the redirect target for all six, so
     // paying its compile cost once keeps the loop off the timeout.
     await page.goto("http://localhost:3000/admin/login", { waitUntil: "domcontentloaded" });
