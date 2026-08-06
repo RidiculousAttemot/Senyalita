@@ -31,12 +31,16 @@ interface SignStageViewerProps {
   clips: AnimationClip[];
   sequenceKey: number;
   loading: boolean;
+  /** Words resolved / words in the sentence, for a determinate loader. */
+  loadedCount?: number;
+  totalCount?: number;
   isStreaming?: boolean;
   fingerspelledGlosses: Set<string>;
 }
 
 export function SignStageViewer({
-  clips, sequenceKey, loading, isStreaming = false, fingerspelledGlosses,
+  clips, sequenceKey, loading, loadedCount = 0, totalCount = 0,
+  isStreaming = false, fingerspelledGlosses,
 }: SignStageViewerProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const surfaceRef = useRef<HTMLDivElement | null>(null);
@@ -145,6 +149,23 @@ export function SignStageViewer({
   }, [clips, index]);
 
   const hasClips = clips.length > 0;
+  /**
+   * Whether the player has put anything on screen for this sequence.
+   *
+   * The loader used to clear on `clips.length > 0` — the moment the first
+   * landmark JSON resolved. Everything after that was invisible to it: the
+   * player mounting, thirteen engine and renderer objects being constructed,
+   * the first animation frame, and in the modes that show the recording a
+   * multi-megabyte video fetching and decoding. All of it rendered as an empty
+   * stage with no loader over it.
+   */
+  const [painted, setPainted] = useState(false);
+  useEffect(() => { setPainted(false); }, [sequenceKey]);
+  const handleFirstFrame = useCallback(() => setPainted(true), []);
+  // Streaming keeps `loading` true while later clips arrive, so this cannot
+  // simply be `loading || !painted` — that would re-cover a stage that is
+  // already playing.
+  const showLoader = (loading && !hasClips) || (hasClips && !painted);
   const current = hasClips ? clips[Math.min(index, clips.length - 1)] : null;
   const clipProgress = progress && progress.clipDuration > 0
     ? Math.min(1, progress.clipTime / progress.clipDuration)
@@ -220,8 +241,8 @@ export function SignStageViewer({
             </div>
           )}
 
-          <AnimatePresence>{loading && <LoadingStage />}</AnimatePresence>
-          {!hasClips && !loading && <EmptyStage />}
+          <AnimatePresence>{showLoader && <LoadingStage loaded={loadedCount} total={totalCount} />}</AnimatePresence>
+          {!hasClips && !showLoader && <EmptyStage />}
         </div>
 
         {hasClips && (
@@ -529,12 +550,23 @@ const LOADING_STAGES = [
   "Almost ready…",
 ];
 
-function LoadingStage() {
+/**
+ * @param loaded how many words have resolved
+ * @param total  how many the sentence has
+ *
+ * Determinate whenever there is more than one word, because the indefinite bar
+ * is indistinguishable from a stuck one. A single word stays indeterminate:
+ * the count the hook reports is per word, and a fingerspelled word is one
+ * word however many letters it spells.
+ */
+function LoadingStage({ loaded, total }: { loaded: number; total: number }) {
   const [stage, setStage] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => setStage((s) => Math.min(s + 1, LOADING_STAGES.length - 1)), 900);
     return () => clearInterval(timer);
   }, []);
+  const determinate = total > 1;
+  const pct = determinate ? Math.round((Math.min(loaded, total) / total) * 100) : 0;
 
   return (
     <motion.div
@@ -554,15 +586,24 @@ function LoadingStage() {
             transition={{ duration: 0.2 }}
             className="text-[13px] font-semibold text-senyalita-dark"
           >
-            {LOADING_STAGES[stage]}
+            {determinate ? `Loading sign ${Math.min(loaded + 1, total)} of ${total}` : LOADING_STAGES[stage]}
           </motion.p>
         </AnimatePresence>
         <div className="h-1.5 overflow-hidden rounded-full bg-senyalita-border">
-          <motion.div
-            className="h-full w-1/3 rounded-full bg-senyalita-primary"
-            animate={{ x: ["-110%", "320%"] }}
-            transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
-          />
+          {determinate ? (
+            <motion.div
+              data-testid="loader-progress"
+              className="h-full rounded-full bg-senyalita-primary"
+              animate={{ width: `${pct}%` }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+            />
+          ) : (
+            <motion.div
+              className="h-full w-1/3 rounded-full bg-senyalita-primary"
+              animate={{ x: ["-110%", "320%"] }}
+              transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+            />
+          )}
         </div>
       </div>
     </motion.div>

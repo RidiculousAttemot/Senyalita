@@ -68,12 +68,29 @@ export function TypeToSignInterface() {
     const stamp = Date.now();
     const clips: AnimationClip[] = [];
 
-    for (const word of words) {
-      // Letters and digits only: punctuation has no sign and would 404.
-      const characters = word.toUpperCase().replace(/[^A-Z0-9]/g, "").split("");
+    // Letters and digits only: punctuation has no sign and would 404.
+    const spelled = words.map((word) => word.toUpperCase().replace(/[^A-Z0-9]/g, "").split(""));
 
+    // Fetch every distinct character at once, then assemble in order.
+    //
+    // This was `await` inside the character loop, so an 11-letter word made 11
+    // round trips end to end. Measured against production, a published letter
+    // takes ~3.4s to arrive, which put PROGRAMMING at roughly 38 seconds before
+    // the item resolved -- and an item resolves as a unit, so not one clip of
+    // it existed until the last letter landed. In parallel the same word costs
+    // about one round trip.
+    //
+    // Distinct, not per-position: PROGRAMMING repeats R, G and M, and the
+    // loader is a cache keyed by gloss but has no in-flight dedupe, so issuing
+    // the same character twice concurrently would fetch 3.3MB twice.
+    const distinct = [...new Set(spelled.flat())];
+    const assets = new Map(await Promise.all(
+      distinct.map(async (c) => [c, await globalLoader.load(c)] as const),
+    ));
+
+    for (const characters of spelled) {
       for (const [ci, character] of characters.entries()) {
-        const published = await globalLoader.load(character);
+        const published = assets.get(character);
         if (published) {
           clips.push({
             id: `spell-${character}-${index}-${ci}-${stamp}`,
@@ -307,7 +324,12 @@ export function TypeToSignInterface() {
         <SignStageViewer
           clips={clips}
           sequenceKey={sequenceKey}
-          loading={loading && clips.length === 0}
+          // Raw, not `&& clips.length === 0`. The viewer decides when to drop
+          // the loader now, and it waits for a painted frame rather than for
+          // the first clip's JSON to land.
+          loading={loading}
+          loadedCount={translation.loadedCount}
+          totalCount={translation.totalCount}
           isStreaming={isStreaming}
           fingerspelledGlosses={fingerspelledRef.current}
         />

@@ -94,6 +94,16 @@ interface SignAnimationPlayerProps {
   onProgress?: (progress: PlaybackProgress) => void;
   onInspectorData?: (data: AnimationInspectorData) => void;
   onAnalyticsEvent?: (event: Parameters<PlaybackAnalytics["record"]>[0]) => void;
+  /**
+   * Fires once, when there is actually something to look at.
+   *
+   * Callers use it to keep a loading state up until then. "Clips have arrived"
+   * is not the same moment: the player still has to mount, build its renderers
+   * and reach a frame, and in the modes that show the recording the <video>
+   * has to fetch and decode several megabytes before it shows anything. Both
+   * gaps used to be rendered as a blank stage with no loader over it.
+   */
+  onFirstFrame?: () => void;
 }
 
 const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnimationPlayerProps>(function SignAnimationPlayer({
@@ -118,6 +128,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
   onProgress,
   onInspectorData,
   onAnalyticsEvent,
+  onFirstFrame,
 }: SignAnimationPlayerProps, ref) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -140,8 +151,17 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
   const streamingRef = useRef(isStreaming);
   streamingRef.current = isStreaming;
   const pendingCompletionRef = useRef(false);
-  const callbacksRef = useRef({ onComplete, onGestureChange, onProgress, onInspectorData, onAnalyticsEvent });
-  callbacksRef.current = { onComplete, onGestureChange, onProgress, onInspectorData, onAnalyticsEvent };
+  const callbacksRef = useRef({ onComplete, onGestureChange, onProgress, onInspectorData, onAnalyticsEvent, onFirstFrame });
+  callbacksRef.current = { onComplete, onGestureChange, onProgress, onInspectorData, onAnalyticsEvent, onFirstFrame };
+  /**
+   * Whether each surface that will be visible has something on it yet, and
+   * whether the caller has been told. Refs, because this is read from the
+   * engine's frame callback and from media events, and a re-render per check
+   * would defeat the point.
+   */
+  const canvasPaintedRef = useRef(false);
+  const videoReadyRef = useRef(false);
+  const firstFrameFiredRef = useRef(false);
   const [playState, setPlayState] = useState<PlaybackState>({
     isPlaying: false, isPaused: false, currentTime: 0, duration: 0,
     currentGesture: null, currentIndex: 0, queueLength: 0, speed: 1, loop: false,
@@ -174,16 +194,77 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
   // sign's own recording instead of pinning the first one.
   const currentClipAsset = currentAsset ?? clips[0]?.asset;
   const videoSrc = currentClipAsset?.video;
+
+  /**
+   * Announce "there is something to look at" once every visible surface has
+   * content — not when the first one does.
+   *
+   * Overlay and split show the skeleton and the recording together, so the
+   * skeleton painting while the video is still fetching is exactly the blank
+   * this is meant to prevent. Human shows only the recording, and the landmark
+   * modes only the canvas, so each waits for what it actually renders.
+   */
+  /**
+   * Draws a clip's opening frame with no engine involvement, so the stage has
+   * content the instant data exists rather than one animation frame after
+   * playback is started.
+   */
+  const paintFirstFrame = useCallback((clip: AnimationClip | undefined) => {
+    const asset = clip?.asset;
+    const frame = asset?.frames?.[0];
+    if (!asset || !frame || !canvasRef.current) return;
+    if (LANDMARK_MODES.has(viewModeRef.current)) {
+      const renderer = exactRendererRef.current;
+      if (!renderer) return;
+      if (asset.imageWidth && asset.imageHeight) {
+        renderer.setImageDimensions(asset.imageWidth, asset.imageHeight);
+      }
+      renderer.setFitBounds(viewModeRef.current === "overlay" ? null : computeClipBounds(asset));
+      renderer.render(frame, 0, asset.totalFrames, { clipTime: 0, videoTime: null });
+    } else {
+      advancedRendererRef.current?.render(frame, {});
+    }
+    canvasPaintedRef.current = true;
+    announceIfPresentedRef.current?.(viewModeRef.current, videoRef.current !== null);
+  }, []);
+
+  /** Indirection so paintFirstFrame can stay dependency-free. */
+  const announceIfPresentedRef = useRef<((m: ViewMode, v: boolean) => void) | null>(null);
+
+  const announceIfPresented = useCallback((mode: ViewMode, hasVideo: boolean) => {
+    if (firstFrameFiredRef.current) return;
+    const needsCanvas = LANDMARK_MODES.has(mode) || !hasVideo;
+    const needsVideo = hasVideo && mode !== "skeleton";
+    if (needsCanvas && !canvasPaintedRef.current) return;
+    if (needsVideo && !videoReadyRef.current) return;
+    firstFrameFiredRef.current = true;
+    callbacksRef.current.onFirstFrame?.();
+  }, []);
+  announceIfPresentedRef.current = announceIfPresented;
   // A dead reference-video URL (expired signature, unpublished source, 503)
   // used to render a silent blank pane — indistinguishable from a rendering
   // bug, which is exactly where the last video outage sent debugging. Track
   // failure so the pane falls back to the skeleton or a note instead.
   const [videoFailed, setVideoFailed] = useState(false);
-  useEffect(() => setVideoFailed(false), [videoSrc]);
+  useEffect(() => {
+    setVideoFailed(false);
+    // A new recording has not decoded anything yet. Only matters before the
+    // first announcement; afterwards the stage already has content and a later
+    // clip swapping its src must not put the loader back up.
+    if (!firstFrameFiredRef.current) videoReadyRef.current = false;
+  }, [videoSrc]);
   const handleVideoError = useCallback(() => {
     console.warn(`[SignAnimationPlayer] reference video failed to load: ${videoSrc}`);
     setVideoFailed(true);
+    // The pane falls back to the canvas, so the recording is no longer
+    // something to wait for — without this a dead URL holds the loader forever.
+    videoReadyRef.current = true;
+    announceIfPresentedRef.current?.(viewModeRef.current, false);
   }, [videoSrc]);
+  const handleVideoReady = useCallback(() => {
+    videoReadyRef.current = true;
+    announceIfPresentedRef.current?.(viewModeRef.current, true);
+  }, []);
   // Split view gives the skeleton a half-width square panel; the drawing
   // buffer has to match that box or the figure renders stretched.
   let renderWidth = width;
@@ -334,6 +415,8 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
                 clipTime: time,
                 videoTime,
               });
+              canvasPaintedRef.current = true;
+              announceIfPresented(viewModeRef.current, video !== null);
             }
           } else if (canvasRef.current) {
             // Guarded on the canvas being mounted, which in this branch it
@@ -360,6 +443,8 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
             advancedRenderer.render(coarticulated, {
               nonManual: nonManual.getFeatures(),
             });
+            canvasPaintedRef.current = true;
+            announceIfPresented(viewModeRef.current, video !== null);
           }
 
           if (callbacksRef.current.onInspectorData && clip) {
@@ -543,9 +628,17 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
     }
 
     pendingCompletionRef.current = false;
+    // Put frame 0 on the canvas before playback is asked for anything.
+    //
+    // Every paint used to come from the engine's frame callback, which cannot
+    // run until loadSequence has started the rAF loop — so between the clips
+    // arriving and the first tick the stage was empty, on top of the mount and
+    // renderer construction that had to happen first. Drawing the frame the
+    // sequence starts on costs one render and removes that window entirely.
+    paintFirstFrame(clips[0]);
     engine.loadSequence(clips);
     setPlayState((p) => ({ ...p, isPlaying: true, isPaused: false, loop }));
-  }, [clips, loop]);
+  }, [clips, loop, paintFirstFrame]);
 
   useEffect(() => {
     if (!isStreaming && pendingCompletionRef.current) {
@@ -681,13 +774,22 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
       position: "absolute", inset: 0, width: "100%", height: "100%",
       objectFit: "contain", borderRadius: 8, background: bgColor,
     };
-    const videoProps = { muted: true, playsInline: true, preload: "auto" as const };
+    // onCanPlay, not just onError: the recording is several megabytes and the
+    // element shows nothing until it has decoded enough to start. Treating
+    // "src assigned" as ready is what let the loader clear over a blank pane.
+    const videoProps = {
+      muted: true,
+      playsInline: true,
+      preload: "auto" as const,
+      onCanPlay: handleVideoReady,
+      onError: handleVideoError,
+    };
 
     if (viewMode === "human") {
       return (
         <div style={{ position: "relative", width: "100%", height: "100%" }}>
           {videoSrc && !videoFailed
-            ? <video ref={videoRef} src={videoSrc} onError={handleVideoError} {...videoProps} style={fillBox} />
+            ? <video ref={videoRef} src={videoSrc} {...videoProps} style={fillBox} />
             : <canvas ref={canvasRef} width={renderWidth} height={renderHeight} style={fillBox} />}
         </div>
       );
@@ -697,7 +799,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
       return (
         <div style={{ position: "relative", width: "100%", height: "100%" }}>
           {videoSrc && !videoFailed && (
-            <video ref={videoRef} src={videoSrc} onError={handleVideoError} {...videoProps} style={fillBox} />
+            <video ref={videoRef} src={videoSrc} {...videoProps} style={fillBox} />
           )}
           <canvas
             ref={canvasRef}
@@ -726,7 +828,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
         <div style={{ display: "flex", gap: 6, width: "100%", height: "100%" }}>
           <div style={pane}>
             {videoSrc && !videoFailed && (
-              <video ref={videoRef} src={videoSrc} onError={handleVideoError} {...videoProps} style={fillBox} />
+              <video ref={videoRef} src={videoSrc} {...videoProps} style={fillBox} />
             )}
             {videoSrc && videoFailed && <span style={unavailable}>Recording unavailable</span>}
             <span style={paneLabel}>Human</span>
