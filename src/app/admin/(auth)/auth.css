@@ -1,12 +1,12 @@
 .auth-shell {
-  --auth-ink: #14243c;
-  --auth-muted: #607083;
-  --auth-line: #dbe2e9;
-  --auth-canvas: #edf2f4;
+  --auth-ink: #1E293B;
+  --auth-muted: #64748B;
+  --auth-line: #E2E8F0;
+  --auth-canvas: #F1F5F9;
   --auth-panel: #ffffff;
-  --auth-accent: #c8553d;
-  --auth-accent-dark: #a94230;
-  --auth-focus: #236c96;
+  --auth-accent: #B45309;
+  --auth-accent-dark: #B45309;
+  --auth-focus: #2563EB;
   display: grid;
   min-height: 100dvh;
   grid-template-rows: auto 1fr auto;
@@ -75,8 +75,8 @@
   margin-bottom: 24px;
   place-items: center;
   border-radius: 8px;
-  background: #e8f1f5;
-  color: #216a91;
+  background: #EFF6FF;
+  color: #2563EB;
 }
 
 .auth-icon svg {
@@ -120,9 +120,9 @@
   padding: 11px 12px;
 }
 
-.auth-banner-info { border-color: #bad7e5; background: #edf8fc; color: #175b7c; }
+.auth-banner-info { border-color: #BFDBFE; background: #EFF6FF; color: #1D4ED8; }
 .auth-banner-warn,
-.auth-error { border-color: #edc9bf; background: #fff4f0; color: #9a3d2a; }
+.auth-error { border-color: #FDE68A; background: #FFFBEB; color: #B45309; }
 
 .auth-form {
   display: grid;
@@ -132,7 +132,7 @@
 .auth-field {
   display: grid;
   gap: 7px;
-  color: #33465d;
+  color: #334155;
   font-size: 0.81rem;
   font-weight: 750;
 }
@@ -141,7 +141,7 @@
   width: 100%;
   min-height: 46px;
   box-sizing: border-box;
-  border: 1px solid #cbd6df;
+  border: 1px solid #CBD5E1;
   border-radius: 7px;
   background: #fff;
   color: var(--auth-ink);
@@ -152,7 +152,7 @@
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
-.auth-field input:hover { border-color: #8fa4b4; }
+.auth-field input:hover { border-color: #94A3B8; }
 
 .auth-field input:focus-visible,
 .auth-brand:focus-visible,
@@ -203,8 +203,8 @@
   padding-top: 17px;
 }
 
-.auth-foot-note { color: #33465d; font-weight: 750; }
-.auth-footer { color: #718092; font-size: 0.75rem; padding-bottom: 28px; }
+.auth-foot-note { color: #334155; font-weight: 750; }
+.auth-footer { color: #64748B; font-size: 0.75rem; padding-bottom: 28px; }
 .auth-footer p { margin: 0; }
 
 @media (max-width: 560px) {

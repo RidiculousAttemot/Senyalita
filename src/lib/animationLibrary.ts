@@ -91,8 +91,8 @@ export const animationLibrary = {
 
   async performAction(
     versionId: string,
-    action: "complete-processing" | "approve" | "reject" | "publish" | "archive",
-    options?: { asset?: unknown; qualityScore?: number; notes?: string },
+    action: "complete-processing" | "approve" | "reject" | "publish" | "unpublish" | "archive",
+    options?: { asset?: unknown; qualityScore?: number; notes?: string; language?: string },
   ): Promise<{ ok: boolean; status: string }> {
     const res = await fetch(`/api/admin/animation-assets/${versionId}/action`, {
       method: "POST",

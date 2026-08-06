@@ -20,10 +20,11 @@ export async function POST(request: NextRequest, { params }: { params: { version
   try {
     const admin = await requireAdmin();
     const body = await request.json() as {
-      action?: "complete-processing" | "approve" | "reject" | "publish" | "archive";
+      action?: "complete-processing" | "approve" | "reject" | "publish" | "unpublish" | "archive";
       asset?: unknown;
       qualityScore?: number;
       notes?: string;
+      language?: string;
     };
     if (!body.action) return NextResponse.json({ error: "An asset action is required." }, { status: 400 });
 
@@ -50,9 +51,10 @@ export async function POST(request: NextRequest, { params }: { params: { version
         );
       }
       const landmarkPath = `${version.asset_id}/${version.id}/landmarks.json`;
+      const serialized = JSON.stringify(body.asset);
       const { error: uploadError } = await supabase.storage
         .from(LANDMARK_BUCKET)
-        .upload(landmarkPath, JSON.stringify(body.asset), { contentType: "application/json", upsert: true });
+        .upload(landmarkPath, serialized, { contentType: "application/json", upsert: true });
       if (uploadError) throw new Error(uploadError.message);
 
       const { error: updateError } = await supabase
@@ -65,6 +67,16 @@ export async function POST(request: NextRequest, { params }: { params: { version
           duration_ms: Math.round(body.asset.duration),
           quality_score: typeof body.qualityScore === "number" ? body.qualityScore : null,
           extraction_metadata: body.asset.metadata,
+          // Both columns already existed and neither was ever written. The
+          // studio collected a language and dropped it on submit, and
+          // storage_bytes was null on all 37 published versions -- which is
+          // also the number that would have shown how close this payload sits
+          // to the platform's 4.5 MB request limit.
+          //
+          // language is NOT NULL with a default, so an absent one is omitted
+          // rather than written as null.
+          ...(typeof body.language === "string" && body.language ? { language: body.language } : {}),
+          storage_bytes: new TextEncoder().encode(serialized).length,
         })
         .eq("id", version.id);
       if (updateError) throw new Error(updateError.message);
@@ -113,6 +125,27 @@ export async function POST(request: NextRequest, { params }: { params: { version
         .eq("id", version.asset_id);
       if (assetError) throw new Error(assetError.message);
       return NextResponse.json({ ok: true, status: "published" });
+    }
+
+    if (body.action === "unpublish") {
+      // Clearing the pointer is the part that matters. Archiving a version
+      // without it leaves animation_assets.published_version_id naming a row
+      // that is no longer published: the resolver still rejects it on status,
+      // so playback degrades correctly, but every listing that reads the
+      // pointer reports the asset as published when it is not.
+      const { error: clearError } = await supabase
+        .from("animation_assets")
+        .update({ published_version_id: null })
+        .eq("id", version.asset_id)
+        .eq("published_version_id", version.id);
+      if (clearError) throw new Error(clearError.message);
+
+      const { error: unpublishError } = await supabase
+        .from("animation_asset_versions")
+        .update({ status: "approved" })
+        .eq("id", version.id);
+      if (unpublishError) throw new Error(unpublishError.message);
+      return NextResponse.json({ ok: true, status: "approved" });
     }
 
     if (body.action === "archive") {

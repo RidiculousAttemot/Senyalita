@@ -276,7 +276,7 @@ export default async function AdminDashboardOverview() {
       </section>
 
       <section className="admin-chart-grid" aria-label="Recognition performance charts">
-        <TrendCard title="Recognition usage" note="Daily recognition and translation activity" values={dailyCounts} accent="#c96745" />
+        <TrendCard title="Recognition usage" note="Daily recognition and translation activity" values={dailyCounts} accent="#2563EB" />
         <TrendCard title="Confidence profile" note={recognitionSourceNote} values={confidenceValues.slice(-14)} accent="#236f83" />
       </section>
 

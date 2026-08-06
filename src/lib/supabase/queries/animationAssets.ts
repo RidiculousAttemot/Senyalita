@@ -165,3 +165,26 @@ export async function listAnimationAssets(): Promise<AnimationAssetWorkspaceRow[
   if (assetsError || versionsError) throw new Error(assetsError?.message ?? versionsError?.message ?? "Unable to load landmark assets.");
   return (assets ?? []).map((asset) => ({ ...asset, versions: (versions ?? []).filter((version) => version.asset_id === asset.id) }));
 }
+/**
+ * Every gloss that currently has a published version.
+ *
+ * This is what makes an upload visible to the public app. The type-to-sign
+ * pipeline derives its animation keys from a hardcoded dictionary, so a gloss
+ * that is not in that file could never be requested no matter how correctly it
+ * had been published -- it fingerspelled instead, and nothing anywhere said
+ * why. Publishing changed a database row and had no observable effect.
+ *
+ * Returned as plain uppercase glosses so the client can consult it before
+ * falling back, without shipping a copy of the vocabulary in code.
+ */
+export async function listPublishedGlosses(): Promise<string[]> {
+  const supabase = createSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("animation_assets")
+    .select("gloss")
+    .not("published_version_id", "is", null)
+    .order("gloss");
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => (row.gloss as string).toUpperCase());
+}

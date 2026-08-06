@@ -1,8 +1,18 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, FlipHorizontal2, Hand, ScanLine, SlidersHorizontal, Tag, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { FlipHorizontal2, Hand, ScanLine, SlidersHorizontal, Tag, X } from "lucide-react";
+// The shared primitives. This panel is where several of them were lifted
+// from, so it consumes them rather than keeping a second copy -- if these
+// drift from the admin's, it is now a change to one file, not two.
+import {
+  Badge,
+  Notice,
+  OptionRow,
+  SectionHeader,
+  SegmentedControl,
+  ToggleRow,
+} from "@/components/ui/surfaces";
 import { MODE_CONFIGS, MODE_ORDER, type RecognitionMode } from "@/features/recognition/recognitionModes";
 import { SENSITIVITY_LABELS, type DetectionSensitivity } from "./handCaptureProfile";
 
@@ -42,19 +52,23 @@ export function CameraSettingsPanel({
       transition={{ duration: 0.16 }}
       className="absolute right-4 top-16 z-20 w-[290px] overflow-hidden rounded-2xl border border-white/15 bg-slate-900/85 shadow-2xl ring-1 ring-black/20 backdrop-blur-xl"
     >
-      <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
-        <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-white/60">
-          <SlidersHorizontal className="h-3.5 w-3.5" />Camera settings
-        </span>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close camera settings"
-          className="flex h-6 w-6 items-center justify-center rounded-full text-white/50 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
+      <SectionHeader
+        tone="dark"
+        className="border-b border-white/10 px-4 py-3"
+        icon={<SlidersHorizontal className="h-3.5 w-3.5" />}
+        actions={
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close camera settings"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-white/50 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        }
+      >
+        Camera settings
+      </SectionHeader>
 
       <div className="space-y-1 px-2 py-2">
         <ToggleRow
@@ -90,117 +104,52 @@ export function CameraSettingsPanel({
       <div className="border-t border-white/10 px-4 py-3">
         <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">Recognition mode</p>
         <div className="space-y-1">
+          {/*
+            The caveat is stated on the mode itself, not tucked away: someone
+            who tries phrase signs and gets poor results should know that is
+            expected, rather than conclude the system is broken.
+          */}
           {MODE_ORDER.map((m) => (
-            <button
+            <OptionRow
               key={m}
-              type="button"
-              onClick={() => onModeChange(m)}
-              className={cn(
-                "flex w-full items-start gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white",
-                mode === m ? "bg-senyalita-primary/25 ring-1 ring-inset ring-senyalita-primary/40" : "hover:bg-white/8",
-              )}
-            >
-              <Check className={cn("mt-0.5 h-3.5 w-3.5 shrink-0", mode === m ? "text-senyalita-secondary" : "text-transparent")} />
-              <span className="min-w-0">
-                <span className="flex items-center gap-1.5">
-                  <span className="text-xs font-semibold text-white">{MODE_CONFIGS[m].label}</span>
-                  {MODE_CONFIGS[m].beta && (
-                    <span className="rounded bg-amber-400/20 px-1 py-px text-[9px] font-bold uppercase tracking-wide text-amber-300">
-                      Beta
-                    </span>
-                  )}
-                </span>
-                <span className="block text-[10px] leading-snug text-white/50">{MODE_CONFIGS[m].description}</span>
-                {/*
-                  Stated on the mode itself, not tucked away: someone who tries
-                  phrase signs and gets poor results should know that is
-                  expected, rather than conclude the system is broken.
-                */}
-                {MODE_CONFIGS[m].caveat && (
-                  <span className="mt-0.5 block text-[10px] leading-snug text-amber-200/70">
-                    {MODE_CONFIGS[m].caveat}
-                  </span>
-                )}
-              </span>
-            </button>
+              tone="dark"
+              selected={mode === m}
+              label={MODE_CONFIGS[m].label}
+              description={MODE_CONFIGS[m].description}
+              caveat={MODE_CONFIGS[m].caveat}
+              badge={MODE_CONFIGS[m].beta ? <Badge tone="warn">Beta</Badge> : undefined}
+              onSelect={() => onModeChange(m)}
+            />
           ))}
         </div>
 
         {modePending && cameraActive && (
-          <p className="mt-2 rounded-md bg-amber-400/12 px-2.5 py-1.5 text-[10px] leading-snug text-amber-200/90">
+          <Notice tone="warn" className="mt-2">
             Restart the camera to apply — this mode tracks a different number of hands,
             which is fixed when the detector starts.
-          </p>
+          </Notice>
         )}
       </div>
 
       <div className="border-t border-white/10 px-4 py-3">
         <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">Detection sensitivity</p>
-        <div className="grid grid-cols-3 gap-1 rounded-full bg-white/8 p-1">
-          {SENSITIVITY_ORDER.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => onChange("sensitivity", s)}
-              title={SENSITIVITY_LABELS[s].hint}
-              className={cn(
-                "rounded-full py-1.5 text-[11px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white",
-                settings.sensitivity === s ? "bg-white text-slate-900" : "text-white/60 hover:text-white",
-              )}
-            >
-              {SENSITIVITY_LABELS[s].label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          tone="dark"
+          value={settings.sensitivity}
+          onChange={(s) => onChange("sensitivity", s)}
+          options={SENSITIVITY_ORDER.map((s) => ({
+            value: s,
+            label: SENSITIVITY_LABELS[s].label,
+            hint: SENSITIVITY_LABELS[s].hint,
+          }))}
+        />
         <p className="mt-2 text-[10px] leading-snug text-white/45">{SENSITIVITY_LABELS[settings.sensitivity].hint}</p>
         {sensitivityPending && cameraActive && (
-          <p className="mt-1.5 rounded-lg bg-amber-400/15 px-2 py-1.5 text-[10px] font-medium leading-snug text-amber-200">
+          <Notice tone="warn" className="mt-1.5">
             Restart the camera to apply this — the detector is built when capture starts.
-          </p>
+          </Notice>
         )}
       </div>
     </motion.div>
-  );
-}
-
-function ToggleRow({
-  icon, label, hint, checked, disabled, onChange,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  hint?: string;
-  checked: boolean;
-  disabled?: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-white/8 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
-    >
-      <span className={cn("shrink-0", checked ? "text-senyalita-secondary" : "text-white/45")}>{icon}</span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-xs font-medium text-white">{label}</span>
-        {hint && <span className="block text-[10px] leading-snug text-white/45">{hint}</span>}
-      </span>
-      <span
-        aria-hidden="true"
-        className={cn(
-          "relative h-5 w-9 shrink-0 rounded-full transition-colors",
-          checked ? "bg-senyalita-primary" : "bg-white/20",
-        )}
-      >
-        <span
-          className={cn(
-            "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
-            checked ? "translate-x-[18px]" : "translate-x-0.5",
-          )}
-        />
-      </span>
-    </button>
   );
 }

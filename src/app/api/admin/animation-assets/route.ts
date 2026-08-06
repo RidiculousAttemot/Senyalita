@@ -6,6 +6,49 @@ import { toErrorResponse } from "@/server/http/errors";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+/**
+ * Renames a gloss.
+ *
+ * The gloss is the only key the public resolver looks an asset up by, so this
+ * is a live change: a published asset renamed here stops answering under its
+ * old name on the next request. Rejecting an existing gloss keeps that from
+ * silently detaching whichever asset already owned the name -- the column is
+ * unique, so the alternative is a constraint error mid-request.
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    await requireAdmin();
+    const body = (await request.json()) as { assetId?: string; gloss?: string };
+    const gloss = typeof body.gloss === "string" ? body.gloss.trim().toUpperCase().replace(/\s+/g, " ") : "";
+
+    if (!body.assetId || !gloss) {
+      return NextResponse.json({ error: "An asset and a new gloss are required." }, { status: 400 });
+    }
+
+    const supabase = createSupabaseServiceClient();
+    const { data: clash, error: clashError } = await supabase
+      .from("animation_assets")
+      .select("id")
+      .eq("gloss", gloss)
+      .neq("id", body.assetId)
+      .maybeSingle();
+    if (clashError) throw new Error(clashError.message);
+    if (clash) {
+      return NextResponse.json({ error: `"${gloss}" is already used by another asset.` }, { status: 409 });
+    }
+
+    const { error: renameError } = await supabase
+      .from("animation_assets")
+      .update({ gloss })
+      .eq("id", body.assetId);
+    if (renameError) throw new Error(renameError.message);
+
+    return NextResponse.json({ ok: true, gloss });
+  } catch (err) {
+    return toErrorResponse(err, "PATCH /api/admin/animation-assets");
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     await requireAdmin();

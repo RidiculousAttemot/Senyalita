@@ -26,6 +26,14 @@ import type { ValidationResult, AnimationMetadata, QualityAnalysis } from "@/fea
 
 interface PublishTabProps {
   extractionResult: ExtractionResult;
+  /**
+   * The video the landmarks came from.
+   *
+   * Stored so a version can be re-extracted or trimmed later. Every publish
+   * used to send an empty placeholder File instead, so the source was
+   * discarded at the moment it was last available.
+   */
+  sourceFile: File | null;
   onPublish: (data: PublishData) => void;
 }
 
@@ -38,7 +46,7 @@ const CATEGORIES = [
 const DIFFICULTIES = ["beginner", "intermediate", "advanced"];
 const LANGUAGES = ["FSL", "ASL", "LSF"];
 
-export function PublishTab({ extractionResult, onPublish }: PublishTabProps) {
+export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishTabProps) {
   const { asset, metadata } = extractionResult;
   const [gloss, setGloss] = useState("");
   const [category, setCategory] = useState("");
@@ -107,18 +115,20 @@ export function PublishTab({ extractionResult, onPublish }: PublishTabProps) {
     try {
       asset.label = trimmedGloss;
 
-      const { assetId, versionId } = await animationLibrary.upload(
-        metadata.sourceFps > 0
-          ? new File([""], "placeholder", { type: "video/mp4" })
-          : extractionResult.frames.length > 0
-            ? new File([""], "placeholder", { type: "video/mp4" })
-            : new File([""], "placeholder", { type: "video/mp4" }),
-        trimmedGloss,
-      );
+      // All three branches of the ternary this replaces built the same empty
+      // placeholder File, so the source video was never stored -- every
+      // published version pointed at a zero-byte object, and re-extracting or
+      // trimming a sign was impossible after the fact.
+      if (!sourceFile) {
+        throw new Error("The source video is no longer available. Re-upload it before publishing.");
+      }
+
+      const { versionId } = await animationLibrary.upload(sourceFile, trimmedGloss);
 
       await animationLibrary.performAction(versionId, "complete-processing", {
         asset: asset as unknown as Record<string, unknown>,
         qualityScore,
+        language,
       });
 
       if (action === "published") {

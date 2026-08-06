@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { globalPipeline } from "@/features/translation-pipeline";
 import { globalLoader } from "@/features/sign-animation/hooks/useAnimationClip";
+import { publishedGlosses, normalizeGloss } from "@/features/sign-animation/publishedGlosses";
 import type { AnimationClip } from "@/features/sign-animation/types";
 import type { AnimationPlanItem, TranslationPipelineResult } from "@/features/translation-pipeline/types";
 import { computeReadyPrefix, type SettledSlot } from "./orderedFlush";
@@ -96,6 +97,25 @@ export function useProgressiveSignTranslation(options: UseProgressiveSignTransla
     const fallbackWords: string[] = [];
 
     const resolveItem = async (item: AnimationPlanItem, index: number): Promise<AnimationClip[]> => {
+      // A published asset for the typed word outranks whatever the dictionary
+      // guessed for it.
+      //
+      // Animation keys come from a hardcoded vocabulary file, and a word it
+      // does not name gets a first-letter fingerspelling stand-in as its key.
+      // So publishing a gloss outside that file was inert -- the upload was
+      // never requested, and the only way to add vocabulary was a code deploy.
+      // Asking the server what exists is what makes an upload playable.
+      //
+      // Checked first, not last: by the time the dictionary's key resolves to
+      // something loadable, the word has already been answered incorrectly.
+      const typed = normalizeGloss(item.original);
+      if (typed && typed !== normalizeGloss(item.animationKey ?? "") && (await publishedGlosses.has(typed))) {
+        const asset = await globalLoader.load(typed);
+        if (asset) {
+          return [{ id: `anim-${typed}-${index}-${Date.now()}`, gesture: typed, asset }];
+        }
+      }
+
       if (!item.fallbackUsed) {
         const asset = await globalLoader.load(item.animationKey);
         if (asset) {
