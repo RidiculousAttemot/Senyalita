@@ -3,11 +3,6 @@ import { mapHolisticResultToFrame } from "../processing";
 
 type HolisticResultLike = Parameters<typeof mapHolisticResultToFrame>[0];
 
-type VideoFrameCallbackVideo = HTMLVideoElement & {
-  requestVideoFrameCallback?: (callback: (now: number) => void) => number;
-  cancelVideoFrameCallback?: (handle: number) => void;
-};
-
 export interface ExtractionProgress {
   currentFrame: number;
   totalFrames: number;
@@ -84,61 +79,87 @@ export async function extractLandmarksFromVideo(
   const sourceFps = 30;
   const totalFrames = Math.max(1, Math.ceil(video.duration * sourceFps));
   const frames: AnimationFrame[] = [];
-  const sourceVideo = video as VideoFrameCallbackVideo;
-  let lastCapturedTime = -1;
-  let callbackHandle: number | undefined;
-  let animationFrameHandle: number | undefined;
-  let stopped = false;
 
   console.log(`[Extraction] Starting: ${totalFrames} total frames expected`);
 
-  try {
-    video.currentTime = 0;
-    await video.play();
-
-    await new Promise<void>((resolve, reject) => {
-      const cleanup = () => {
-        stopped = true;
-        video.removeEventListener("ended", onEnded);
+  /**
+   * Seek to a timestamp and resolve once the frame there is actually decoded.
+   *
+   * `seeked` fires when currentTime has moved, which can be slightly before the
+   * new frame is available to draw; readyState >= HAVE_CURRENT_DATA is the
+   * condition that matters for detectForVideo. The timeout keeps one
+   * undecodable frame from stalling the whole extraction -- it is skipped and
+   * reported instead.
+   */
+  const seekTo = (time: number) =>
+    new Promise<boolean>((resolve) => {
+      let settled = false;
+      const done = (ok: boolean) => {
+        if (settled) return;
+        settled = true;
+        video.removeEventListener("seeked", onSeeked);
         video.removeEventListener("error", onError);
-        if (callbackHandle !== undefined) sourceVideo.cancelVideoFrameCallback?.(callbackHandle);
-        if (animationFrameHandle !== undefined) window.cancelAnimationFrame(animationFrameHandle);
+        clearTimeout(timer);
+        resolve(ok);
       };
-      const onEnded = () => {
-        cleanup();
-        resolve();
+      const onSeeked = () => {
+        if (video.readyState >= 2) done(true);
+        else video.addEventListener("canplay", () => done(video.readyState >= 2), { once: true });
       };
-      const onError = () => {
-        cleanup();
-        reject(new Error("The source video could not be decoded during landmark extraction."));
-      };
-      const capture = (timestamp: number) => {
-        if (stopped) return;
-        if (video.currentTime !== lastCapturedTime) {
-          lastCapturedTime = video.currentTime;
-          const result = landmarker.detectForVideo(video, timestamp);
-          const frame = mapHolisticVideoResult(result, timestamp);
-          if (frame) frames.push(frame);
-          const currentFrame = Math.min(totalFrames, Math.max(1, Math.round(video.currentTime * sourceFps)));
-          onProgress?.({ currentFrame, totalFrames, progress: currentFrame / totalFrames, frame: frame ?? undefined });
-        }
-        scheduleCapture();
-      };
-      const scheduleCapture = () => {
-        if (stopped) return;
-        if (sourceVideo.requestVideoFrameCallback) {
-          callbackHandle = sourceVideo.requestVideoFrameCallback(capture);
-        } else {
-          animationFrameHandle = window.requestAnimationFrame(capture);
-        }
-      };
+      const onError = () => done(false);
+      const timer = setTimeout(() => done(false), 3000);
 
-      video.addEventListener("ended", onEnded, { once: true });
+      video.addEventListener("seeked", onSeeked, { once: true });
       video.addEventListener("error", onError, { once: true });
-      scheduleCapture();
+      video.currentTime = time;
     });
-  } finally {
+
+  try {
+    // Paused and seeked, not played.
+    //
+    // This used to drive capture from requestVideoFrameCallback during
+    // playback, gated on `video.currentTime !== lastCapturedTime`. That makes
+    // the whole extraction depend on the element actually advancing: if
+    // playback never starts -- an autoplay policy, an element paused by the
+    // caller, a decoder that will not run in the background -- the guard is
+    // true exactly once and the run "completes" with 1 of 189 frames and no
+    // error. It also capped throughput at real time and silently dropped any
+    // frame the compositor skipped.
+    //
+    // Seeking is deterministic: every frame index is visited exactly once,
+    // nothing depends on playback, and a failed seek is reported rather than
+    // quietly shortening the result.
     video.pause();
+
+    let skipped = 0;
+    for (let i = 0; i < totalFrames; i++) {
+      // Clamp inside the media: seeking exactly to duration lands past the
+      // last frame and never fires `seeked` on some decoders.
+      const time = Math.min(i / sourceFps, Math.max(0, video.duration - 1 / (sourceFps * 2)));
+      if (!(await seekTo(time))) {
+        skipped++;
+        continue;
+      }
+
+      // detectForVideo requires strictly increasing timestamps; media time in
+      // milliseconds is monotonic across the loop by construction.
+      const timestampMs = Math.round(time * 1000);
+      const result = landmarker.detectForVideo(video, timestampMs);
+      const frame = mapHolisticVideoResult(result, timestampMs);
+      if (frame) frames.push(frame);
+
+      onProgress?.({
+        currentFrame: i + 1,
+        totalFrames,
+        progress: (i + 1) / totalFrames,
+        frame: frame ?? undefined,
+      });
+    }
+
+    if (skipped > 0) {
+      console.warn(`[Extraction] ${skipped}/${totalFrames} frames could not be decoded and were skipped.`);
+    }
+  } finally {
     landmarker.close();
   }
 

@@ -158,10 +158,19 @@ export function SignStageViewer({
    * the first animation frame, and in the modes that show the recording a
    * multi-megabyte video fetching and decoding. All of it rendered as an empty
    * stage with no loader over it.
+   *
+   * Stored as the sequence that painted rather than a boolean with a reset
+   * effect. React runs a child's effects before its parent's, so a remounted
+   * player announced its first frame and *then* the parent's reset ran and
+   * clobbered it — the loader stayed up forever with the sign playing
+   * underneath. Comparing keys makes a new sequence unpainted by construction,
+   * with no ordering to get wrong.
    */
-  const [painted, setPainted] = useState(false);
-  useEffect(() => { setPainted(false); }, [sequenceKey]);
-  const handleFirstFrame = useCallback(() => setPainted(true), []);
+  const [paintedKey, setPaintedKey] = useState<number | null>(null);
+  const sequenceKeyRef = useRef(sequenceKey);
+  sequenceKeyRef.current = sequenceKey;
+  const handleFirstFrame = useCallback(() => setPaintedKey(sequenceKeyRef.current), []);
+  const painted = paintedKey === sequenceKey;
   // Streaming keeps `loading` true while later clips arrive, so this cannot
   // simply be `loading || !painted` — that would re-cover a stage that is
   // already playing.
@@ -237,6 +246,7 @@ export function SignStageViewer({
                 onGestureChange={handleGestureChange}
                 onProgress={handleProgress}
                 onComplete={handleComplete}
+                onFirstFrame={handleFirstFrame}
               />
             </div>
           )}

@@ -636,8 +636,19 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
     // renderer construction that had to happen first. Drawing the frame the
     // sequence starts on costs one render and removes that window entirely.
     paintFirstFrame(clips[0]);
-    engine.loadSequence(clips);
-    setPlayState((p) => ({ ...p, isPlaying: true, isPaused: false, loop }));
+
+    // Then start on the next frame, not this one.
+    //
+    // Painting announces "there is something to look at", which is what takes
+    // the caller's loading overlay down — but that is a React state change, so
+    // it lands a commit later. Starting the engine synchronously ran the sign
+    // underneath the overlay for that commit, and the viewer met the sign
+    // already in progress. One frame of the static opening pose instead.
+    const startId = requestAnimationFrame(() => {
+      engine.loadSequence(clips);
+      setPlayState((p) => ({ ...p, isPlaying: true, isPaused: false, loop }));
+    });
+    return () => cancelAnimationFrame(startId);
   }, [clips, loop, paintFirstFrame]);
 
   useEffect(() => {
