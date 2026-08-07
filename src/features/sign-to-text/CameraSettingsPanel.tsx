@@ -137,10 +137,15 @@ export function CameraSettingsPanel({
           ))}
         </div>
 
+        {/* Progress, not an instruction. This used to read "restart the camera
+            to apply", which was accurate then and is not now: the detector is
+            rebuilt for the new hand count while the camera keeps running, and
+            this is only on screen for the moment that takes. Leaving the old
+            wording would ask for a restart that does nothing. */}
         {modePending && cameraActive && (
-          <Notice tone="warn" className="mt-2">
-            Restart the camera to apply — this mode tracks a different number of hands,
-            which is fixed when the detector starts.
+          <Notice tone="info" className="mt-2">
+            Switching hand tracking for this mode — alphabet follows one hand,
+            phrase signs need both.
           </Notice>
         )}
       </div>

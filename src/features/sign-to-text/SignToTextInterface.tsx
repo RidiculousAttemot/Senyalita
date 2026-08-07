@@ -73,7 +73,13 @@ export function SignToTextInterface() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const landmarkCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const handLandmarkerRef = useRef<{ close: () => void } | null>(null);
+  // The real landmarker type, derived from the factory rather than imported:
+  // @mediapipe/tasks-vision is dynamically imported to keep it out of the
+  // initial bundle, and `typeof` reaches its types without a value import.
+  // Previously this was a minimal `{ close }`, which was enough while the draw
+  // loop held its own reference — it now detects through the ref so the
+  // detector can be swapped, and needs detectForVideo to be on the type.
+  const handLandmarkerRef = useRef<Awaited<ReturnType<typeof createHandLandmarker>> | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const cameraRunIdRef = useRef(0);
   const [status, setStatus] = useState<Status>("waiting");
@@ -351,7 +357,15 @@ export function SignToTextInterface() {
         if (video.currentTime !== lastVideoTime) {
           lastVideoTime = video.currentTime;
           const frameTimestamp = performance.now();
-          const results = handLandmarker.detectForVideo(video, frameTimestamp);
+          // Read from the ref, not the closure this loop was started with, so
+          // the detector can be replaced underneath it — which is how a mode
+          // change takes effect without stopping the camera.
+          const detector = handLandmarkerRef.current;
+          if (!detector) {
+            animationFrameRef.current = window.requestAnimationFrame(drawLandmarks);
+            return;
+          }
+          const results = detector.detectForVideo(video, frameTimestamp);
           lastDetectEnd = performance.now();
           lastDetectCost = lastDetectEnd - frameTimestamp;
           // Cost of detection alone, separated from camera delivery rate.
@@ -468,6 +482,65 @@ export function SignToTextInterface() {
   }, [clearCameraResources, resetRecognition]);
 
   useEffect(() => () => stopCamera(), [stopCamera]);
+
+  /**
+   * Rebuild the detector when the selected mode needs a different hand count.
+   *
+   * numHands is compiled into the MediaPipe graph when it is created, so a
+   * mode change on a running camera kept whatever the detector started with.
+   * Choosing Phrase Signs and then signing a two-handed phrase tracked one
+   * hand, which does not read as "the mode has not applied yet" — it reads as
+   * the model failing on two-handed signs. Alphabet is one hand and phrase
+   * signs are two, so every mode change crosses this boundary.
+   *
+   * Only the graph is rebuilt. The MediaStream is unaffected by numHands, and
+   * tearing the camera down to change it would drop frames, blank the stage and
+   * re-run permission checks for a setting the camera does not own.
+   *
+   * The buffer is cleared with it: the window holds up to 120 frames captured
+   * under the old hand count, and the right half of every one of those is
+   * zero-filled. Feeding the model a window that changes hand count partway
+   * through is a distribution it was never trained on.
+   */
+  useEffect(() => {
+    // Camera off — startCamera reads selectedModeRef and builds it correctly.
+    if (!handLandmarkerRef.current) return;
+    if (activeModeRef.current === selectedMode) return;
+
+    let cancelled = false;
+    const runId = cameraRunIdRef.current;
+
+    (async () => {
+      let next;
+      try {
+        next = await createHandLandmarker({
+          ...handLandmarkerOptionsFor(activeSensitivityRef.current ?? settingsRef.current.sensitivity),
+          numHands: handsForMode(selectedMode),
+        });
+      } catch {
+        // Keep the working detector rather than leaving the camera with none.
+        // The panel's "restart to apply" notice stays up, which is now the
+        // accurate thing to say.
+        return;
+      }
+      // The camera stopped or restarted while the graph was being built.
+      if (cancelled || cameraRunIdRef.current !== runId || !handLandmarkerRef.current) {
+        next.close();
+        return;
+      }
+      const previous = handLandmarkerRef.current;
+      handLandmarkerRef.current = next;
+      // Safe to close only after the swap: the draw loop reads the ref at the
+      // top of each detect, and nothing yields between these two statements,
+      // so no frame can be mid-flight on the old graph.
+      previous.close();
+      activeModeRef.current = selectedMode;
+      setActiveMode(selectedMode);
+      clearSequence();
+    })();
+
+    return () => { cancelled = true; };
+  }, [selectedMode, clearSequence]);
 
   useEffect(() => {
     const toggleCameraFromHeader = () => {
@@ -633,9 +706,10 @@ export function SignToTextInterface() {
                   onChange={(key, value) => setSettings((prev) => ({ ...prev, [key]: value }))}
                   mode={selectedMode}
                   onModeChange={(m) => { setSelectedMode(m); recognition.setMode(m); }}
-                  // The mode sets numHands, which the detector bakes in at
-                  // creation, so switching it needs the same restart notice
-                  // sensitivity already gets.
+                  // Transient now, not an instruction. The detector is rebuilt
+                  // for the new hand count on its own, so this is only true
+                  // for the moment that takes — unlike sensitivity below,
+                  // which still genuinely needs the camera restarted.
                   modePending={
                     activeMode !== null
                     && handsForMode(activeMode) !== handsForMode(selectedMode)

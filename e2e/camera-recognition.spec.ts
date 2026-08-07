@@ -284,3 +284,58 @@ test.describe("capture loop @gesture", () => {
     expect(predicted).not.toBe("");
   });
 });
+
+/**
+ * Switching mode has to change the number of hands being tracked, on a camera
+ * that is already running.
+ *
+ * numHands is compiled into the MediaPipe graph at creation. Selecting Phrase
+ * Signs used to leave the running detector on one hand until the camera was
+ * restarted by hand, so a two-handed phrase tracked one hand — which reads as
+ * the model failing on two-handed signs rather than as a setting that has not
+ * applied.
+ *
+ * The observable is the panel's own pending state: it is derived from the hand
+ * count the detector was built with against the one the selected mode wants,
+ * so it clearing on its own is the rebuild having happened. The camera must
+ * still be running afterwards — rebuilding the graph must not take the stream
+ * down with it.
+ */
+test.describe("recognition mode @letter", () => {
+  test("applies a two-handed mode without restarting the camera", async ({ page }) => {
+    test.setTimeout(240_000);
+
+    await page.goto(`${BASE}/translate`);
+    await page.getByRole("button", { name: /Sign\s*→\s*Text/i }).click();
+    await page.locator('[role="tabpanel"]')
+      .getByRole("button", { name: /Start camera/i }).first().click();
+
+    // Wait for the detector to actually be running before changing anything.
+    await expect
+      .poll(async () => (await page.locator('[data-testid="recognition-readout"]')
+        .getAttribute("data-prediction")) ?? "",
+        { timeout: 150_000, message: "camera never produced a prediction" })
+      .not.toBe("");
+
+    await page.getByRole("button", { name: /Camera settings/i }).click();
+    const panel = page.getByRole("dialog", { name: /Camera settings/i });
+    await expect(panel).toBeVisible();
+
+    await panel.getByText(/Phrase Signs/i).click();
+
+    // The pending notice may never be caught between samples on a fast rebuild;
+    // what matters is that it is not still there afterwards.
+    await expect
+      .poll(async () => panel.getByText(/Switching hand tracking/i).isVisible().catch(() => false),
+        { timeout: 30_000, message: "mode never applied — detector was not rebuilt" })
+      .toBe(false);
+
+    // The stream survived the swap: predictions keep arriving.
+    await page.getByRole("button", { name: /Close camera settings/i }).click();
+    await expect
+      .poll(async () => (await page.locator('[data-testid="recognition-readout"]')
+        .getAttribute("data-prediction")) ?? "",
+        { timeout: 60_000, message: "camera stopped producing after the mode change" })
+      .not.toBe("");
+  });
+});
