@@ -50,11 +50,25 @@ export function CameraSettingsPanel({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -8, scale: 0.97 }}
       transition={{ duration: 0.16 }}
-      className="absolute right-4 top-16 z-20 w-[290px] overflow-hidden rounded-2xl border border-white/15 bg-slate-900/85 shadow-2xl ring-1 ring-black/20 backdrop-blur-xl"
+      /*
+        Capped and scrollable, because the stage it sits in is a fixed 400px
+        (560px from md) with overflow hidden. The panel opens 4rem down, so
+        anything past roughly 320px was simply clipped — on a short viewport
+        that hid the whole sensitivity section, and there was no way to reach
+        it. 5rem is the 4rem offset plus a 1rem gap at the bottom edge.
+
+        overflow-x stays hidden so the rounded corners still clip their
+        content, and overscroll-contain stops a flick inside the panel from
+        scrolling the page behind it.
+      */
+      className="absolute right-4 top-16 z-20 max-h-[calc(100%-5rem)] w-[290px] overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl border border-white/15 bg-slate-900/85 shadow-2xl ring-1 ring-black/20 backdrop-blur-xl"
     >
       <SectionHeader
         tone="dark"
-        className="border-b border-white/10 px-4 py-3"
+        // Pinned, so the close button stays reachable once the panel scrolls.
+        // It needs its own near-opaque background: the panel's own translucency
+        // would let the scrolling rows show through the title.
+        className="sticky top-0 z-10 border-b border-white/10 bg-slate-900/95 px-4 py-3 backdrop-blur-xl"
         icon={<SlidersHorizontal className="h-3.5 w-3.5" />}
         actions={
           <button
