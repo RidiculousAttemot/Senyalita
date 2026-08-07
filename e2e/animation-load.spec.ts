@@ -36,29 +36,29 @@ test.describe("animation asset delivery", () => {
   // production server and considerably longer against a cold dev one.
   test.describe.configure({ timeout: 240_000 });
 
-  test("no published asset is ever served from the local fallback", async ({ page }) => {
-    await page.goto(`${BASE}/`);
-
-    // Run the burst inside the page rather than through Playwright's request
-    // context. Two reasons: the browser is where preloadCommonAssets() actually
-    // runs, so its connection limits are the ones that matter; and reading
-    // headers without buffering 38 x 3MB of bodies is the difference between
-    // an 11s test and one that dies holding ~82MB.
-    const responses = await page.evaluate(async (glosses: string[]) => {
-      return Promise.all(
-        glosses.map(async (gloss) => {
-          const res = await fetch(`/api/animations/${encodeURIComponent(gloss)}`);
-          // Release the body without materialising it.
-          await res.body?.cancel();
-          return {
-            gloss,
-            status: res.status,
-            source: res.headers.get("x-animation-source"),
-            stage: res.headers.get("x-animation-failure-stage"),
-          };
-        }),
-      );
-    }, PRELOAD_GLOSSES);
+  test("no published asset is ever served from the local fallback", async ({ request }) => {
+    // Originally this ran in-page, because reading headers through Playwright's
+    // request context meant buffering 38 x 3MB of bodies — 82MB, and a timeout.
+    // The route now 307s to a signed Storage URL instead of proxying the JSON,
+    // so with maxRedirects: 0 each response is a bodyless redirect. The burst
+    // costs almost nothing and the headers are readable directly.
+    //
+    // X-Animation-Source lives on that redirect. Following it reads Storage's
+    // headers, where the field does not exist — which is what made the in-page
+    // version start reporting `undefined` for every gloss.
+    const responses = await Promise.all(
+      PRELOAD_GLOSSES.map(async (gloss) => {
+        const res = await request.get(`${BASE}/api/animations/${encodeURIComponent(gloss)}`, {
+          maxRedirects: 0,
+        });
+        return {
+          gloss,
+          status: res.status(),
+          source: res.headers()["x-animation-source"] ?? null,
+          stage: res.headers()["x-animation-failure-stage"] ?? null,
+        };
+      }),
+    );
 
     // The tripwire. `local-development-failed` means a published asset existed
     // and could not be fetched; `local-development-absent` means dev is
@@ -81,7 +81,8 @@ test.describe("animation asset delivery", () => {
     // alphabet, which is the fallback for every unknown word -- if a letter is
     // missing there is nothing beneath it to degrade to.
     const letters = responses.filter((r) => r.gloss.length === 1);
-    const badLetters = letters.filter((r) => r.status !== 200 || r.source !== "published");
+    // 307, not 200: a published asset is now a redirect to signed Storage.
+    const badLetters = letters.filter((r) => r.status !== 307 || r.source !== "published");
     expect(
       badLetters.map((r) => `${r.gloss} -> ${r.status} ${r.source}`),
       "every letter must be served from the database",

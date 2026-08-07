@@ -136,31 +136,30 @@ test.describe("Text-to-Sign", () => {
 });
 
 test.describe("routing", () => {
-  test("public surface is /, /translate and /evaluation", async ({ page }) => {
-    // /learn and /conversation moved out of this list when they gained
-    // redirects; they are asserted below instead. These two are gone outright.
+  test("public surface is /, /translate, /evaluation and /learn", async ({ page }) => {
+    // /conversation redirects and is asserted below. These two are gone.
     for (const path of ["/presentation", "/history"]) {
       const res = await page.goto(`${BASE}${path}`);
       expect(res?.status(), `${path} should be gone`).toBe(404);
     }
 
-    // /evaluation is public route #3. It was removed with the rest and then
-    // restored: it is the harness that produces the recognition accuracy
-    // figures, so it has to keep resolving.
-    for (const path of ["/", "/translate", "/evaluation"]) {
+    // /evaluation is #3 and /learn is #4. Both were deleted under the
+    // two-workflow rule and both came back: /evaluation because it produces
+    // the accuracy figures, /learn as a learning reference. Its redirect to
+    // /translate has been removed, so it must resolve on its own.
+    for (const path of ["/", "/translate", "/evaluation", "/learn"]) {
       const res = await page.goto(`${BASE}${path}`);
       expect(res?.status(), `${path} should resolve`).toBe(200);
     }
   });
 
   test("legacy paths redirect to /translate", async ({ page }) => {
-    // The first two are renames (301) and the rest are deletions (307), but
+    // The first two are renames (308) and the rest are deletions (307), but
     // from a visitor's side the requirement is identical: an old link lands on
     // /translate instead of a 404.
     for (const path of [
       "/type-to-sign",
       "/sign-to-text",
-      "/learn",
       "/conversation",
       "/conversation/some-old-id",
     ]) {
@@ -175,7 +174,8 @@ test.describe("routing", () => {
     const expected: Array<[string, number]> = [
       ["/type-to-sign", 308],
       ["/sign-to-text", 308],
-      ["/learn", 307],
+      // /learn is deliberately absent: it is a real page again, and its 307
+      // redirect was removed. The public-surface test asserts it returns 200.
       ["/conversation", 307],
       ["/conversation/some-old-id", 307],
     ];
@@ -195,8 +195,12 @@ test.describe("routing", () => {
   });
 
   test("published animations are served from the database", async ({ request }) => {
-    const res = await request.get(`${BASE}/api/animations/A`);
-    expect(res.status()).toBe(200);
+    // maxRedirects: 0 is load-bearing. The route now 307s to a signed Storage
+    // URL rather than proxying 3MB through the function, and X-Animation-Source
+    // rides on the redirect, not on the final Storage response. Following the
+    // redirect reads Storage's headers, where the field simply does not exist.
+    const res = await request.get(`${BASE}/api/animations/A`, { maxRedirects: 0 });
+    expect(res.status()).toBe(307);
     expect(res.headers()["x-animation-source"]).toBe("published");
   });
 });
