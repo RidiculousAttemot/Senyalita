@@ -1,0 +1,129 @@
+{
+  "$comment": [
+    "Curated external FSL learning resources shown on /learn.",
+    "",
+    "Adding one is a data edit: append an object here, no code change. Every",
+    "entry needs title, url, topic, creator and verifiedOn.",
+    "",
+    "ATTRIBUTION. `creator` is the actual channel or publisher, taken from the",
+    "YouTube oEmbed API rather than typed from memory, because this is a thesis",
+    "artefact and these are other people's work. Cite them from this field.",
+    "",
+    "LINK ROT. Every url below returned HTTP 200 on the verifiedOn date. External",
+    "links decay — re-check before the defense. `npm run verify:tutorials` walks",
+    "this file and reports non-200s.",
+    "",
+    "Two candidates were dropped rather than shipped unverified: an INQUIRER.net",
+    "article (403 to non-browser clients) and a Facebook page (400). Both may work",
+    "in a browser, but a link that cannot be checked automatically will rot",
+    "silently."
+  ],
+  "topics": [
+    { "id": "alphabet", "label": "Alphabet & fingerspelling" },
+    { "id": "numbers", "label": "Numbers" },
+    { "id": "greetings", "label": "Greetings & everyday phrases" },
+    { "id": "reference", "label": "Background & reference" }
+  ],
+  "tutorials": [
+    {
+      "id": "rai-zason-fsl-tutorial",
+      "title": "FILIPINO SIGN LANGUAGE TUTORIAL",
+      "url": "https://www.youtube.com/playlist?list=PLkEbhtuT-Wbr9IZ7RJqlwsBqZvAvh__bO",
+      "topic": "alphabet",
+      "creator": "Rai Zason",
+      "kind": "playlist",
+      "note": "Multi-part tutorial series covering the alphabet and basic vocabulary.",
+      "verifiedOn": "2026-08-08"
+    },
+    {
+      "id": "fsl-tutor-channel",
+      "title": "FSL TUTOR",
+      "url": "https://www.youtube.com/c/FSLTUTOR",
+      "topic": "alphabet",
+      "creator": "FSL TUTOR",
+      "kind": "channel",
+      "note": "Dictionary-style vocabulary videos and fingerspelling practice.",
+      "verifiedOn": "2026-08-08"
+    },
+    {
+      "id": "ustp-basic-fsl-series",
+      "title": "Basic FSL Series",
+      "url": "https://sites.google.com/ustp.edu.ph/damor/basic-fsl-series",
+      "topic": "alphabet",
+      "creator": "University of Science and Technology of Southern Philippines (USTP)",
+      "kind": "course",
+      "note": "University-hosted lesson series, structured from the alphabet upward.",
+      "verifiedOn": "2026-08-08"
+    },
+    {
+      "id": "inquirer-basic-phrases",
+      "title": "Learn basic phrases in Filipino Sign Language",
+      "url": "https://www.youtube.com/watch?v=UytbjabYX_8",
+      "topic": "greetings",
+      "creator": "INQUIRER.net",
+      "kind": "video",
+      "note": "Short introduction to everyday greetings and courtesy phrases.",
+      "verifiedOn": "2026-08-08"
+    },
+    {
+      "id": "mccid-advanced-fsl",
+      "title": "Advanced Filipino Sign Language Online Tutorial",
+      "url": "https://www.mccid.edu.ph/online/courselist/advanced-filipino-sign-language-online-tutorial/",
+      "topic": "greetings",
+      "creator": "Manila Christian Computer Institute for the Deaf (MCCID)",
+      "kind": "course",
+      "note": "Online course from a long-running Deaf education institution.",
+      "verifiedOn": "2026-08-08"
+    },
+    {
+      "id": "seek-the-world-fsl-asl",
+      "title": "Filipino Sign Language (FSL) & American Sign Language (ASL)",
+      "url": "https://www.youtube.com/watch?v=leTo5-lzex4",
+      "topic": "reference",
+      "creator": "Seek the World",
+      "kind": "video",
+      "note": "Where FSL and ASL differ — useful, since much of the alphabet is shared.",
+      "verifiedOn": "2026-08-08"
+    },
+    {
+      "id": "wikipedia-fsl",
+      "title": "Filipino Sign Language",
+      "url": "https://en.wikipedia.org/wiki/Filipino_Sign_Language",
+      "topic": "reference",
+      "creator": "Wikipedia contributors",
+      "kind": "article",
+      "note": "Overview of FSL's history, grammar and legal status.",
+      "verifiedOn": "2026-08-08"
+    },
+    {
+      "id": "wikipedia-pfd",
+      "title": "Philippine Federation of the Deaf",
+      "url": "https://en.wikipedia.org/wiki/Philippine_Federation_of_the_Deaf",
+      "topic": "reference",
+      "creator": "Wikipedia contributors",
+      "kind": "article",
+      "note": "The organisation behind the regional sign compilation work.",
+      "verifiedOn": "2026-08-08"
+    },
+    {
+      "id": "wikipedia-deafness-ph",
+      "title": "Deafness in the Philippines",
+      "url": "https://en.wikipedia.org/wiki/Deafness_in_the_Philippines",
+      "topic": "reference",
+      "creator": "Wikipedia contributors",
+      "kind": "article",
+      "note": "Context on the Deaf community this system is meant to serve.",
+      "verifiedOn": "2026-08-08"
+    },
+    {
+      "id": "handspeak-filipino",
+      "title": "PHILIPPINES, FILIPINO — ASL Dictionary entry",
+      "url": "https://www.handspeak.com/word/6358/",
+      "topic": "reference",
+      "creator": "Handspeak",
+      "kind": "article",
+      "note": "Single-sign reference; ASL rather than FSL, included for comparison.",
+      "verifiedOn": "2026-08-08"
+    }
+  ]
+}

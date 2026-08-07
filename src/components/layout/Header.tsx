@@ -9,10 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Keyboard, Video } from "lucide-react";
 import { LandingNav } from "@/components/landing/LandingNav";
 
+// The first three are in-page anchors on the landing page; "Learn FSL" is a
+// real route. Kept in one list because they render as one nav — Link handles
+// both, and separating them would mean two loops rendering identical markup.
 const navLinks = [
   { name: "Why it matters", href: "#why-it-matters" },
   { name: "How you use it", href: "#how-it-works" },
   { name: "How it works", href: "#principles" },
+  { name: "Learn FSL", href: "/learn" },
 ];
 
 export function Header() {
