@@ -82,6 +82,9 @@ const FILIPINO_SPELLING_VARIANTS: Record<string, string> = {
   "w8": "wait", "2morow": "tomorrow",
 };
 
+/** A token that is only sentence punctuation — never a gloss to look up. */
+const PUNCTUATION_ONLY = /^[,.!?;:]+$/;
+
 export class TextNormalizerService implements ITextNormalizer {
   readonly name = "TextNormalizer";
 
@@ -91,7 +94,30 @@ export class TextNormalizerService implements ITextNormalizer {
     cleaned = cleaned.replace(EMOJI_PATTERN, " ");
     cleaned = cleaned.replace(REPEATED_LETTER_PATTERN, "$1$1");
 
-    cleaned = cleaned.replace(/[^\w\s'-ñáéíóúàèìòùäëïöüâêîôû]/g, " ");
+    // Split sentence punctuation off the word it is attached to, rather than
+    // deleting it.
+    //
+    // Attached, "kamusta ka?" tokenises as ["kamusta", "ka?"], so the second
+    // word is looked up as the gloss KA? and fetched from
+    // /api/animations/KA%3F, which 404s — "ka" loses its sign purely because
+    // it ended a question, while "kamusta" one word earlier gets one.
+    //
+    // Deleting it instead would be wrong in the other direction: `normalized`
+    // is rebuilt from these tokens and SentenceSegmenter reads a trailing "?"
+    // to mark a sentence interrogative, and AnimationPlanner keeps these
+    // characters as PAUSE_GLOSSES. Separated, the word is looked up clean and
+    // the mark still reaches both.
+    cleaned = cleaned.replace(/([,.!?;:])/g, " $1 ");
+
+    // Everything else that is not a word character, space, apostrophe, hyphen
+    // or accented letter goes.
+    //
+    // The hyphen is escaped, and that is the entire fix: unescaped, `'-ñ` is a
+    // RANGE from U+0027 to U+00F1 — 203 code points — so rather than allowing
+    // the two literals ' and -, it whitelisted , . : ; ? @ ( ) and nearly all
+    // of ASCII punctuation. Only ! and #, which sort below ', were ever
+    // actually stripped, which is why this looked like it worked.
+    cleaned = cleaned.replace(/[^\w\s'\-ñáéíóúàèìòùäëïöüâêîôû,.!?;:]/g, " ");
     cleaned = cleaned.replace(/\s{2,}/g, " ").trim();
 
     let words = cleaned.toLowerCase().split(/\s+/);
@@ -117,7 +143,18 @@ export class TextNormalizerService implements ITextNormalizer {
 
     words = words.flatMap((w) => w.split(/\s+/));
 
+    // Built before punctuation is dropped, because the two consumers want
+    // different things: SentenceSegmenter reads `normalized` and decides a
+    // sentence is interrogative from a trailing "?", while the translator
+    // reads `words` and would otherwise look "?" up as a gloss and fetch
+    // /api/animations/? for it.
+    //
+    // AnimationPlanner declares a PAUSE_GLOSSES set for exactly these
+    // characters, but nothing reads it — so punctuation reaching the planner
+    // does not become a pause, it becomes a failed asset request.
     const normalized = words.join(" ");
+
+    words = words.filter((w) => !PUNCTUATION_ONLY.test(w));
 
     return {
       original: input.trim(),
