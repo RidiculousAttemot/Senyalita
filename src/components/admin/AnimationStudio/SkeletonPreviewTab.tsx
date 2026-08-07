@@ -15,6 +15,7 @@ import {
 import type { VideoMetadata, ExtractionResult } from "./types";
 import type { AnimationFrame, GestureAnimationAsset } from "@/features/sign-animation/types";
 import { drawFullPose, drawStylizedFace, drawFullHand } from "@/features/sign-animation/renderer/renderUtils";
+import { useObjectUrl } from "./useObjectUrl";
 
 interface SkeletonPreviewTabProps {
   extractionResult: ExtractionResult;
@@ -24,6 +25,8 @@ interface SkeletonPreviewTabProps {
 type ViewMode = "skeleton" | "video" | "side-by-side";
 
 export function SkeletonPreviewTab({ extractionResult, videoMeta }: SkeletonPreviewTabProps) {
+  // Owned here, for the same reason as the extract tab.
+  const videoUrl = useObjectUrl(videoMeta?.file);
   const { asset } = extractionResult;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -133,10 +136,12 @@ export function SkeletonPreviewTab({ extractionResult, videoMeta }: SkeletonPrev
   }, [currentFrame, renderFrame, viewMode]);
 
   useEffect(() => {
-    if (videoRef.current && videoMeta) {
-      videoRef.current.src = videoMeta.url;
+    if (videoRef.current && videoUrl) {
+      videoRef.current.src = videoUrl;
     }
-  }, [videoMeta]);
+    // videoUrl arrives one render after videoMeta, so it must be a dependency
+    // or the element keeps the empty src it mounted with.
+  }, [videoMeta, videoUrl]);
 
   useEffect(() => {
     if (videoRef.current && videoMeta) {

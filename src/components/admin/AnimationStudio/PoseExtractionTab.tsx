@@ -17,6 +17,7 @@ import { extractLandmarksFromVideo, type ExtractionProgress as HolisticProgress 
 import { processExtractedFrames } from "@/features/sign-animation/processing/landmarkProcessor";
 import { LandmarkCanvasRenderer } from "@/features/sign-animation/renderer/LandmarkCanvasRenderer";
 import { suggestGloss, type GlossSuggestionResult } from "@/features/ai-assist";
+import { useObjectUrl } from "./useObjectUrl";
 
 interface PoseExtractionTabProps {
   videoMeta: VideoMetadata;
@@ -39,6 +40,9 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
   const [showSplit, setShowSplit] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  // Owned here. `videoMeta.url` belongs to VideoUploadTab, which revokes it
+  // when the tab switch unmounts that tab -- see useObjectUrl.
+  const videoUrl = useObjectUrl(videoMeta.file);
   const skeletonCanvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<LandmarkCanvasRenderer | null>(null);
   const startTimeRef = useRef(0);
@@ -87,8 +91,15 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
     startTimeRef.current = Date.now();
     const vid = videoRef.current;
     if (!vid) return;
+    // The URL is created in an effect, so it is empty on the first render.
+    // Calling load() against an empty src fails the same way a revoked blob
+    // does, which is the confusion this whole path just cost.
+    if (!videoUrl) {
+      setError("The video is still loading. Try again in a moment.");
+      return;
+    }
 
-    console.log(`[Video] Starting extraction for: ${videoMeta.url}, duration=${videoMeta.duration}s, dims=${videoMeta.width}x${videoMeta.height}`);
+    console.log(`[Video] Starting extraction for: ${videoUrl}, duration=${videoMeta.duration}s, dims=${videoMeta.width}x${videoMeta.height}`);
 
     try {
       if (vid.readyState < 2) {
@@ -100,8 +111,11 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
         });
         console.log("[Video] Metadata loaded");
       }
-      vid.currentTime = 0;
-      await vid.play();
+      // No play/pause warm-up. Extraction now seeks frame by frame, so the
+      // element must simply be decodable and paused -- and the old
+      // `play(); pause();` was part of why it captured a single frame: it
+      // handed the extractor a paused element whose playback-driven capture
+      // loop then had nothing to advance it.
       vid.pause();
       console.log("[Video] Ready for extraction");
 
@@ -127,7 +141,7 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
 
       const processed = processExtractedFrames(rawSequence.frames, Math.round(rawSequence.sourceFps), {
         targetFps: 30, label: "UNTITLED", smoothMotion: true, repairMissing: true, source: "animation-studio-extraction",
-        video: videoMeta.url,
+        video: videoUrl,
         imageWidth: vid.videoWidth || undefined,
         imageHeight: vid.videoHeight || undefined,
       });
@@ -156,7 +170,7 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
       setError(`${msg}`);
       setProgress((prev) => ({ ...prev, status: "error", message: msg }));
     }
-  }, [videoMeta, onExtractionComplete]);
+  }, [videoMeta, videoUrl, onExtractionComplete]);
 
   const isRunning = progress.status !== "idle" && progress.status !== "complete" && progress.status !== "error";
 
@@ -326,7 +340,7 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
         <div className="pext-split">
           <div className="pext-panel">
             <div className="pext-panel-label">Original Video</div>
-            <video ref={videoRef} src={videoMeta.url} controls preload="auto" />
+            <video ref={videoRef} src={videoUrl} controls preload="auto" />
           </div>
           <div className="pext-panel">
             <div className="pext-panel-label">
@@ -341,7 +355,7 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
       {/* Video preview when not yet started */}
       {!showSplit && (
         <div style={{ marginBottom: 20 }}>
-          <video ref={videoRef} src={videoMeta.url} controls preload="auto" style={{ width: "100%", maxHeight: 320, borderRadius: 10, background: "#000" }} />
+          <video ref={videoRef} src={videoUrl} controls preload="auto" style={{ width: "100%", maxHeight: 320, borderRadius: 10, background: "#000" }} />
         </div>
       )}
 
