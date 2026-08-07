@@ -102,24 +102,27 @@ export function TypeToSignInterface() {
       }),
     ));
 
+    // Position across the whole expansion, not within each word.
+    //
+    // A grammar rule can expand one item into several words ("KUMUSTA" ->
+    // "HOW ARE YOU"), and a per-word index repeats: O is at position 1 of both
+    // HOW and YOU, so both clips came out as `spell-O-0-1-<stamp>`. React drops
+    // or duplicates children under a repeated key, and the timeline renders
+    // them by clip id.
+    let position = 0;
     for (const characters of spelled) {
-      for (const [ci, character] of characters.entries()) {
+      for (const character of characters) {
         const published = assets.get(character);
-        if (published) {
-          clips.push({
-            id: `spell-${character}-${index}-${ci}-${stamp}`,
-            gesture: character,
-            asset: published,
-          });
-          continue;
-        }
-        // No recorded animation for this character — synthesise it rather
-        // than drop it, so the word still spells out in full.
         clips.push({
-          id: `spell-synth-${character}-${index}-${ci}-${stamp}`,
+          id: published
+            ? `spell-${character}-${index}-${position}-${stamp}`
+            // No recorded animation for this character — synthesise it rather
+            // than drop it, so the word still spells out in full.
+            : `spell-synth-${character}-${index}-${position}-${stamp}`,
           gesture: character,
-          asset: engine.generateFingerspellingAsset(character),
+          asset: published ?? engine.generateFingerspellingAsset(character),
         });
+        position += 1;
       }
     }
 

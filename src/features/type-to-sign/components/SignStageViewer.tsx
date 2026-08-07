@@ -572,7 +572,11 @@ function LoadingStage({ loaded, total }: { loaded: number; total: number }) {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      // Leaves at once. It is dismissed the moment the stage has a frame on
+      // it, so any fade here is spent sitting on top of the sign the viewer is
+      // waiting to watch — the loader and the first sign were visible together
+      // for the length of the transition.
+      exit={{ opacity: 0, transition: { duration: 0 } }}
       className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-white/80 backdrop-blur-sm"
     >
       <SkeletonPlaceholder />

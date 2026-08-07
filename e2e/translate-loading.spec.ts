@@ -49,16 +49,25 @@ const observeUntilPainted = async (page: Page, timeoutMs: number) => {
   let firstPaintMs: number | null = null;
   let blankUncoveredSamples = 0;
   let loaderEverSeen = false;
+  let playingUnderLoaderSamples = 0;
+  let previousInk: number | null = null;
 
   while (Date.now() - startedAt < timeoutMs) {
     const [loader, canvas] = await Promise.all([loaderVisible(page), canvasInk(page)]);
     if (loader) loaderEverSeen = true;
-    if (canvas.ink > 0) { firstPaintMs = Date.now() - startedAt; break; }
+    // The sign advancing while the overlay still covers it: the viewer meets
+    // it already in progress. A static opening pose under the loader is fine
+    // and expected — a *changing* one is not.
+    if (loader && previousInk !== null && canvas.ink > 0 && canvas.ink !== previousInk) {
+      playingUnderLoaderSamples += 1;
+    }
+    previousInk = canvas.ink;
+    if (canvas.ink > 0 && !loader) { firstPaintMs = Date.now() - startedAt; break; }
     // The defect, stated directly: nothing drawn, and nothing covering it.
     if (!loader && canvas.present) blankUncoveredSamples += 1;
     await page.waitForTimeout(100);
   }
-  return { firstPaintMs, blankUncoveredSamples, loaderEverSeen };
+  return { firstPaintMs, blankUncoveredSamples, loaderEverSeen, playingUnderLoaderSamples };
 };
 
 test.describe("type-to-sign loading", () => {
@@ -75,14 +84,20 @@ test.describe("type-to-sign loading", () => {
       test.setTimeout(budgetMs + 60_000);
       await translate(page, text);
 
-      const { firstPaintMs, blankUncoveredSamples, loaderEverSeen } =
+      const { firstPaintMs, blankUncoveredSamples, loaderEverSeen, playingUnderLoaderSamples } =
         await observeUntilPainted(page, budgetMs);
 
       // eslint-disable-next-line no-console
       console.log(
-        `  ${name.padEnd(22)} "${text}"  first paint ${firstPaintMs ?? "never"}ms`
-        + `  uncovered-blank samples ${blankUncoveredSamples}`,
+        `  ${name.padEnd(22)} "${text}"  visible at ${firstPaintMs ?? "never"}ms`
+        + `  uncovered-blank ${blankUncoveredSamples}`
+        + `  playing-under-loader ${playingUnderLoaderSamples}`,
       );
+
+      expect(
+        playingUnderLoaderSamples,
+        "the sign was already playing while the loader still covered it",
+      ).toBe(0);
 
       // Deliberately not asserting that a loader was seen at all: on a warm
       // CDN cache the whole sequence can resolve inside one sampling interval,
