@@ -16,7 +16,16 @@ export interface QualityAnalysis {
     jitterScore: number;
     noiseLevel: number;
     lowConfidenceFrames: number;
+    /** Count of frames where every comparable hand stayed still. */
     frozenFrames: number;
+    /**
+     * frozenFrames as a percentage of the frames actually compared, 0-100.
+     *
+     * Exposed so consumers stop deriving it themselves: smartValidator was
+     * recomputing frozenFrames/frameCount, a different denominator from the one
+     * used for the warning here, so the two could disagree about the same asset.
+     */
+    frozenPercent: number;
     cameraShake: number;
     occlusionScore: number;
     handContinuity: number;
@@ -25,6 +34,18 @@ export interface QualityAnalysis {
   };
 }
 
+/**
+ * Movement below this, in normalised landmark units, counts as no movement.
+ *
+ * Deliberately unchanged while fixing the ratio: it is tight, and it is applied
+ * to `landmarks[0]` only — the wrist. A sign whose wrist is planted while the
+ * fingers articulate therefore reads as frozen even though it is not. That is a
+ * real limitation of this metric and worth revisiting, but widening the sample
+ * to all 21 points shifts every quality score, which is a separate change from
+ * making the percentage arithmetically possible.
+ */
+const FROZEN_DISTANCE = 0.0005;
+
 export function analyzeQuality(asset: GestureAnimationAsset): QualityAnalysis {
   const { frames, fps, duration } = asset;
   const issues: QualityIssue[] = [];
@@ -32,6 +53,8 @@ export function analyzeQuality(asset: GestureAnimationAsset): QualityAnalysis {
 
   let missingFrameCount = 0;
   let frozenFrames = 0;
+  /** Frames with at least one hand comparable against the previous frame. */
+  let comparedFrames = 0;
   let lowConfidenceFrames = 0;
   let occlusionScore = 0;
   let cameraShake = 0;
@@ -63,6 +86,14 @@ export function analyzeQuality(asset: GestureAnimationAsset): QualityAnalysis {
       if (hasPose === hasPosePrev) poseContinuity++;
       if (hasFace === hasFacePrev) faceContinuity++;
 
+      // A frame counts as frozen only when EVERY hand that could be compared
+      // stayed put. This used to increment once per hand while the ratio below
+      // divided by frame count, so a two-handed sign could report up to 200%
+      // frozen — a percentage that cannot exist, from a metric surfaced to the
+      // user as "High number of frozen frames (98%)".
+      let handsCompared = 0;
+      let anyHandMoved = false;
+
       for (let h = 0; h < Math.min(frame.landmarks.length, prev.landmarks.length); h++) {
         const a = frame.landmarks[h]?.landmarks?.[0];
         const b = prev.landmarks[h]?.landmarks?.[0];
@@ -70,14 +101,23 @@ export function analyzeQuality(asset: GestureAnimationAsset): QualityAnalysis {
           const dist = Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2);
           totalMovement += dist;
           movementComparisons++;
-          if (dist < 0.0005) frozenFrames++;
+          handsCompared++;
+          if (dist >= FROZEN_DISTANCE) anyHandMoved = true;
         }
+      }
+
+      if (handsCompared > 0) {
+        comparedFrames++;
+        if (!anyHandMoved) frozenFrames++;
       }
     }
   }
 
   const missingRatio = frames.length > 0 ? missingFrameCount / frames.length : 0;
-  const frozenRatio = frames.length > 0 ? frozenFrames / frames.length : 0;
+  // Denominator is frames that were actually compared, not every frame. The
+  // first frame has no predecessor, and a frame with no tracked hand cannot be
+  // judged still — counting either as "not frozen" understated long dropouts.
+  const frozenRatio = comparedFrames > 0 ? frozenFrames / comparedFrames : 0;
   const leftContinuity = frames.length > 1 ? leftHandContinuity / (frames.length - 1) : 1;
   const rightContinuity = frames.length > 1 ? rightHandContinuity / (frames.length - 1) : 1;
   const poseCont = frames.length > 1 ? poseContinuity / (frames.length - 1) : 1;
@@ -214,6 +254,7 @@ export function analyzeQuality(asset: GestureAnimationAsset): QualityAnalysis {
       noiseLevel: Math.round(normalizedNoise * 100),
       lowConfidenceFrames,
       frozenFrames,
+      frozenPercent: Math.round(frozenRatio * 100),
       cameraShake: Math.round(cameraShake * 100),
       occlusionScore: Math.round(occlusionScore * 100),
       handContinuity: Math.round(((leftContinuity + rightContinuity) / 2) * 100),

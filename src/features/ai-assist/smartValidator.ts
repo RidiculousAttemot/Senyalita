@@ -69,7 +69,11 @@ export function validateAsset(asset: GestureAnimationAsset): ValidationResult {
     movement: { ...validateThreshold("movement", metadata.movementScore), value: metadata.movementScore },
     smoothness: { ...validateThreshold("smoothness", metadata.motionSmoothness), value: metadata.motionSmoothness },
     jitter: { ...validateThreshold("jitter", quality.metrics.jitterScore, true), value: quality.metrics.jitterScore },
-    frozen_frames: { ...validateThreshold("frozen_frames", quality.metrics.frozenFrames / Math.max(1, metadata.frameCount) * 100, true), value: Math.round(quality.metrics.frozenFrames / Math.max(1, metadata.frameCount) * 100) },
+    // Uses the ratio analyzeQuality already computed rather than deriving a
+    // second one. This divided a per-hand count by frameCount, so a two-handed
+    // sign could report a frozen percentage above 100 — and could disagree with
+    // the warning shown beside it, which used a different denominator.
+    frozen_frames: { ...validateThreshold("frozen_frames", quality.metrics.frozenPercent, true), value: quality.metrics.frozenPercent },
     missing_frames: { ...validateThreshold("missing_frames", quality.metrics.missingFrameCount / Math.max(1, metadata.frameCount) * 100, true), value: Math.round(quality.metrics.missingFrameCount / Math.max(1, metadata.frameCount) * 100) },
     dominant_hand: { status: "pass", value: metadata.dominantHand, message: `Dominant: ${metadata.dominantHand}` },
   };
