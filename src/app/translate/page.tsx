@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TypeToSignInterface } from "@/features/type-to-sign/TypeToSignInterface";
-import { TranslateHeaderActions } from "@/features/type-to-sign/TranslateHeaderActions";
 
 // Defers the sign-to-text chunk (TF.js model loader, MediaPipe wiring) until
 // the user actually opens this tab — the default tab is type-to-sign, so
@@ -37,11 +36,9 @@ export default function TranslatePage() {
   }, []);
 
   return (
-    // Background and the <main> landmark now come from PublicShell, so this is
-    // just the page's own width and padding.
-    <div className="overflow-hidden">
-      <TranslateHeaderActions />
-      <div className="mx-auto max-w-[1440px] px-4 pb-14 pt-6 md:px-8">
+    // Shares the landing page's warm slate canvas so the two read as one product.
+    <div className="min-h-screen overflow-hidden bg-senyalita-warm">
+      <main className="mx-auto max-w-[1440px] flex-grow px-4 pb-14 pt-6 md:px-8">
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="w-full">
           <TabsContent value="sign-to-text" className="mt-0 focus-visible:ring-0 focus-visible:outline-none">
             <SignToTextInterface />
@@ -50,7 +47,7 @@ export default function TranslatePage() {
             <TypeToSignInterface />
           </TabsContent>
         </Tabs>
-      </div>
+      </main>
     </div>
   );
 }
