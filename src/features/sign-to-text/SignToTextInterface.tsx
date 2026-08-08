@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   RealtimeMetrics, useRecognition, translateLabel, getModelLabels,
   allowedLabelsForMode, handsForMode, partitionLabels, assertPartition, numberDisplay,
-  DEFAULT_MODE, type RecognitionMode,
+  assignHandSlots, DEFAULT_MODE, type RecognitionMode,
 } from "@/features/recognition";
 import { CommunicationProfileManager } from "@/features/profiles";
 import { Textarea } from "@/components/ui/textarea";
@@ -377,15 +377,27 @@ export function SignToTextInterface() {
           }
           const measuredFps = fpsTracker.record(frameTimestamp);
           if (measuredFps > 0) setMediapipeFps(measuredFps);
-          const leftIndex = results.handedness.findIndex((handedness) => handedness[0]?.categoryName?.toLowerCase() === "left");
-          const rightIndex = results.handedness.findIndex((handedness) => handedness[0]?.categoryName?.toLowerCase() === "right");
+          // Slotted the way training did, including its collision fallback.
+          //
+          // This was two independent findIndex calls, one per handedness label.
+          // MediaPipe guesses handedness per frame and regularly labels both
+          // hands "Right", which made leftIndex -1 and silently discarded the
+          // second hand — 63 of the model's 126 features left at zero. Phrases
+          // are 93% two-handed in the v4 training split, so that is exactly the
+          // case that stopped working.
+          const [leftLandmarks, rightLandmarks] = assignHandSlots(
+            results.landmarks.map((landmarks, index) => ({
+              landmarks,
+              handedness: results.handedness[index]?.[0]?.categoryName,
+            })),
+          );
           // Rendering below still runs on every camera frame; only the
           // recognition buffer is throttled, keeping the two decoupled.
           if (frameTimestamp - lastAppendTime >= CAPTURE_INTERVAL_MS) {
             lastAppendTime = frameTimestamp;
             appendFrame(
-              leftIndex >= 0 ? { landmarks: results.landmarks[leftIndex] } : null,
-              rightIndex >= 0 ? { landmarks: results.landmarks[rightIndex] } : null,
+              leftLandmarks ? { landmarks: leftLandmarks } : null,
+              rightLandmarks ? { landmarks: rightLandmarks } : null,
             );
             const captureFps = captureTracker.record(frameTimestamp);
             if (captureFps > 0) setCaptureFps(captureFps);

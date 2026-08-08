@@ -36,6 +36,7 @@ export { RealtimeMetrics } from "./RealtimeMetrics";
 export { ModeManager, MODE_CONFIGS, DEFAULT_MODE } from "./recognitionModes";
 export type { RecognitionMode } from "./recognitionModes";
 export { allowedLabelsForMode, handsForMode, MODE_ORDER } from "./recognitionModes";
+export { assignHandSlots, type DetectedHand, type HandSlots } from "./handSlots";
 export { partitionLabels, assertPartition, numberDisplay } from "./labelPartition";
 export type { LabelPartition } from "./labelPartition";
 
