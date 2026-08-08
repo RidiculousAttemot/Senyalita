@@ -187,10 +187,25 @@ test.describe("routing", () => {
     }
   });
 
-  test("admin API is guarded", async ({ request }) => {
+  test("admin API never serves an unauthenticated caller", async ({ request }) => {
+    // Two legitimate answers, depending on ADMIN_ENABLED:
+    //
+    //   401  the admin surface is on (local dev) and the route rejected the
+    //        caller through requireAdmin
+    //   404  ADMIN_ENABLED is unset, so middleware hides the surface entirely,
+    //        returning a body identical to a genuinely missing route
+    //
+    // Production runs with it unset, so /admin, /admin/login and /api/admin/*
+    // all 404 there by design. Asserting 401 outright made this test pass
+    // locally and fail against production, reporting a working security
+    // feature as a defect. The invariant that actually matters is that neither
+    // environment ever serves the data.
     for (const path of ["/api/admin/health", "/api/assets/dataset", "/api/admin/animation-assets"]) {
       const res = await request.get(`${BASE}${path}`);
-      expect(res.status(), `${path} should require auth`).toBe(401);
+      expect([401, 404], `${path} returned ${res.status()}`).toContain(res.status());
+      // Whichever it is, no payload comes back.
+      const body = await res.text();
+      expect(body, `${path} leaked a body`).not.toMatch(/"(rows|assets|data|items)"\s*:/);
     }
   });
 
