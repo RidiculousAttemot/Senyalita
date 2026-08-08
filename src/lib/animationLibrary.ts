@@ -1,4 +1,5 @@
 import type { GestureAnimationAsset } from "@/features/sign-animation/types";
+import { isQuantisableAsset, quantiseAsset } from "@/lib/landmarkPrecision";
 
 /**
  * Turns a failed response into something a human can act on.
@@ -135,10 +136,22 @@ export const animationLibrary = {
     action: "complete-processing" | "approve" | "reject" | "publish" | "unpublish" | "archive",
     options?: { asset?: unknown; qualityScore?: number; notes?: string; language?: string },
   ): Promise<{ ok: boolean; status: string }> {
+    // Quantise before serialising, not after: the point is the size of the
+    // request body. A Vercel function request is capped at 4.5 MB, and the
+    // studio was sending raw float64 -- THANK YOU came to 7,552,771 bytes, so
+    // it published on localhost and could not publish in production at all.
+    //
+    // Done here rather than in PublishTab so every caller that submits an asset
+    // gets it, and so the payload can never be assembled at full precision by a
+    // future call site that forgets.
+    const payload = options?.asset && isQuantisableAsset(options.asset)
+      ? { ...options, asset: quantiseAsset(options.asset) }
+      : options;
+
     const res = await fetch(`/api/admin/animation-assets/${versionId}/action`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, ...options }),
+      body: JSON.stringify({ action, ...payload }),
     });
     if (!res.ok) {
       throw new Error(await failureMessage(res, `${action} failed`));
