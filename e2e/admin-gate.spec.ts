@@ -22,7 +22,8 @@ import { expect, test } from "@playwright/test";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const APP_DIR = path.join(REPO_ROOT, "src", "app");
 
-const LOCAL = "http://localhost:3000";
+// 127.0.0.1 for the same IPv6 reason as e2e/public-shell.spec.ts.
+const LOCAL = process.env.E2E_BASE ?? "http://127.0.0.1:3000";
 const PRODUCTION = process.env.PRODUCTION_URL ?? "https://signlangvisual.vercel.app";
 
 /** Route groups -- "(dashboard)" -- are organisational and contribute no URL segment. */

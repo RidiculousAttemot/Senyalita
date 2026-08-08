@@ -1,8 +1,7 @@
 import "./globals.css";
 import localFont from "next/font/local";
 import { cn } from "@/lib/utils";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
+import { PublicShell } from "@/components/layout/PublicShell";
 
 /**
  * Inter, self-hosted. Previously `Inter` from next/font/google.
@@ -55,9 +54,12 @@ export default function RootLayout({
         >
           Skip to main content
         </a>
-        <Header />
-        <main id="main-content" className="flex-grow">{children}</main>
-        <Footer />
+        {/*
+          One shell for every public route. It owns the <main> landmark and the
+          page background too, so spacing and surface are defined in the same
+          place as the header and footer rather than re-declared per page.
+        */}
+        <PublicShell>{children}</PublicShell>
       </body>
     </html>
   );
