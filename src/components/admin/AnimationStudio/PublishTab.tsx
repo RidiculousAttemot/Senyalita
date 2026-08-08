@@ -135,14 +135,23 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
         await animationLibrary.performAction(versionId, "approve", { notes });
         await animationLibrary.performAction(versionId, "publish");
 
-        const jsonData = JSON.stringify(asset, null, 2);
-        const blob = new Blob([jsonData], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${trimmedGloss}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+        // No browser download here.
+        //
+        // Publishing used to end by pushing the landmark JSON at the browser as
+        // a file, which opened a "What do you want to do with THANK YOU.json?"
+        // prompt and asked the admin to file a copy by hand. That made sense
+        // when the studio had no backend and the JSON had nowhere else to go.
+        //
+        // It does now. The "complete-processing" call above uploads the very
+        // same payload to the landmark bucket at
+        // {asset_id}/{version_id}/landmarks.json, and "publish" points the
+        // asset's published_version_id at that row. Everything downstream --
+        // /api/animations/[gloss], Text-to-Sign, /learn -- reads it from there.
+        //
+        // So the download was a second, unmanaged copy of data the database
+        // already had: no version, no gloss it stays attached to, and stale the
+        // moment the sign is re-published. Save Draft never downloaded anything
+        // and was not missing a step.
       } else if (action === "archived") {
         await animationLibrary.performAction(versionId, "archive");
       }
