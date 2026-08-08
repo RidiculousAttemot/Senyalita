@@ -10,11 +10,15 @@ import { useScrollSpy } from "./useScrollSpy";
 
 const GITHUB_URL = "https://github.com/RidiculousAttemot/SignLangVisual";
 
+// "Recognition" used to sit here, pointing at #recognition -- which is the id
+// on <RecognitionSequence> INSIDE the hero, so it scrolled to the same place
+// as "Home" and one of the six entries did nothing. It is now Learn, which
+// points at a section of its own.
 const navLinks = [
   { name: "Home", href: "#hero", id: "hero" },
   { name: "Features", href: "#features", id: "features" },
-  { name: "Recognition", href: "#recognition", id: "recognition" },
   { name: "Translate", href: "#showcase", id: "showcase" },
+  { name: "Learn", href: "#learn", id: "learn" },
   { name: "Research", href: "#research", id: "research" },
   { name: "About", href: "#accessibility", id: "accessibility" },
 ];

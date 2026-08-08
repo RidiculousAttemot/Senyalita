@@ -29,18 +29,27 @@ const features: Feature[] = [
   },
   {
     icon: BookOpen,
-    title: "Learning Mode",
-    description: "Practice the alphabet, numbers, and everyday phrases with guided, interactive lessons.",
+    // Was "Learning Mode ... guided, interactive lessons". /learn is a
+    // reference you browse and replay, not a lesson plan -- promising
+    // coursework that does not exist is the kind of claim a visitor checks.
+    title: "Sign Library",
+    description: "Browse and replay every recorded sign — the alphabet, numbers, and the phrase list the camera knows.",
   },
   {
     icon: Database,
-    title: "Dataset Builder",
-    description: "Every contributed recording helps expand and refine the recognition model over time.",
+    // Was "Dataset Builder -- every contributed recording helps expand the
+    // model". There is no public contribution path; recordings are ingested
+    // by an admin, so this invited visitors to do something they cannot.
+    title: "Research Dataset",
+    description: "Trained on 131 sign classes extracted from recorded FSL video, with the pipeline documented end to end.",
   },
   {
     icon: Settings,
-    title: "Admin Studio",
-    description: "A dedicated research workspace for managing animations, datasets, and model training.",
+    // Was "Admin Studio". The admin is a local-only authoring tool and
+    // returns 404 on the deployed site, so advertising it to visitors
+    // pointed at a door that is not there. /evaluation is public and real.
+    title: "Live Evaluation",
+    description: "Measure recognition accuracy yourself, class by class, against the same model the app runs on.",
   },
 ];
 

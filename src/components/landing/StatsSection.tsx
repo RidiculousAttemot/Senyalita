@@ -12,11 +12,22 @@ interface StatDef {
   label: string;
 }
 
+// Under a heading that says "Measured, not just claimed", every number here
+// has to survive being checked.
+//
+// 131 is the model's label count (26 letters + 10 numbers + 95 phrases).
+// 543 is pose 33 + face 468 + two hands at 21 each.
+// 37 is the published animation count -- deliberately shown next to 131,
+// because they are different sets and the gap is the honest part.
+//
+// "60 FPS Animation Playback" used to sit here. Every published asset is
+// stored at 30 fps, so the figure was simply wrong.
 const stats: StatDef[] = [
   { target: 131, label: "Sign Classes Recognized" },
   { target: 94.86, decimals: 2, suffix: "%", label: "Test Recognition Accuracy" },
-  { target: 543, suffix: "+", label: "Landmark Points per Frame" },
-  { target: 60, suffix: " FPS", label: "Animation Playback" },
+  { target: 543, label: "Landmark Points per Frame" },
+  { target: 37, label: "Recorded Signs You Can Play" },
+  { target: 30, suffix: " FPS", label: "Animation Playback" },
   { target: 165, suffix: "ms", label: "Avg. Recognition Latency" },
 ];
 
