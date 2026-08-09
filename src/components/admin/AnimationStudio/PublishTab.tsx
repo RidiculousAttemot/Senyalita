@@ -187,8 +187,15 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
           <CheckCircle2 />
           <h2>Animation Published</h2>
           <p>{gloss.toUpperCase()} has been registered in the Animation Library.</p>
+          {/*
+            Was "JSON file has been downloaded." Removing the browser download
+            left that sentence describing something that no longer happens, so
+            it told the admin to look for a file that was never saved. The
+            landmarks live in the animation library now, which is the fact worth
+            stating.
+          */}
           <p style={{ fontSize: 12, color: "#475569", marginTop: 4 }}>
-            JSON file has been downloaded. The asset is now available for Type-to-Sign playback.
+            The landmarks are stored in the Animation Library and available for Type-to-Sign playback.
           </p>
         </div>
       </div>
