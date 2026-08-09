@@ -115,6 +115,10 @@ export function SignToTextInterface() {
     showHandLabels: true,
     showDetails: false,
     sensitivity: "balanced",
+    // Off by default: the second hand costs about a third of the frame rate
+    // (342ms vs 631ms per detection on a weak GPU). Opt-in for signers whose
+    // resting hand is in frame, where a wrong lock-on is worse than the cost.
+    trackBothHands: false,
   });
   // Settings are read inside the rAF draw loop, which closes over its initial
   // values — a ref keeps that loop reading the live object without restarting
@@ -128,6 +132,12 @@ export function SignToTextInterface() {
   // Same story for the mode: it sets numHands, which the detector bakes in.
   const activeModeRef = useRef<RecognitionMode | null>(null);
   const [activeMode, setActiveMode] = useState<RecognitionMode | null>(null);
+  // numHands is what is actually compiled into the MediaPipe graph, and it now
+  // depends on the "Track both hands" setting as well as the mode. Comparing
+  // modes alone would miss a toggle that changes the count without changing the
+  // mode, leaving the running detector on the old one.
+  const activeHandsRef = useRef<1 | 2 | null>(null);
+  const [activeHands, setActiveHands] = useState<1 | 2 | null>(null);
   const [speakEnabled, setSpeakEnabled] = useState(true);
   const [commitShortcut, setCommitShortcut] = useState("Space");
   const [capturingShortcut, setCapturingShortcut] = useState(false);
@@ -298,13 +308,16 @@ export function SignToTextInterface() {
       // phrases need the second and because one-hand tracking flips between
       // hands when both are in frame, which reads as recognition failing.
       const mode = selectedModeRef.current;
+      const hands = handsForMode(mode, settingsRef.current.trackBothHands);
       const handLandmarker = await createHandLandmarker({
         ...handLandmarkerOptionsFor(sensitivity),
-        numHands: handsForMode(mode),
+        numHands: hands,
       });
       activeSensitivityRef.current = sensitivity;
       activeModeRef.current = mode;
       setActiveMode(mode);
+      activeHandsRef.current = hands;
+      setActiveHands(hands);
       setActiveSensitivity(sensitivity);
       if (cameraRunIdRef.current !== runId) {
         handLandmarker.close();
@@ -517,7 +530,8 @@ export function SignToTextInterface() {
   useEffect(() => {
     // Camera off — startCamera reads selectedModeRef and builds it correctly.
     if (!handLandmarkerRef.current) return;
-    if (activeModeRef.current === selectedMode) return;
+    const requiredHands = handsForMode(selectedMode, settings.trackBothHands);
+    if (activeModeRef.current === selectedMode && activeHandsRef.current === requiredHands) return;
 
     let cancelled = false;
     const runId = cameraRunIdRef.current;
@@ -527,7 +541,7 @@ export function SignToTextInterface() {
       try {
         next = await createHandLandmarker({
           ...handLandmarkerOptionsFor(activeSensitivityRef.current ?? settingsRef.current.sensitivity),
-          numHands: handsForMode(selectedMode),
+          numHands: requiredHands,
         });
       } catch {
         // Keep the working detector rather than leaving the camera with none.
@@ -548,11 +562,16 @@ export function SignToTextInterface() {
       previous.close();
       activeModeRef.current = selectedMode;
       setActiveMode(selectedMode);
+      activeHandsRef.current = requiredHands;
+      setActiveHands(requiredHands);
       clearSequence();
     })();
 
     return () => { cancelled = true; };
-  }, [selectedMode, clearSequence]);
+    // trackBothHands belongs here: it changes numHands, which is compiled into
+    // the graph, so toggling it has to rebuild the detector exactly as a mode
+    // change does.
+  }, [selectedMode, settings.trackBothHands, clearSequence]);
 
   useEffect(() => {
     const toggleCameraFromHeader = () => {
@@ -723,8 +742,11 @@ export function SignToTextInterface() {
                   // for the moment that takes — unlike sensitivity below,
                   // which still genuinely needs the camera restarted.
                   modePending={
-                    activeMode !== null
-                    && handsForMode(activeMode) !== handsForMode(selectedMode)
+                    // Compares the compiled hand count, not the mode, so the
+                    // notice also covers toggling "Track both hands" within a
+                    // mode — which rebuilds the graph for the same reason.
+                    activeHands !== null
+                    && activeHands !== handsForMode(selectedMode, settings.trackBothHands)
                   }
                   sensitivityPending={activeSensitivity !== null && activeSensitivity !== settings.sensitivity}
                   cameraActive={status === "active" || status === "no-hand"}

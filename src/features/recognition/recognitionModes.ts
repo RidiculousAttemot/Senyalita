@@ -71,9 +71,24 @@ export function allowedLabelsForMode(
  *
  * Alphabet takes the cheap path because FSL fingerspelling is one-handed.
  * Phrase signs need the second hand.
+ *
+ * `trackBothHands` lifts alphabet to two, opt-in and off by default. It exists
+ * because the flip above is worst for a left-handed signer whose resting hand
+ * is in frame, and because the alphabet training data is uneven between hands:
+ * 58% of letter sequences are right-hand-only against 24% left-only, so a
+ * left-handed signer already has less margin before a wrong lock-on costs them
+ * the prediction. The model tolerates the second hand — 18% of letter
+ * sequences carry both.
+ *
+ * It is off by default because the cost is a third of the frame rate on a weak
+ * GPU, and that is not a trade to make for everyone silently.
+ *
+ * Phrase signs ignore the flag: they are 93% two-handed in training and cannot
+ * work with one.
  */
-export function handsForMode(mode: RecognitionMode): 1 | 2 {
-  return mode === "alphabet" ? 1 : 2;
+export function handsForMode(mode: RecognitionMode, trackBothHands = false): 1 | 2 {
+  if (mode !== "alphabet") return 2;
+  return trackBothHands ? 2 : 1;
 }
 
 export class ModeManager {

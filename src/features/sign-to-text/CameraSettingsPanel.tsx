@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { FlipHorizontal2, Hand, ScanLine, SlidersHorizontal, Tag, X } from "lucide-react";
+import { FlipHorizontal2, Hand, HandHelping, ScanLine, SlidersHorizontal, Tag, X } from "lucide-react";
 // The shared primitives. This panel is where several of them were lifted
 // from, so it consumes them rather than keeping a second copy -- if these
 // drift from the admin's, it is now a change to one file, not two.
@@ -22,6 +22,11 @@ export interface CameraSettings {
   showHandLabels: boolean;
   showDetails: boolean;
   sensitivity: DetectionSensitivity;
+  /**
+   * Track a second hand in Alphabet mode. Off by default — it costs about a
+   * third of the frame rate. Phrase Signs always tracks two regardless.
+   */
+  trackBothHands: boolean;
 }
 
 interface CameraSettingsPanelProps {
@@ -91,6 +96,24 @@ export function CameraSettingsPanel({
           hint="Shows you as a mirror would"
           checked={settings.mirrored}
           onChange={(v) => onChange("mirrored", v)}
+        />
+        {/*
+          Only meaningful in Alphabet mode — Phrase Signs already tracks two,
+          because 93% of its training sequences are two-handed. Shown disabled
+          there rather than hidden, so the control does not appear and vanish
+          with the mode.
+        */}
+        <ToggleRow
+          icon={<HandHelping className="h-4 w-4" />}
+          label="Track both hands"
+          hint={
+            mode === "alphabet"
+              ? "Steadier if your other hand is in frame. Costs about a third of the frame rate."
+              : "Always on for Phrase Signs"
+          }
+          checked={mode === "alphabet" ? settings.trackBothHands : true}
+          disabled={mode !== "alphabet"}
+          onChange={(v) => onChange("trackBothHands", v)}
         />
         <ToggleRow
           icon={<Hand className="h-4 w-4" />}

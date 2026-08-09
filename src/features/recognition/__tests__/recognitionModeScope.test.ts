@@ -121,4 +121,22 @@ describe("recognition modes", () => {
     expect(handsForMode("alphabet")).toBe(1);
     expect(handsForMode("phrase-signs")).toBe(2);
   });
+
+  it("defaults to one hand for alphabet when the flag is omitted", () => {
+    // The default is load-bearing: two hands costs about a third of the frame
+    // rate (342ms vs 631ms per detection), so it must be opt-in.
+    expect(handsForMode("alphabet")).toBe(1);
+    expect(handsForMode("alphabet", false)).toBe(1);
+  });
+
+  it("lets alphabet opt in to a second hand", () => {
+    expect(handsForMode("alphabet", true)).toBe(2);
+  });
+
+  it("keeps phrase signs on two hands whatever the flag says", () => {
+    // 93% of phrase sequences in the v4 training split carry both hands, so
+    // one is not a supported configuration for them at any setting.
+    expect(handsForMode("phrase-signs", false)).toBe(2);
+    expect(handsForMode("phrase-signs", true)).toBe(2);
+  });
 });
