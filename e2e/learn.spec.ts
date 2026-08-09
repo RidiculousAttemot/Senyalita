@@ -69,6 +69,37 @@ test.describe("Learn FSL", () => {
     await expect.poll(async () => paintedPixels(page), { timeout: 150_000 }).toBeGreaterThan(0);
   });
 
+  test("has no footer, and offers a way home and a way to try it", async ({ page }) => {
+    await page.goto(`${BASE}/learn`);
+    await expect(page.getByTestId("section-alphabet")).toBeVisible({ timeout: 150_000 });
+
+    // The marketing footer is gone — /learn ends on its own call to action.
+    await expect(page.locator("footer")).toHaveCount(0);
+
+    // Getting home is the header's job now that the footer is not there.
+    const home = page.getByRole("link", { name: /back to home/i });
+    await expect(home).toBeVisible();
+    await expect(home).toHaveAttribute("href", "/");
+
+    // The old template header carried landing-page anchors that resolve to
+    // nothing off "/". They must not come back.
+    for (const dead of ["#why-it-matters", "#how-it-works", "#principles"]) {
+      await expect(page.locator(`a[href="${dead}"]`), `${dead} is a dead anchor here`).toHaveCount(0);
+    }
+  });
+
+  test("the try-it call to action reaches /translate", async ({ page }) => {
+    await page.goto(`${BASE}/learn`);
+    const cta = page.getByTestId("learn-try-cta");
+    await expect(cta).toBeVisible({ timeout: 150_000 });
+    await expect(page.getByRole("heading", { name: /want to try it yourself/i })).toBeVisible();
+
+    await cta.click();
+    await expect(page).toHaveURL(new RegExp("/translate$"));
+    // Landed on the real translator, not a redirect stub.
+    await expect(page.locator("#composer-input")).toBeVisible({ timeout: 150_000 });
+  });
+
   test("search filters every section", async ({ page }) => {
     await page.goto(`${BASE}/learn`);
     await expect(page.getByTestId("section-alphabet")).toBeVisible({ timeout: 150_000 });

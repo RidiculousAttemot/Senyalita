@@ -3,21 +3,14 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { Keyboard, Video } from "lucide-react";
 import { LandingNav } from "@/components/landing/LandingNav";
 
-// The first three are in-page anchors on the landing page; "Learn FSL" is a
-// real route. Kept in one list because they render as one nav — Link handles
-// both, and separating them would mean two loops rendering identical markup.
-const navLinks = [
-  { name: "Why it matters", href: "#why-it-matters" },
-  { name: "How you use it", href: "#how-it-works" },
-  { name: "How it works", href: "#principles" },
-  { name: "Learn FSL", href: "/learn" },
-];
+// The anchor list that used to live here went with the template header below.
+// It was never the landing nav — LandingNav owns its own links — so those
+// #why-it-matters anchors only ever rendered on /learn and /evaluation, where
+// they pointed at sections that do not exist on the page.
 
 export function Header() {
   const pathname = usePathname();
@@ -137,43 +130,46 @@ export function Header() {
     return <LandingNav />;
   }
 
-  // Otherwise, default header shared by remaining app pages (learn, conversation, history, presentation)
+  /**
+   * The remaining public pages: /learn and /evaluation.
+   *
+   * This was the original template header — its own palette (#FDF8F0, gray-900,
+   * stone-500) rather than the senyalita tokens every other surface uses, and a
+   * nav of landing-page anchors (#why-it-matters, #how-it-works) that resolve to
+   * nothing from anywhere except "/". On /learn that read as a different
+   * product with three dead links.
+   *
+   * It now mirrors the /translate header: the same back-to-home affordance, the
+   * same palette, minus the translation-mode switcher and camera control, which
+   * belong to that page alone.
+   */
   return (
-    <motion.header
-      initial={{ y: -100 }}
-      animate={{ y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="sticky top-0 z-50 w-full bg-[#FDF8F0]/90 backdrop-blur-md"
-    >
-      <div className="container mx-auto flex h-20 items-center justify-between px-4 md:px-6">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center">
-            <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+    <header className="sticky top-0 z-50 w-full border-b border-senyalita-border/70 bg-senyalita-warm/85 px-4 py-3 backdrop-blur-xl md:px-8 md:py-3.5">
+      <div className="mx-auto flex w-full max-w-[1160px] items-center justify-between gap-3">
+        <Link
+          href="/"
+          className="group flex items-center gap-2.5 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary"
+        >
+          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-senyalita-border bg-white text-senyalita-muted transition-all duration-150 group-hover:-translate-x-0.5 group-hover:border-senyalita-primary/40 group-hover:text-senyalita-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+            <span className="sr-only">Back to home</span>
+          </span>
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-senyalita-primary shadow-lg shadow-senyalita-primary/25">
+            <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2v11z"/>
               <circle cx="12" cy="13" r="4" fill="transparent" stroke="white" strokeWidth="2"/>
             </svg>
-          </div>
-          <span className="font-display text-lg font-bold text-gray-900">
-            Senyalita
           </span>
+          <span className="font-display text-xl font-bold leading-none tracking-tight text-senyalita-dark">Senyalita</span>
         </Link>
-        <nav className="hidden md:flex items-center gap-8">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="text-xs font-semibold tracking-wide text-stone-500 transition-colors hover:text-gray-900 uppercase"
-            >
-              {link.name}
-            </Link>
-          ))}
-        </nav>
-        <div className="flex items-center gap-4">
-          <Button asChild className="bg-[hsl(var(--primary-hsl))] hover:bg-black text-white rounded-full px-6 text-sm font-medium transition-colors shadow-none">
-            <Link href="/translate">Open Senyalita</Link>
-          </Button>
-        </div>
+
+        <Link
+          href="/translate"
+          className="inline-flex h-10 items-center gap-2 rounded-full bg-senyalita-primary px-5 text-sm font-semibold text-white shadow-lg shadow-senyalita-primary/25 transition-all duration-150 hover:shadow-xl hover:shadow-senyalita-primary/35 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary"
+        >
+          Open translator
+        </Link>
       </div>
-    </motion.header>
+    </header>
   );
 }

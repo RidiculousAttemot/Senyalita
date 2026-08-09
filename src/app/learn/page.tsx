@@ -265,6 +265,32 @@ export default function LearnPage() {
             })
           )}
         </SurfaceCard>
+
+        {/*
+          The page ends on the thing it is for. Everything above is reference —
+          watching a sign, or reading which ones the camera knows — and the
+          obvious next move is to go and use it. This stands in for the footer
+          that used to close the page, which repeated links /learn had already
+          made in context.
+        */}
+        <section className="mt-8 flex flex-col items-center gap-5 rounded-3xl border border-senyalita-border bg-white px-6 py-10 text-center">
+          <div>
+            <h2 className="font-display text-2xl font-bold tracking-tight text-senyalita-dark">
+              Want to try it yourself?
+            </h2>
+            <p className="mx-auto mt-2 max-w-lg text-[15px] leading-relaxed text-senyalita-muted">
+              Sign to the camera and read it back as text, or type a message and watch it signed.
+            </p>
+          </div>
+          <Link
+            href="/translate"
+            data-testid="learn-try-cta"
+            className="group inline-flex h-12 items-center gap-2 rounded-full bg-senyalita-primary px-7 text-sm font-semibold text-white shadow-lg shadow-senyalita-primary/25 transition-all duration-150 hover:shadow-xl hover:shadow-senyalita-primary/35 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary"
+          >
+            Open the translator
+            <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+          </Link>
+        </section>
       </main>
     </div>
   );

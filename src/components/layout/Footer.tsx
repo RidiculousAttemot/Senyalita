@@ -18,6 +18,14 @@ export function Footer() {
     return null;
   }
 
+  // /learn is a reference you scroll through — alphabet, vocabulary, tutorials.
+  // A marketing footer at the end of it repeats links the page has already made
+  // in context, and the page ends on its own call to action instead. Getting
+  // home is the header's job, which now carries a back arrow on this route.
+  if (pathname === "/learn" || pathname?.startsWith("/learn/")) {
+    return null;
+  }
+
   // Landing page ("/") gets its own richer footer — scoped here so the
   // simpler footer used by /translate, /learn, /conversation, etc. is untouched.
   if (pathname === "/") {
