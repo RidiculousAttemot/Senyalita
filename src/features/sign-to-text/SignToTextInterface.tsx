@@ -398,6 +398,14 @@ export function SignToTextInterface() {
           // second hand — 63 of the model's 126 features left at zero. Phrases
           // are 93% two-handed in the v4 training split, so that is exactly the
           // case that stopped working.
+          //
+          // No mirroring or single-hand selection on top of this. Measured over
+          // the real v4 test captures, the model already handles either hand
+          // and a second hand in frame: left-only 93.1% (n=1675), right-only
+          // 94.6% (n=3788), both 92.9% (n=1125). Forcing a lone hand into the
+          // right slot mirrored made every group worse -- letters -2.9, numbers
+          // -14.7, phrases -5.1 points -- because it rewrites left-handed
+          // captures the model was trained on and already reads correctly.
           const [leftLandmarks, rightLandmarks] = assignHandSlots(
             results.landmarks.map((landmarks, index) => ({
               landmarks,
