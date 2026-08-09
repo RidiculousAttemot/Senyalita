@@ -24,11 +24,29 @@ interface StatDef {
 // stored at 30 fps, so the figure was simply wrong.
 const stats: StatDef[] = [
   { target: 131, label: "Sign Classes Recognized" },
-  { target: 94.86, decimals: 2, suffix: "%", label: "Test Recognition Accuracy" },
+  // 93.99, not 94.86. The old figure was bilstm_v2's test accuracy, and v2
+  // has not been the served model for some time -- the deployed export is
+  // bilstm_v4, whose metrics.json reports 0.9398515818252832 over a 7,681
+  // sample test split (macro F1 94.10%).
+  { target: 93.99, decimals: 2, suffix: "%", label: "Test Recognition Accuracy" },
   { target: 543, label: "Landmark Points per Frame" },
   { target: 37, label: "Recorded Signs You Can Play" },
   { target: 30, suffix: " FPS", label: "Animation Playback" },
-  { target: 165, suffix: "ms", label: "Avg. Recognition Latency" },
+  // 12ms, and relabelled from "Avg. Recognition Latency".
+  //
+  // 165ms had no source anywhere in the repository; models/benchmark.json is
+  // marked "simulated", predates v4 entirely, and reports a nonsense 39.38%
+  // for v3. Measured instead: the deployed model (79,907 params, input
+  // [1,35,126]) runs at a median 11.8ms over 100 predictions on the tfjs CPU
+  // backend.
+  //
+  // The label changed because the old one could not be true of anything
+  // measurable. End-to-end recognition also includes MediaPipe landmark
+  // detection, which is hardware-bound and ranges from tens of milliseconds
+  // to over half a second on a weak GPU -- no single figure describes it.
+  // What the model itself costs is a property of the model, and that is what
+  // this now states.
+  { target: 12, suffix: "ms", label: "Model Inference Time" },
 ];
 
 function AnimatedStat({ stat }: { stat: StatDef }) {
