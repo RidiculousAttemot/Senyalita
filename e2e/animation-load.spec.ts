@@ -90,6 +90,23 @@ test.describe("animation asset delivery", () => {
     expect(letters).toHaveLength(26);
   });
 
+  test("a multi-word gloss resolves however the client spells it", async ({ request }) => {
+    // THANK YOU was the first multi-word gloss ever published and it 404'd
+    // immediately. Clients key caches as toUpperCase().replace(/\s+/g,"_") and
+    // AnimationLoader requests that same key, while the row keeps the space:
+    //
+    //   GET /api/animations/THANK_YOU    -> 404
+    //   GET /api/animations/THANK%20YOU  -> 307
+    //
+    // Invisible for 37 signs, because underscore normalisation is the identity
+    // function on a single letter. Both spellings must reach the same asset.
+    for (const spelling of ["THANK_YOU", "THANK%20YOU"]) {
+      const res = await request.get(`${BASE}/api/animations/${spelling}`, { maxRedirects: 0 });
+      expect(res.status(), `${spelling} should resolve`).toBe(307);
+      expect(res.headers()["x-animation-source"]).toBe("published");
+    }
+  });
+
   test("an unpublished gloss is a 404, distinct from a failure", async ({ request }) => {
     // Never a 5xx and never a fallback: this gloss genuinely does not exist,
     // and the client is correct to fingerspell it.

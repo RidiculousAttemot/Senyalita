@@ -2,6 +2,7 @@ import "server-only";
 
 import type { GestureAnimationAsset } from "@/features/sign-animation/types";
 import { createSupabaseServiceClient } from "../service";
+import { glossLookupCandidates } from "@/lib/glossKey";
 import type { AnimationAsset, AnimationAssetVersion } from "@/lib/animationAssets";
 
 type PublishedVersionResult = {
@@ -48,13 +49,27 @@ export type PublishedAssetLookup =
 
 export async function getPublishedAnimationAsset(gloss: string): Promise<PublishedAssetLookup> {
   const supabase = createSupabaseServiceClient();
-  const { data: asset, error: assetError } = await supabase
-    .from("animation_assets")
-    .select("published_version_id")
-    .eq("gloss", gloss.toUpperCase())
-    .maybeSingle();
 
-  if (assetError) return { outcome: "failed", stage: "asset", message: assetError.message };
+  // Clients key their caches as THANK_YOU; the row is stored as THANK YOU. See
+  // glossLookupCandidates — the exact spelling is tried first, then the space
+  // variant, so a request in either form finds the same asset.
+  let asset: { published_version_id: string | null } | null = null;
+  for (const candidate of glossLookupCandidates(gloss)) {
+    const { data, error } = await supabase
+      .from("animation_assets")
+      .select("published_version_id")
+      .eq("gloss", candidate)
+      .maybeSingle();
+
+    // An infrastructure failure is not a miss, and must not fall through to the
+    // next spelling and be reported as "no such gloss".
+    if (error) return { outcome: "failed", stage: "asset", message: error.message };
+    if (data?.published_version_id) {
+      asset = data;
+      break;
+    }
+  }
+
   if (!asset?.published_version_id) return { outcome: "absent" };
 
   const { data: version, error: versionError } = await supabase
@@ -124,13 +139,24 @@ export type SignedAssetLookup =
 export async function getPublishedAnimationSignedUrl(gloss: string): Promise<SignedAssetLookup> {
   const supabase = createSupabaseServiceClient();
 
-  const { data: asset, error: assetError } = await supabase
-    .from("animation_assets")
-    .select("published_version_id")
-    .eq("gloss", gloss.toUpperCase())
-    .maybeSingle();
+  // Same spelling problem as getPublishedAnimationAsset, and this is the path
+  // the route actually takes since it started redirecting to a signed URL —
+  // so this is the one that was returning 404 for THANK_YOU.
+  let asset: { published_version_id: string | null } | null = null;
+  for (const candidate of glossLookupCandidates(gloss)) {
+    const { data, error } = await supabase
+      .from("animation_assets")
+      .select("published_version_id")
+      .eq("gloss", candidate)
+      .maybeSingle();
 
-  if (assetError) return { outcome: "failed", stage: "asset", message: assetError.message };
+    if (error) return { outcome: "failed", stage: "asset", message: error.message };
+    if (data?.published_version_id) {
+      asset = data;
+      break;
+    }
+  }
+
   if (!asset?.published_version_id) return { outcome: "absent" };
 
   const { data: version, error: versionError } = await supabase
