@@ -50,8 +50,26 @@ export async function POST(request: NextRequest, { params }: { params: { version
           `This animation cannot be published: ${validation.errors.map((e) => e.message).join(" ")}`,
         );
       }
+      /**
+       * The reference video URL is rewritten to a route, never stored as sent.
+       *
+       * The studio builds its preview with URL.createObjectURL(file) and that
+       * blob: URL rode along into the published asset — THANK YOU went live
+       * carrying `video: "blob:http://localhost:3000/8a628c9f-…"`. A blob URL is
+       * valid only inside the tab that created it, so Human mode resolved
+       * ERR_FILE_NOT_FOUND for every other visitor and fell back to the drawn
+       * figure. The seed script had always written a real route, which is why
+       * A–Z worked and the first studio-published sign did not.
+       *
+       * Rewritten here rather than in the studio: this is the boundary where
+       * the asset becomes permanent, and a client cannot be trusted to have
+       * cleaned up after itself.
+       */
+      const referenceVideo = `/api/videos/${encodeURIComponent(body.asset.label)}/source`;
+      const storedAsset = { ...body.asset, video: referenceVideo };
+
       const landmarkPath = `${version.asset_id}/${version.id}/landmarks.json`;
-      const serialized = JSON.stringify(body.asset);
+      const serialized = JSON.stringify(storedAsset);
       const { error: uploadError } = await supabase.storage
         .from(LANDMARK_BUCKET)
         .upload(landmarkPath, serialized, { contentType: "application/json", upsert: true });

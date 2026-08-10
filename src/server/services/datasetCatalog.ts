@@ -1,6 +1,7 @@
 import "server-only";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { NotFoundError } from "@/server/http/errors";
+import { glossLookupCandidates } from "@/lib/glossKey";
 
 /**
  * Backend catalogue for the admin Animation Dataset Manager.
@@ -165,12 +166,17 @@ export async function getDatasetAsset(label: string, file: string): Promise<Reso
   const supabase = createSupabaseServiceClient();
   const version = parseVersionFromFile(file);
 
-  const { data: parent, error: parentError } = await supabase
-    .from("animation_assets")
-    .select("id")
-    .eq("gloss", label.toUpperCase())
-    .maybeSingle();
-  if (parentError) throw new Error(`Unable to look up gloss: ${parentError.message}`);
+  // Accepts THANK_YOU as well as THANK YOU — see lib/glossKey.
+  let parent: { id: string } | null = null;
+  for (const candidate of glossLookupCandidates(label)) {
+    const { data, error } = await supabase
+      .from("animation_assets")
+      .select("id")
+      .eq("gloss", candidate)
+      .maybeSingle();
+    if (error) throw new Error(`Unable to look up gloss: ${error.message}`);
+    if (data) { parent = data; break; }
+  }
   if (!parent) throw new NotFoundError(`No animation asset for gloss "${label}".`);
 
   let versionQuery = supabase
@@ -223,9 +229,16 @@ export async function resolveSourceVideoUrl(label: string, file: string): Promis
   const supabase = createSupabaseServiceClient();
   const version = parseVersionFromFile(file);
 
-  const { data: parent, error: parentError } = await supabase
-    .from("animation_assets").select("id").eq("gloss", label.toUpperCase()).maybeSingle();
-  if (parentError) return { outcome: "failed", stage: "asset", message: parentError.message };
+  // Accepts THANK_YOU as well as THANK YOU — see lib/glossKey. The client keys
+  // its caches with underscores and the row keeps the space, so an exact match
+  // finds nothing for any multi-word gloss.
+  let parent: { id: string } | null = null;
+  for (const candidate of glossLookupCandidates(label)) {
+    const { data, error } = await supabase
+      .from("animation_assets").select("id").eq("gloss", candidate).maybeSingle();
+    if (error) return { outcome: "failed", stage: "asset", message: error.message };
+    if (data) { parent = data; break; }
+  }
   if (!parent) return { outcome: "absent" };
 
   let q = supabase.from("animation_asset_versions").select("source_video_path").eq("asset_id", parent.id);

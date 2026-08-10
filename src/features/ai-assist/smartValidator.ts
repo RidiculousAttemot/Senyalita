@@ -30,9 +30,36 @@ const THRESHOLDS: Record<string, { warn: number; fail: number }> = {
   fps: { warn: 20, fail: 15 },
   hand_visibility: { warn: 40, fail: 20 },
   landmark_completeness: { warn: 60, fail: 40 },
-  movement: { warn: 15, fail: 5 },
+  /**
+   * Advisory only — it can warn, never fail.
+   *
+   * Movement is wrist travel, and a fingerspelled letter is a static handshape:
+   * the wrist is meant to stay put. Measured against the real published
+   * library, "A" scores movement=4 against a fail threshold of 5, so enforcing
+   * this would have refused most of the alphabet — the signs the whole
+   * Text-to-Sign fallback depends on.
+   *
+   * Low movement is worth flagging on a phrase, where it usually means a bad
+   * take. It is not evidence that a sign is unpublishable, so it does not get
+   * to block one. `fail: 0` keeps the check visible and demotes it to a warning
+   * rather than deleting the signal.
+   */
+  movement: { warn: 15, fail: 0 },
   smoothness: { warn: 40, fail: 20 },
-  jitter: { warn: 30, fail: 50 },
+  /**
+   * Recalibrated against the library that already exists.
+   *
+   * Measured over published assets: a=44, b=50, 1=53, 5=47, 10=43. The fail
+   * line was 50 — inside the normal noise floor of this recording setup — so
+   * enforcing it would have rejected roughly half the alphabet, including signs
+   * Text-to-Sign has been serving correctly for weeks. "1" failed outright.
+   *
+   * A threshold that rejects the working library is measuring the camera, not
+   * the sign. 70 sits clear of the observed range while still catching a take
+   * that is genuinely shaky. Worth revisiting with more samples; the warn line
+   * at 30 keeps the signal visible in the meantime.
+   */
+  jitter: { warn: 30, fail: 70 },
   missing_frames: { warn: 20, fail: 50 },
   frozen_frames: { warn: 20, fail: 40 },
 };
@@ -45,14 +72,30 @@ function validateThreshold(
   const t = THRESHOLDS[check];
   if (!t) return { status: "pass", message: "OK" };
 
-  const passes = invert ? value >= t.fail : value >= t.warn;
-  const fails = invert ? value < t.fail : value < t.fail;
-  const warn = invert
-    ? (value >= t.warn && value < t.fail)
-    : (value >= t.fail && value < t.warn);
+  /**
+   * `invert` was accepted and never applied.
+   *
+   * Both branches of every ternary here were identical — `invert ? fails :
+   * fails` — so jitter, frozen_frames and missing_frames, the three checks
+   * where LOWER is better, were graded as if higher were better. Their
+   * thresholds are {warn: 20, fail: 40}, so:
+   *
+   *   frozen_frames 0   ->  0 < 40   -> FAIL   (a flawless clip)
+   *   frozen_frames 98  ->  98 < 40  -> pass   (an unusable one)
+   *
+   * Exactly backwards, and it is why a well-formed asset reported
+   * "FAIL — Failed 2 check(s)": it was penalised for having no jitter and no
+   * missing frames. Nothing enforced the verdict, so the wrong answer stayed
+   * cosmetic — until the publish gate started depending on it, at which point
+   * it would have blocked every good asset and passed the bad ones.
+   *
+   * For an inverted check the threshold is a ceiling, not a floor.
+   */
+  const fails = invert ? value > t.fail : value < t.fail;
+  const warns = invert ? value > t.warn : value < t.warn;
 
-  if (invert ? fails : fails) return { status: "fail", message: `${value} (threshold: ${t.fail})` };
-  if (invert ? warn : warn) return { status: "warn", message: `${value} (threshold: ${t.warn})` };
+  if (fails) return { status: "fail", message: `${value} (threshold: ${t.fail})` };
+  if (warns) return { status: "warn", message: `${value} (threshold: ${t.warn})` };
   return { status: "pass", message: `${value} OK` };
 }
 

@@ -109,6 +109,45 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
       return;
     }
 
+    /**
+     * The quality verdict gates publishing too.
+     *
+     * Only the structural check above was enforced, so an asset could show
+     * "FAIL — Failed 2 check(s), 75/100" and publish anyway: the red banner was
+     * advisory text with nothing behind it. Structural validity means the
+     * frames are well formed, not that the sign is worth showing — those are
+     * different questions and only one of them was being asked.
+     *
+     * Re-run here rather than reading the state set by "Validate Animation".
+     * That button is optional, so gating on its result would let anyone skip
+     * the gate by not pressing it, and the state can be stale if the asset
+     * changed since.
+     *
+     * Draft and archive are deliberately exempt. Saving work in progress is
+     * exactly what you do with an asset that is not good enough yet, and
+     * blocking that would push people to publish or lose it.
+     */
+    if (action !== "draft" && action !== "archived") {
+      const ai = validateAsset(asset);
+      setAiValidation(ai);
+      setAiMeta(ai.metadata);
+      setAiQuality(ai.qualityAnalysis);
+
+      if (ai.verdict === "fail") {
+        const failed = ai.checks
+          ? Object.entries(ai.checks)
+              .filter(([, c]) => c.status === "fail")
+              .map(([name]) => name.replace(/_/g, " "))
+          : [];
+        setError(
+          failed.length > 0
+            ? `Cannot publish: quality check failed (${failed.join(", ")}). Save a draft, or re-record and try again.`
+            : "Cannot publish: this animation failed quality validation. Save a draft, or re-record and try again.",
+        );
+        return;
+      }
+    }
+
     setError("");
     setSubmitting(true);
 
