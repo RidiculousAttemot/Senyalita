@@ -15,6 +15,9 @@ import {
 import tutorialData from "@/data/tutorials.json";
 
 const LABELS_URL = "/models/fsl_unified/bilstm_tfjs/labels.json";
+// The published library. The route caches it for 30s, so a newly published sign
+// appears here quickly without every visitor reaching the database.
+const PUBLISHED_URL = "/api/animations";
 
 type Tutorial = {
   id: string;
@@ -33,32 +36,63 @@ export default function LearnPage() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string>("A");
   const [vocabulary, setVocabulary] = useState<VocabularyEntry[]>([]);
+  const [publishedGlosses, setPublishedGlosses] = useState<string[]>([]);
 
-  // The recognition vocabulary comes from the model's own labels.json rather
-  // than a copy checked in here, so retraining cannot silently desync the page
-  // from what the camera actually recognises.
+  /**
+   * Two sources, neither of them a copy checked in here.
+   *
+   * labels.json is the model's own label list, so retraining cannot silently
+   * desync the page from what the camera recognises. /api/animations is the
+   * published library, so publishing a sign cannot silently desync it from what
+   * can actually be played — which is exactly what happened when THANK YOU went
+   * live and this page went on calling it unanimated.
+   */
   useEffect(() => {
     let cancelled = false;
-    fetch(LABELS_URL)
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
-      .then((data: { labels?: string[] } | string[]) => {
-        if (cancelled) return;
-        const labels = Array.isArray(data) ? data : data.labels ?? [];
-        setVocabulary(buildVocabulary(labels));
-      })
-      .catch(() => {
-        // Non-fatal: sections 1 and 3 do not depend on this.
-        if (!cancelled) setVocabulary([]);
-      });
+
+    Promise.all([
+      fetch(LABELS_URL)
+        .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+        .then((data: { labels?: string[] } | string[]) => (Array.isArray(data) ? data : data.labels ?? []))
+        .catch(() => [] as string[]),
+      fetch(PUBLISHED_URL)
+        .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+        .then((data: { glosses?: string[] }) => data.glosses ?? [])
+        .catch(() => [] as string[]),
+    ]).then(([labels, glosses]) => {
+      if (cancelled) return;
+      setPublishedGlosses(glosses);
+      setVocabulary(buildVocabulary(labels, glosses));
+    });
+
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const signs = useMemo(
-    () => [...ALPHABET, ...NUMBERS].filter((g) => matchesQuery(g, query)),
-    [query],
-  );
+  /**
+   * The alphabet grid, from the library rather than from A-Z and 0-10 literals.
+   *
+   * Those constants were accurate the day they were written and are a claim
+   * about the database, not a fact of the alphabet — if a letter were ever
+   * unpublished the grid would still offer it and the stage would fail to load.
+   * Falls back to the literals only while the fetch is in flight, so the grid
+   * is never empty on first paint.
+   */
+  const signs = useMemo(() => {
+    const fromLibrary = publishedGlosses
+      .filter((g) => g.length === 1 || NUMBERS.includes(g))
+      .sort((a, b) => {
+        const numeric = (v: string) => (/^\d+$/.test(v) ? Number(v) : NaN);
+        const [na, nb] = [numeric(a), numeric(b)];
+        if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+        if (!Number.isNaN(na)) return 1;
+        if (!Number.isNaN(nb)) return -1;
+        return a.localeCompare(b);
+      });
+    const source = fromLibrary.length > 0 ? fromLibrary : [...ALPHABET, ...NUMBERS];
+    return source.filter((g) => matchesQuery(g, query));
+  }, [publishedGlosses, query]);
   const phrases = useMemo(
     () => vocabulary.filter((v) => matchesQuery(v.label, query) || matchesQuery(v.category, query)),
     [vocabulary, query],

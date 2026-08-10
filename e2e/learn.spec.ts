@@ -100,6 +100,40 @@ test.describe("Learn FSL", () => {
     await expect(page.locator("#composer-input")).toBeVisible({ timeout: 150_000 });
   });
 
+  test("playability follows the library, not a hardcoded rule", async ({ page, request }) => {
+    // The page used to decide playability structurally — letters, digits and
+    // number words — which was true only while the published set was exactly
+    // A-Z and 0-10. Publishing THANK YOU made it false, and /learn went on
+    // calling it unanimated while Text-to-Sign played it correctly.
+    //
+    // Driven from the same endpoint the page reads, so this keeps holding as
+    // the library grows rather than pinning today's vocabulary.
+    const res = await request.get(`${BASE}/api/animations`);
+    expect(res.status()).toBe(200);
+    const published: string[] = (await res.json()).glosses ?? [];
+
+    const multiWord = published.filter((g) => g.length > 1 && !/^\d+$/.test(g));
+    test.skip(multiWord.length === 0, "no multi-word gloss published yet");
+
+    await page.goto(`${BASE}/learn`);
+    await expect(page.getByTestId("section-phrases")).toBeVisible({ timeout: 150_000 });
+
+    for (const gloss of multiWord) {
+      await expect(
+        page.getByTestId(`phrase-${gloss}`),
+        `${gloss} is published but not offered as playable`,
+      ).toBeVisible({ timeout: 30_000 });
+    }
+
+    // And it plays, rather than merely being listed.
+    const first = multiWord[0];
+    await page.getByTestId(`phrase-${first}`).click();
+    await expect(page.getByTestId("learn-stage")).toHaveAttribute("data-gloss", first);
+    await expect
+      .poll(async () => paintedPixels(page), { timeout: 150_000 })
+      .toBeGreaterThan(0);
+  });
+
   test("search filters every section", async ({ page }) => {
     await page.goto(`${BASE}/learn`);
     await expect(page.getByTestId("section-alphabet")).toBeVisible({ timeout: 150_000 });

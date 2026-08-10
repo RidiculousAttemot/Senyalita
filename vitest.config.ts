@@ -14,8 +14,12 @@ export default defineConfig({
       "src/features/**/__tests__/**/*.test.ts",
       "src/features/**/__tests__/**/*.test.tsx",
       "src/components/**/__tests__/**/*.test.tsx",
-      "src/lib/__tests__/**/*.test.ts",
-      "src/lib/supabase/**/__tests__/**/*.test.ts",
+      // `src/lib/**` rather than `src/lib/__tests__` plus a special case for
+      // supabase. The narrow pair silently skipped anything under a new lib
+      // subdirectory: src/lib/learn/__tests__/vocabulary.test.ts matched
+      // neither pattern, so it ran zero tests and reported success. A test file
+      // that never runs is worse than one that does not exist.
+      "src/lib/**/__tests__/**/*.test.ts",
       "src/server/**/__tests__/**/*.test.ts"
     ],
     exclude: ["node_modules", ".next", "dist"],
