@@ -9,9 +9,17 @@ import { getMetricDisplay } from "@/lib/admin/dashboardMetrics";
 import { getDashboardRecognitionSamples } from "@/lib/admin/dashboardRecognition";
 import AdminDataTable, { type AdminDataTableRow } from "./AdminDataTable";
 import { DashboardServiceGrid } from "./DashboardServiceGrid";
-import { detectMissingAnimations } from "@/features/ai-assist";
+import { computeAnimationCoverage } from "@/lib/admin/animationCoverage";
+import { MODEL_LABELS } from "@/lib/admin/modelLabels";
 
 type TrendDirection = "up" | "down" | "steady";
+
+/**
+ * How many missing glosses to name before summarising the rest. At 94 missing
+ * the full list is a wall of text that stops being read; a couple of rows is
+ * enough to answer "what should I record next".
+ */
+const MISSING_PREVIEW = 24;
 
 const metricTone = (direction: TrendDirection) => direction === "up" ? "is-up" : direction === "down" ? "is-down" : "is-steady";
 
@@ -114,7 +122,7 @@ export default async function AdminDashboardOverview() {
     supabase.from("translation_logs").select("id, gesture_label, confidence, inference_time_ms, created_at").order("created_at", { ascending: false }).limit(20),
     supabase.from("model_versions").select("version, architecture, accuracy, num_classes").eq("is_active", true).maybeSingle(),
     supabase.storage.from("gesture-videos").list("", { limit: 1 }),
-    supabase.from("animation_assets").select("id, gloss"),
+    supabase.from("animation_assets").select("id, gloss, published_version_id"),
     supabase.from("animation_asset_versions").select("status").in("status", ["pending", "processing", "ready", "approved", "published", "archived"]),
   ]);
 
@@ -178,11 +186,16 @@ export default async function AdminDashboardOverview() {
 
   const animationAssetsAvailable = !animationAssetsResult.error;
   const animationVersionsAvailable = !animationVersionsResult.error;
-  const animationAssetsData = animationAssetsResult.data as { id: string; gloss: string }[] | null;
+  const animationAssetsData = animationAssetsResult.data as { id: string; gloss: string; published_version_id: string | null }[] | null;
   const animationTotal = animationAssetsData?.length ?? 0;
-  const animationGlosses = (animationAssetsData ?? []).map((a) => a.gloss).filter(Boolean);
-  const coverageReport = animationGlosses.length > 0
-    ? detectMissingAnimations(animationGlosses)
+  // Only a published version is visible to the public app, so only a published
+  // version counts as covered. The previous card counted every row, which meant
+  // an upload raised coverage before anyone had approved it.
+  const publishedGlosses = (animationAssetsData ?? [])
+    .filter((a) => a.published_version_id && a.gloss)
+    .map((a) => a.gloss);
+  const coverage = animationAssetsAvailable
+    ? computeAnimationCoverage(MODEL_LABELS, publishedGlosses)
     : null;
   const animationVersions = animationVersionsResult.data ?? [];
   const animationPublished = animationVersions.filter((v) => v.status === "published").length;
@@ -231,36 +244,62 @@ export default async function AdminDashboardOverview() {
         <MetricCard icon={Database} label="Approved assets" value={getMetricDisplay({ value: animationApproved, available: animationVersionsAvailable })} note={animationVersionsAvailable ? "Approved, ready to publish" : "Version data unavailable"} />
       </section>
 
-      {coverageReport && (
+      {coverage && (
         <section className="admin-panel" style={{ marginBottom: 24 }}>
           <div className="admin-panel-heading">
             <div>
-              <p className="admin-overline">Gloss coverage</p>
-              <h2>Animation library coverage</h2>
+              <p className="admin-overline">Vocabulary coverage</p>
+              <h2>Signs the system can recognise but cannot show</h2>
             </div>
             <Link href="/admin/animation-studio" className="admin-inline-link">Animation Studio <ArrowUpRight size={15} /></Link>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, padding: "0 20px 20px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, padding: "0 20px 8px" }}>
             <article className="admin-metric-card">
-              <p className="admin-metric-label">Coverage</p>
-              <strong className="admin-metric-value" style={{ color: coverageReport.coveragePercent > 70 ? "#4ade80" : coverageReport.coveragePercent > 40 ? "#fde68a" : "#f87171" }}>
-                {coverageReport.coveragePercent}%
+              <p className="admin-metric-label">Published coverage</p>
+              <strong className="admin-metric-value" style={{ color: coverage.percent > 70 ? "#4ade80" : coverage.percent > 40 ? "#fde68a" : "#f87171" }}>
+                {coverage.percent}%
               </strong>
-              <p className="admin-metric-note">{coverageReport.coveredGlosses} of {coverageReport.totalGlosses} glosses in library</p>
+              <p className="admin-metric-note">{coverage.published} of {coverage.total} signs the model knows</p>
             </article>
             <article className="admin-metric-card">
-              <p className="admin-metric-label">Missing animations</p>
-              <strong className="admin-metric-value">{coverageReport.missingGlosses}</strong>
-              <p className="admin-metric-note">{coverageReport.missingEntries.filter((e) => e.priority === "high").length} high priority</p>
+              <p className="admin-metric-label">Not yet animated</p>
+              <strong className="admin-metric-value">{coverage.missing}</strong>
+              <p className="admin-metric-note">Recognised by the camera, fingerspelled in Type-to-Sign</p>
             </article>
-            <article className="admin-metric-card">
-              <p className="admin-metric-label">Next to create</p>
-              <strong className="admin-metric-value" style={{ fontSize: 14, fontFamily: "monospace" }}>
-                {coverageReport.missingEntries[0]?.gloss ?? "—"}
-              </strong>
-              <p className="admin-metric-note">{coverageReport.missingEntries[0]?.reason ?? "All glosses covered"}</p>
-            </article>
+            {coverage.groups.map((group) => (
+              <article className="admin-metric-card" key={group.name}>
+                <p className="admin-metric-label">{group.name}</p>
+                <strong className="admin-metric-value">{group.published}<span style={{ fontSize: 15, opacity: 0.55 }}> / {group.total}</span></strong>
+                <p className="admin-metric-note">
+                  {group.missing.length === 0 ? "Fully covered" : `${group.missing.length} still to publish`}
+                </p>
+              </article>
+            ))}
           </div>
+          {coverage.missing > 0 && (
+            <div style={{ padding: "0 20px 20px" }}>
+              <p className="admin-metric-label" style={{ marginBottom: 8 }}>Not yet published, in model order</p>
+              <p style={{ fontFamily: "monospace", fontSize: 12, lineHeight: 1.8, wordBreak: "break-word", margin: 0 }}>
+                {coverage.groups.flatMap((g) => g.missing).slice(0, MISSING_PREVIEW).join("  ·  ")}
+                {coverage.missing > MISSING_PREVIEW && (
+                  <span style={{ opacity: 0.6 }}>{"  ·  "}and {coverage.missing - MISSING_PREVIEW} more</span>
+                )}
+              </p>
+            </div>
+          )}
+          {coverage.unrecognised.length > 0 && (
+            <div style={{ padding: "0 20px 20px" }}>
+              <p className="admin-metric-label" style={{ marginBottom: 8 }}>
+                Published but not in the model ({coverage.unrecognised.length})
+              </p>
+              <p className="admin-panel-note" style={{ margin: "0 0 6px" }}>
+                Usable in Type-to-Sign. The camera cannot recognise these, so they are not counted above.
+              </p>
+              <p style={{ fontFamily: "monospace", fontSize: 12, lineHeight: 1.8, wordBreak: "break-word", margin: 0 }}>
+                {coverage.unrecognised.join("  ·  ")}
+              </p>
+            </div>
+          )}
         </section>
       )}
 
