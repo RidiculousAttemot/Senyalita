@@ -1,46 +1,6 @@
 import type { GestureAnimationAsset } from "@/features/sign-animation/types";
 import { isQuantisableAsset, quantiseAsset } from "@/lib/landmarkPrecision";
-
-/**
- * Turns a failed response into something a human can act on.
- *
- * These paths used to call `await res.json()` on the error branch, which
- * assumes every failure is one of ours. A 500 raised above the route handler —
- * by middleware, or by the framework — comes back as an HTML error page, so the
- * parse itself threw and the admin saw
- *
- *   Unexpected token '<', "<!DOCTYPE "... is not valid JSON
- *
- * instead of the reason the publish failed. The real message never reached the
- * screen and never reached the network tab in a readable form either, which is
- * a bad place to be when the underlying error is intermittent.
- *
- * Reads the body once as text, tries JSON, and falls back to the status line
- * plus a snippet. Always includes the status code, because "500" and "413" want
- * completely different responses from whoever is reading it.
- */
-async function failureMessage(res: Response, fallback: string): Promise<string> {
-  let body = "";
-  try {
-    body = await res.text();
-  } catch {
-    return `${fallback} (HTTP ${res.status}, response body unreadable)`;
-  }
-
-  try {
-    const parsed = JSON.parse(body) as { error?: unknown };
-    if (typeof parsed.error === "string" && parsed.error) {
-      return `${parsed.error} (HTTP ${res.status})`;
-    }
-  } catch {
-    // Not JSON — an HTML error page, or an empty body.
-  }
-
-  const snippet = body.replace(/\s+/g, " ").trim().slice(0, 120);
-  return snippet
-    ? `${fallback} (HTTP ${res.status}): ${snippet}`
-    : `${fallback} (HTTP ${res.status})`;
-}
+import { failureMessage } from "@/lib/http/failureMessage";
 
 export interface AnimationLibraryAsset {
   id: string;
@@ -111,7 +71,7 @@ export const animationLibrary = {
     if (query?.sort) params.set("sort", query.sort);
     const qs = params.toString();
     const res = await fetch(`/api/admin/animation-assets${qs ? `?${qs}` : ""}`);
-    if (!res.ok) throw new Error("Failed to list animation assets");
+    if (!res.ok) throw new Error(await failureMessage(res, "Failed to list animation assets"));
     const data = await res.json();
     return data.assets as AnimationLibraryAsset[];
   },

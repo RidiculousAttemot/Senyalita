@@ -6,6 +6,7 @@ import {
   FileJson, Play, Pause, RotateCcw, X, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { drawFullPose, drawStylizedFace, drawFullHand } from "@/features/sign-animation/renderer/renderUtils";
+import { failureMessage } from "@/lib/http/failureMessage";
 
 interface AssetSummary {
   label: string;
@@ -43,8 +44,14 @@ export function AnimationDatasetManager() {
   const animRef = useRef<number | null>(null);
 
   useEffect(() => {
+    // The .ok check is the point. Without it a 401 or an HTML error page went
+    // straight into r.json(), so an auth failure and a server fault both
+    // surfaced as "Failed to load dataset" via the catch below.
     fetch("/api/assets/dataset")
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error(await failureMessage(r, "Failed to load dataset"));
+        return (await r.json()) as DatasetResponse;
+      })
       .then((data: DatasetResponse) => {
         setAssets(data.assets);
         setLabels(data.labels);
@@ -56,7 +63,7 @@ export function AnimationDatasetManager() {
         }
         setBestPicks(picks);
       })
-      .catch(() => setError("Failed to load dataset"))
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : "Failed to load dataset"))
       .finally(() => setLoading(false));
   }, []);
 
@@ -83,11 +90,11 @@ export function AnimationDatasetManager() {
 
     try {
       const res = await fetch(`/api/assets/dataset?label=${encodeURIComponent(asset.label)}&file=${encodeURIComponent(asset.file)}`);
-      if (!res.ok) throw new Error("Failed to load");
+      if (!res.ok) throw new Error(await failureMessage(res, "Failed to load preview"));
       const data = await res.json();
       setPreviewData(data);
-    } catch {
-      setError("Failed to load preview");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load preview");
     }
   }, []);
 
