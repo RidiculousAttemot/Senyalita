@@ -316,21 +316,40 @@ export function applyGrammarRules(
 
   let result = [...glossTokens];
   let changed = true;
+  let passes = 0;
 
   while (changed) {
+    // Backstop. The loop below only continues on real progress, so this should
+    // never trip -- but a rule set is data, and an infinite loop here freezes
+    // the tab rather than degrading. Bounded by tokens x rules, which is the
+    // most rewrites that can happen before something is cycling.
+    if (++passes > activeRules.length * (result.length + 1) + 8) break;
+
     changed = false;
     for (const rule of activeRules) {
       for (let i = 0; i <= result.length - rule.pattern.length; i++) {
         const slice = result.slice(i, i + rule.pattern.length);
-        if (arraysMatch(slice, rule.pattern)) {
-          result = [
-            ...result.slice(0, i),
-            ...rule.replacement,
-            ...result.slice(i + rule.pattern.length),
-          ];
-          changed = true;
-          break;
-        }
+        if (!arraysMatch(slice, rule.pattern)) continue;
+
+        const next = [
+          ...result.slice(0, i),
+          ...rule.replacement,
+          ...result.slice(i + rule.pattern.length),
+        ];
+
+        // A rewrite only counts as progress if it changed something.
+        //
+        // Five rules in this file replace a pattern with itself -- VERY -> VERY,
+        // TODAY, TOMORROW, YESTERDAY, and SEE YOU TOMORROW. They exist to
+        // document that the token stays put, which is fine, but the old loop
+        // set `changed = true` on any match and re-ran, so any of those five
+        // spun forever. Typing "very" hung the translator outright, and the
+        // same for "today", "tomorrow" and "yesterday".
+        if (arraysMatch(next, result)) continue;
+
+        result = next;
+        changed = true;
+        break;
       }
       if (changed) break;
     }

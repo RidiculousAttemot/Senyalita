@@ -32,7 +32,11 @@ const ABBREVIATIONS: Record<string, string> = {
   "tho": "though", "thru": "through", "nite": "night",
 };
 
-const CONTRACTIONS: Record<string, string> = {
+// Exported so the dictionary can index the same expansions it will be queried
+// with. The normalizer turns "dont" into "do not" before lookup happens, so a
+// key stored only in its contracted form is unreachable -- "i dont know" was
+// listed and could never match.
+export const CONTRACTIONS: Record<string, string> = {
   "don't": "do not", "dont": "do not", "can't": "cannot", "cant": "cannot",
   "won't": "will not", "wont": "will not", "isn't": "is not", "isnt": "is not",
   "aren't": "are not", "arent": "are not", "wasn't": "was not", "wasnt": "was not",

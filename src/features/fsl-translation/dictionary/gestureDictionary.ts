@@ -1,6 +1,18 @@
 import type { DictionaryEntry } from "../types";
+import { CONTRACTIONS } from "@/features/translation-pipeline/stages/TextNormalizer";
 
-const BUILT_IN_DICTIONARY: DictionaryEntry[] = [
+/** Applies the same contraction expansion the normalizer does, word by word. */
+function expandContractions(form: string): string {
+  return form
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w) => CONTRACTIONS[w] ?? w)
+    .join(" ")
+    .trim();
+}
+
+// Exported so tests can walk every entry rather than naming cases by hand.
+export const BUILT_IN_DICTIONARY: DictionaryEntry[] = [
   { label: "HELLO", gloss: "HELLO", synonyms: ["hi", "hey", "hello", "kumusta"], english: ["hello"], filipino: ["kumusta", "hello"], category: "greeting", animationAsset: "HELLO", referenceVideo: undefined, suggestedReplies: ["HELLO", "HOW ARE YOU", "GOOD MORNING"] },
   { label: "GOOD MORNING", gloss: "GOOD MORNING", synonyms: ["morning"], english: ["good morning", "morning"], filipino: ["magandang umaga"], category: "greeting", animationAsset: "GOOD MORNING", suggestedReplies: ["GOOD MORNING", "HOW ARE YOU"] },
   { label: "GOOD AFTERNOON", gloss: "GOOD AFTERNOON", synonyms: ["afternoon"], english: ["good afternoon", "afternoon"], filipino: ["magandang hapon"], category: "greeting", animationAsset: "GOOD AFTERNOON", suggestedReplies: ["GOOD AFTERNOON", "HOW ARE YOU"] },
@@ -232,6 +244,7 @@ export class GestureDictionary {
   private englishIndex: Map<string, string[]> = new Map();
   private filipinoIndex: Map<string, string[]> = new Map();
   private cache = new Map<string, DictionaryEntry>();
+  private longestForm = 0;
 
   constructor() {
     this.loadBuiltIn();
@@ -246,18 +259,29 @@ export class GestureDictionary {
   addEntry(entry: DictionaryEntry): void {
     this.entries.set(entry.label, entry);
     this.cache.clear();
+    this.longestForm = 0;
     for (const syn of entry.synonyms) {
       this.synonymIndex.set(syn.toLowerCase(), entry.label);
+      // …and the form the normalizer will actually hand us. It expands
+      // contractions before lookup, so "i dont know" arrives as "i do not
+      // know" and the stored key never matched. Indexing both means the index
+      // and the input cannot disagree.
+      const expanded = expandContractions(syn);
+      if (expanded !== syn.toLowerCase()) this.synonymIndex.set(expanded, entry.label);
     }
     for (const en of entry.english) {
-      const existing = this.englishIndex.get(en.toLowerCase()) ?? [];
-      existing.push(entry.label);
-      this.englishIndex.set(en.toLowerCase(), existing);
+      for (const key of new Set([en.toLowerCase(), expandContractions(en)])) {
+        const existing = this.englishIndex.get(key) ?? [];
+        existing.push(entry.label);
+        this.englishIndex.set(key, existing);
+      }
     }
     for (const tl of entry.filipino) {
-      const existing = this.filipinoIndex.get(tl.toLowerCase()) ?? [];
-      existing.push(entry.label);
-      this.filipinoIndex.set(tl.toLowerCase(), existing);
+      for (const key of new Set([tl.toLowerCase(), expandContractions(tl)])) {
+        const existing = this.filipinoIndex.get(key) ?? [];
+        existing.push(entry.label);
+        this.filipinoIndex.set(key, existing);
+      }
     }
   }
 
@@ -276,6 +300,21 @@ export class GestureDictionary {
     const synLabel = this.synonymIndex.get(lower);
     if (synLabel) {
       const entry = this.entries.get(synLabel);
+      if (entry) {
+        this.cache.set(lower, entry);
+        return entry;
+      }
+    }
+
+    // The english/filipino lists were only reachable through searchByEnglish /
+    // searchByFilipino, which the translator never calls. So a form listed only
+    // there -- "ikinagagalak kong makilala ka" is filipino-only -- resolved to
+    // nothing and fingerspelled, even though the entry it belongs to has a
+    // published animation. Same sign, same asset, more lexical forms reaching
+    // it; no second upload involved.
+    for (const index of [this.filipinoIndex, this.englishIndex]) {
+      const labels = index.get(lower);
+      const entry = labels?.length ? this.entries.get(labels[0]) : undefined;
       if (entry) {
         this.cache.set(lower, entry);
         return entry;
@@ -304,6 +343,30 @@ export class GestureDictionary {
     }
 
     return undefined;
+  }
+
+  /**
+   * Longest lexical form in the dictionary, in words.
+   *
+   * Bounds the n-gram scan in FslTranslator: there is no point trying a 7-word
+   * window when nothing here is longer than 4. Derived rather than hardcoded so
+   * a longer entry added later is matched without anyone remembering to raise a
+   * constant.
+   */
+  maxPhraseWords(): number {
+    if (this.longestForm > 0) return this.longestForm;
+    let longest = 1;
+    for (const key of [
+      ...this.synonymIndex.keys(),
+      ...this.englishIndex.keys(),
+      ...this.filipinoIndex.keys(),
+      ...this.entries.keys(),
+    ]) {
+      const n = key.trim().split(/\s+/).length;
+      if (n > longest) longest = n;
+    }
+    this.longestForm = longest;
+    return longest;
   }
 
   searchByEnglish(word: string): DictionaryEntry[] {

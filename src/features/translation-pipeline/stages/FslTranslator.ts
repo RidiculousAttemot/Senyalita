@@ -17,22 +17,48 @@ export class FslTranslatorService implements IFslTranslator {
     const ctx = context ?? this.context;
     const resolved: GlossTranslation[] = [];
 
-    for (const word of words) {
-      const lower = word.toLowerCase().trim();
-      const direct = globalDictionary.lookup(lower);
+    // Longest match first, consuming every token the match covered.
+    //
+    // This used to walk one word at a time and call lookup() with a single
+    // token, which made every multi-word key in the dictionary unreachable.
+    // "thank you" did not match as a phrase at all: token 1 "thank" matched --
+    // it is also a synonym of THANK YOU -- and "you" was left to resolve on its
+    // own, so the user got THANK YOU followed by a fingerspelled Y-O-U. 57
+    // multi-word forms have at least one token that resolves standalone, so
+    // this was never specific to THANK YOU.
+    //
+    // The window is bounded by the longest form the dictionary actually holds,
+    // asked of the dictionary rather than hardcoded.
+    const maxWindow = globalDictionary.maxPhraseWords();
 
-      if (direct) {
+    for (let i = 0; i < words.length; ) {
+      let match: ReturnType<typeof globalDictionary.lookup> | undefined;
+      let span = 0;
+
+      for (let n = Math.min(maxWindow, words.length - i); n >= 1; n--) {
+        const phrase = words.slice(i, i + n).join(" ").toLowerCase().trim();
+        const hit = globalDictionary.lookup(phrase);
+        if (hit) {
+          match = hit;
+          span = n;
+          break;
+        }
+      }
+
+      if (match) {
         resolved.push({
-          original: word,
-          gloss: direct.gloss,
+          original: words.slice(i, i + span).join(" "),
+          gloss: match.gloss,
           confidence: 0.95,
           strategy: "direct",
-          category: direct.category,
-          animationKey: direct.animationAsset ?? direct.gloss,
+          category: match.category,
+          animationKey: match.animationAsset ?? match.gloss,
         });
+        i += span;
         continue;
       }
 
+      const word = words[i];
       const resolution = globalResolver.resolve(word);
       resolved.push({
         original: word,
@@ -41,6 +67,7 @@ export class FslTranslatorService implements IFslTranslator {
         strategy: resolution.strategy,
         animationKey: resolution.animationAsset ?? resolution.resolvedGloss,
       });
+      i += 1;
     }
 
     let glossTokens = resolved.map((g) => g.gloss);
