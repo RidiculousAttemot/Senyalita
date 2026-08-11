@@ -156,14 +156,14 @@ export function useProgressiveSignTranslation(options: UseProgressiveSignTransla
       if (typed && typed !== normalizeGloss(item.animationKey ?? "") && (await publishedGlosses.has(typed))) {
         const asset = await globalLoader.load(typed);
         if (asset) {
-          return [{ id: `anim-${typed}-${index}-${Date.now()}`, gesture: typed, displayLabel: item.displayLabel, asset }];
+          return [{ id: `anim-${typed}-${index}-${Date.now()}`, gesture: typed, asset }];
         }
       }
 
       if (!item.fallbackUsed) {
         const asset = await globalLoader.load(item.animationKey);
         if (asset) {
-          return [{ id: `anim-${item.animationKey}-${index}-${Date.now()}`, gesture: item.gloss, displayLabel: item.displayLabel, asset }];
+          return [{ id: `anim-${item.animationKey}-${index}-${Date.now()}`, gesture: item.gloss, asset }];
         }
       }
       const fallback = (await optionsRef.current.resolveFallback?.(item, index, progressFor(index))) ?? null;

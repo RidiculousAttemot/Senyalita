@@ -274,9 +274,7 @@ export function SignStageViewer({
                         presentationMode ? "text-[clamp(2rem,4vw,4rem)] leading-none" : "text-xl"
                       }`}
                     >
-                      {/* The label, not the gloss. current.gesture stays the
-                          gloss and remains the lookup key just below. */}
-                      {current?.displayLabel ?? current?.gesture}
+                      {current?.gesture}
                     </span>
                     {current && fingerspelledGlosses.has(current.gesture) && (
                       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">
@@ -541,7 +539,7 @@ function MotionTimeline({
               <span className={`relative block truncate font-mono text-[11px] font-bold ${
                 active ? "text-senyalita-primary" : done ? "text-senyalita-accent" : "text-senyalita-muted"
               }`}>
-                {clip.displayLabel ?? clip.gesture}
+                {clip.gesture}
               </span>
               <span className="relative block text-[9px] tabular-nums text-senyalita-muted/70">
                 {(clip.asset.duration / 1000).toFixed(1)}s

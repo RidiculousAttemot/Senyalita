@@ -285,38 +285,6 @@ export class GestureDictionary {
     }
   }
 
-  /**
-   * Which lexical list a form came from, for choosing a display label.
-   *
-   * Kept beside lookup() rather than folded into it: lookup is called from
-   * several places that only want the entry, and widening its return type
-   * would churn all of them. Same precedence, so the two cannot disagree about
-   * which entry a form belongs to.
-   */
-  matchSource(word: string): "english" | "filipino" | "synonym" | "label" | undefined {
-    // Language lists first, unlike lookup().
-    //
-    // lookup() checks synonyms early because it only needs to find the entry,
-    // and synonyms are the broadest index. Here the question is different --
-    // which language did the user write in -- and many forms sit in BOTH lists:
-    // "walang anuman" is a synonym of YOURE WELCOME and its filipino form.
-    // Checking synonyms first threw that signal away and labelled a Filipino
-    // input "YOU'RE WELCOME".
-    const lower = word.toLowerCase().trim();
-    if (this.filipinoIndex.has(lower)) return "filipino";
-    if (this.englishIndex.has(lower)) return "english";
-    if (this.entries.has(word.toUpperCase())) return "label";
-    if (this.synonymIndex.has(lower)) return "synonym";
-
-    const expanded = expandContractions(lower);
-    if (expanded !== lower) {
-      if (this.filipinoIndex.has(expanded)) return "filipino";
-      if (this.englishIndex.has(expanded)) return "english";
-      if (this.synonymIndex.has(expanded)) return "synonym";
-    }
-    return undefined;
-  }
-
   lookup(word: string): DictionaryEntry | undefined {
     const lower = word.toLowerCase().trim();
 
