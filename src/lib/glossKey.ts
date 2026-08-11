@@ -32,6 +32,21 @@
  */
 export function glossLookupCandidates(gloss: string): string[] {
   const exact = gloss.trim().toUpperCase();
-  const spaced = exact.replace(/_+/g, " ").replace(/\s+/g, " ").trim();
+  const spaced = canonicalGloss(exact);
   return exact === spaced ? [exact] : [exact, spaced];
+}
+
+/**
+ * The spelling the database actually stores: uppercase, single spaces.
+ *
+ * The server accepting both spellings is the safety net, not the plan. A
+ * client that requests THANK_YOU still works, but only after the exact match
+ * misses and the space variant is tried — a wasted round-trip on every
+ * multi-word gloss, and a network tab that shows a spelling no row has.
+ *
+ * Asking with this instead means the first candidate hits. The tolerance above
+ * stays, because it is what protects the next cache that invents its own key.
+ */
+export function canonicalGloss(gloss: string): string {
+  return gloss.trim().toUpperCase().replace(/_+/g, " ").replace(/\s+/g, " ").trim();
 }

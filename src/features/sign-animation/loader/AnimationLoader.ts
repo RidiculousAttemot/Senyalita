@@ -1,4 +1,5 @@
 import type { GestureAnimationAsset } from "../types";
+import { canonicalGloss } from "@/lib/glossKey";
 
 /**
  * Concurrent requests allowed while warming the cache.
@@ -39,7 +40,12 @@ export class AnimationLoader {
       return pending;
     }
 
-    const promise = this.fetchAsset(key);
+    // Cached under the underscore key, but REQUESTED with the spelling the
+    // database stores. The two were the same string before, so the browser
+    // asked for THANK_YOU and the server only found the row on its second
+    // candidate — a wasted round-trip per multi-word gloss, and a network tab
+    // showing a spelling no row has. The server still accepts both.
+    const promise = this.fetchAsset(canonicalGloss(gestureLabel));
     this.pending.set(key, promise);
     const asset = await promise;
     this.pending.delete(key);
