@@ -10,8 +10,14 @@
  * `assertPartition` exists so that drift becomes a test failure instead.
  */
 
-/** A number sign's model label, in counting order. */
-const NUMBER_ORDER = [
+/**
+ * A number sign's model label, in counting order.
+ *
+ * Exported because this is the canonical order — sorted as strings, EIGHT
+ * would come first and TWO last. Anything presenting numbers has to agree with
+ * it, so it is shared rather than restated.
+ */
+export const NUMBER_ORDER = [
   "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN",
 ] as const;
 
