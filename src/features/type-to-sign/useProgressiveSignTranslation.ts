@@ -7,6 +7,7 @@ import { publishedGlosses, normalizeGloss } from "@/features/sign-animation/publ
 import type { AnimationClip } from "@/features/sign-animation/types";
 import type { AnimationPlanItem, TranslationPipelineResult } from "@/features/translation-pipeline/types";
 import { computeReadyPrefix, type SettledSlot } from "./orderedFlush";
+import { sourceLabel } from "./sourceLabel";
 
 export type TranslationStage = "idle" | "translating" | "loading" | "done" | "error";
 
@@ -156,14 +157,18 @@ export function useProgressiveSignTranslation(options: UseProgressiveSignTransla
       if (typed && typed !== normalizeGloss(item.animationKey ?? "") && (await publishedGlosses.has(typed))) {
         const asset = await globalLoader.load(typed);
         if (asset) {
-          return [{ id: `anim-${typed}-${index}-${Date.now()}`, gesture: typed, asset }];
+          return [{ id: `anim-${typed}-${index}-${Date.now()}`, gesture: typed, displayLabel: sourceLabel(item.original, typed), asset }];
         }
       }
 
       if (!item.fallbackUsed) {
+        // gesture stays the gloss -- it is the lookup key and the
+        // fingerspelledGlosses membership test. Only displayLabel follows the
+        // source, so typing "salamat" plays the published THANK YOU asset and
+        // is captioned SALAMAT.
         const asset = await globalLoader.load(item.animationKey);
         if (asset) {
-          return [{ id: `anim-${item.animationKey}-${index}-${Date.now()}`, gesture: item.gloss, asset }];
+          return [{ id: `anim-${item.animationKey}-${index}-${Date.now()}`, gesture: item.gloss, displayLabel: sourceLabel(item.original, item.gloss), asset }];
         }
       }
       const fallback = (await optionsRef.current.resolveFallback?.(item, index, progressFor(index))) ?? null;

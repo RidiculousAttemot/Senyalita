@@ -10,6 +10,7 @@ import type { AnimationClip } from "@/features/sign-animation/types";
 import { globalLoader } from "@/features/sign-animation/hooks/useAnimationClip";
 import { useProgressiveSignTranslation } from "./useProgressiveSignTranslation";
 import type { FallbackProgress } from "./useProgressiveSignTranslation";
+import { fingerspellSource, spellableCharacters } from "./sourceLabel";
 import { SignComposer } from "./components/SignComposer";
 import { SignStageViewer } from "./components/SignStageViewer";
 import {
@@ -62,16 +63,30 @@ export function TypeToSignInterface() {
     progress: FallbackProgress,
   ): Promise<AnimationClip[] | null> => {
     const engine = fingerspellingRef.current;
-    // Grammar rules can expand one word into a multi-word gloss
-    // ("KUMUSTA" -> "HOW ARE YOU"), so spell each word separately.
-    const words = item.gloss.split(/\s+/).filter((w) => engine.isFingerspellable(w));
-    if (words.length === 0) return null;
+
+    // Spell what the user typed, not the gloss it resolved to.
+    //
+    // This read item.gloss, so typing "kamusta ka" -- which resolves to the
+    // gloss HOW ARE YOU -- was spelled H-O-W-A-R-E-Y-O-U. That is nonsense to
+    // a Filipino user: it spells English words they never wrote, and it does it
+    // at the exact moment the system has nothing else to offer. The gloss is
+    // still the identity used to look the asset up; only these characters and
+    // the label follow the source.
+    const source = fingerspellSource(item);
+
+    // Letters and digits only: punctuation has no sign and would 404.
+    //
+    // Selected by what is actually spellable rather than by
+    // engine.isFingerspellable, which is /^[A-Za-z]+$/ and so rejects any word
+    // containing a digit. That was harmless while this spelled the gloss --
+    // glosses are words -- but the source is the user's own text, where "10"
+    // is both plausible and a real sign. It also means "don't" spells D-O-N-T
+    // instead of being dropped whole for one apostrophe.
+    const spelled = spellableCharacters(source);
+    if (spelled.length === 0) return null;
 
     const stamp = Date.now();
     const clips: AnimationClip[] = [];
-
-    // Letters and digits only: punctuation has no sign and would 404.
-    const spelled = words.map((word) => word.toUpperCase().replace(/[^A-Z0-9]/g, "").split(""));
 
     // Fetch every distinct character at once, then assemble in order.
     //
@@ -104,11 +119,10 @@ export function TypeToSignInterface() {
 
     // Position across the whole expansion, not within each word.
     //
-    // A grammar rule can expand one item into several words ("KUMUSTA" ->
-    // "HOW ARE YOU"), and a per-word index repeats: O is at position 1 of both
-    // HOW and YOU, so both clips came out as `spell-O-0-1-<stamp>`. React drops
-    // or duplicates children under a repeated key, and the timeline renders
-    // them by clip id.
+    // One item can cover several source words ("kamusta ka"), and a per-word
+    // index repeats: A is at position 1 of both KAMUSTA and KA, so both clips
+    // came out as `spell-A-0-1-<stamp>`. React drops or duplicates children
+    // under a repeated key, and the timeline renders them by clip id.
     let position = 0;
     for (const characters of spelled) {
       for (const character of characters) {

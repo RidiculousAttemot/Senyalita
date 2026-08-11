@@ -79,7 +79,22 @@ export interface GestureAnimationAsset {
 
 export interface AnimationClip {
   id: string;
+  /**
+   * The gloss, and the identity. It is the asset lookup key and is used as a
+   * Set member (fingerspelledGlosses.has(clip.gesture)), so it must stay the
+   * gloss and must never be replaced by a display string. Putting the label
+   * here would make playback request an asset that does not exist, 404, and
+   * silently fingerspell -- which reads as a dictionary bug rather than a
+   * labelling one.
+   */
   gesture: string;
+  /**
+   * What to show the user: the words they actually typed.
+   *
+   * Someone who types "kamusta ka" should not be shown HOW ARE YOU -- it is a
+   * language they did not use. Display-only, and falls back to the gloss.
+   */
+  displayLabel?: string;
   asset: GestureAnimationAsset;
 }
 

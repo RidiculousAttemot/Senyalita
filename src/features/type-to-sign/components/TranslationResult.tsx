@@ -145,7 +145,10 @@ export function TranslationResult({
           className="border-t border-senyalita-border/70 bg-amber-50/60 px-6 py-3 text-[12px] leading-relaxed text-amber-800"
         >
           <span className="font-semibold">Spelled letter by letter:</span>{" "}
-          {spelled.map((e) => e.gloss).join(", ")} — no recorded sign for these yet.
+          {/* The source words, matching the letters actually signed. Naming the
+              gloss here told the user "HOW ARE YOU" was spelled when the stage
+              was spelling k-a-m-u-s-t-a. */}
+          {spelled.map((e) => e.original || e.gloss).join(", ")} — no recorded sign for these yet.
         </motion.p>
       )}
     </motion.section>
