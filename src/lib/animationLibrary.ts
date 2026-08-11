@@ -1,6 +1,7 @@
 import type { GestureAnimationAsset } from "@/features/sign-animation/types";
 import { isQuantisableAsset, quantiseAsset } from "@/lib/landmarkPrecision";
 import { failureMessage } from "@/lib/http/failureMessage";
+import { describePayloadBudget, measureBytes } from "@/lib/admin/payloadBudget";
 
 export interface AnimationLibraryAsset {
   id: string;
@@ -108,10 +109,19 @@ export const animationLibrary = {
       ? { ...options, asset: quantiseAsset(options.asset) }
       : options;
 
+    const body = JSON.stringify({ action, ...payload });
+
+    // Refuse here rather than letting the platform reject it. Over the cap the
+    // request never reaches our route, so the response is an HTML 413 we cannot
+    // annotate — the admin would see a failure with no reason and no remedy.
+    // Measured on the serialised body, which is the thing actually limited.
+    const budget = describePayloadBudget(measureBytes(body));
+    if (budget.status === "over") throw new Error(budget.message);
+
     const res = await fetch(`/api/admin/animation-assets/${versionId}/action`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, ...payload }),
+      body,
     });
     if (!res.ok) {
       throw new Error(await failureMessage(res, `${action} failed`));

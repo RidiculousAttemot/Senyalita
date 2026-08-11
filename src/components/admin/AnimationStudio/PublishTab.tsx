@@ -23,6 +23,8 @@ import { animationLibrary } from "@/lib/animationLibrary";
 import type { AnimationValidationResult } from "@/lib/animationLibrary";
 import { validateAsset, analyzeQuality, generateMetadata } from "@/features/ai-assist";
 import type { ValidationResult, AnimationMetadata, QualityAnalysis } from "@/features/ai-assist";
+import { describePayloadBudget, measureBytes } from "@/lib/admin/payloadBudget";
+import { isQuantisableAsset, quantiseAsset } from "@/lib/landmarkPrecision";
 
 interface PublishTabProps {
   extractionResult: ExtractionResult;
@@ -61,6 +63,17 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
   const [aiValidation, setAiValidation] = useState<ValidationResult | null>(null);
   const [aiMeta, setAiMeta] = useState<AnimationMetadata | null>(null);
   const [aiQuality, setAiQuality] = useState<QualityAnalysis | null>(null);
+
+  // Measured on the quantised asset, because that is what performAction sends.
+  // Estimating from the raw asset would report roughly double and warn about a
+  // limit that is not the one being applied.
+  const payloadBudget = useMemo(() => {
+    const submitted = isQuantisableAsset(asset) ? quantiseAsset(asset) : asset;
+    return describePayloadBudget(measureBytes(submitted), {
+      frames: asset.frames.length,
+      fps: metadata.sourceFps,
+    });
+  }, [asset, metadata.sourceFps]);
 
   const qualityScore = useMemo(() => {
     const totalLm = asset.frames.reduce((sum, f) => {
@@ -296,7 +309,22 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
 
           <div className="form-group">
             <label>Gloss Label *</label>
-            <input type="text" placeholder="e.g., HOW_ARE_YOU" value={gloss} onChange={(e) => setGloss(e.target.value.toUpperCase())} />
+            {/*
+              Clearing the error on edit is the point. It used to persist until
+              the next submit, so "Gloss label is required" stayed on screen
+              after the gloss had been typed -- the message contradicted the
+              form, and the obvious reading was that the field was not
+              registering at all.
+            */}
+            <input
+              type="text"
+              placeholder="e.g., HOW ARE YOU"
+              value={gloss}
+              onChange={(e) => {
+                setGloss(e.target.value.toUpperCase());
+                if (error) setError("");
+              }}
+            />
           </div>
 
           <div className="form-group">
@@ -450,8 +478,31 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
               <div>Has pose: {asset.frames.some((f) => (f.poseLandmarks?.length ?? 0) > 0) ? "Yes" : "No"}</div>
               <div>Has face: {asset.frames.some((f) => (f.faceLandmarks?.length ?? 0) > 0) ? "Yes" : "No"}</div>
               <div>Has hands: {asset.frames.some((f) => f.landmarks.length > 0) ? "Yes" : "No"}</div>
+              <div>
+                Publish size: {payloadBudget.readable}{" "}
+                <span style={{ color: payloadBudget.status === "over" ? "#f87171" : payloadBudget.status === "tight" ? "#fbbf24" : "#64748b" }}>
+                  ({payloadBudget.percent}% of limit)
+                </span>
+              </div>
             </div>
           </div>
+
+          {payloadBudget.message && (
+            <div
+              style={{
+                marginTop: 16,
+                padding: 12,
+                borderRadius: 8,
+                background: payloadBudget.status === "over" ? "#450a0a" : "#422006",
+                border: `1px solid ${payloadBudget.status === "over" ? "#dc2626" : "#a16207"}`,
+              }}
+            >
+              <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <AlertTriangle size={16} color={payloadBudget.status === "over" ? "#f87171" : "#fbbf24"} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span style={{ fontSize: 12, color: "#e2e8f0", lineHeight: 1.6 }}>{payloadBudget.message}</span>
+              </div>
+            </div>
+          )}
 
           <div style={{ marginTop: 16, padding: 12, background: "#1e293b", borderRadius: 8 }}>
             <span style={{ fontSize: 11, color: "#64748b" }}>
@@ -486,7 +537,13 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
           </div>
         )}
 
-        {error && !validation && (
+        {/*
+          Not gated on `!validation`. A submit error used to be suppressed
+          entirely once any validation had been run, so the most important
+          message on the form -- the reason the publish just failed -- became
+          invisible to anyone who had clicked "Validate Animation" first.
+        */}
+        {error && (
           <div className="error-box">
             <AlertCircle size={18} />
             <span>{error}</span>
@@ -497,7 +554,11 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
           <button
             className="btn-publish secondary"
             onClick={() => handlePublish("draft")}
-            disabled={submitting}
+            // Every path posts to the upload route, which rejects a missing
+            // gloss. Only "Publish" was disabled without one, so the other two
+            // buttons were the easy way to trigger "Gloss label is required"
+            // and then be told it by a message that never went away.
+            disabled={submitting || !gloss.trim()}
           >
             {submitting ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
             {submitting ? "Saving..." : "Save Draft"}
@@ -513,7 +574,7 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
           <button
             className="btn-publish danger"
             onClick={() => handlePublish("archived")}
-            disabled={submitting}
+            disabled={submitting || !gloss.trim()}
           >
             <Archive size={16} /> Archive
           </button>
