@@ -79,7 +79,13 @@ export interface GestureAnimationAsset {
 
 export interface AnimationClip {
   id: string;
+  /**
+   * The gloss. Also a lookup key -- fingerspelledGlosses.has(clip.gesture) --
+   * so this must stay the gloss and never become a display string.
+   */
   gesture: string;
+  /** Language-appropriate label for the UI. Falls back to gesture. */
+  displayLabel?: string;
   asset: GestureAnimationAsset;
 }
 

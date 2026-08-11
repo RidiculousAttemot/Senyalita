@@ -54,6 +54,7 @@ export class GlossOptimizerService implements IGlossOptimizer {
       strategy: g.strategy,
       category: g.category,
       animationKey: g.animationKey,
+      displayLabel: g.displayLabel,
       expressionTag: g.expressionTag ?? "neutral",
       isFiller: false,
       isDuplicate: false,

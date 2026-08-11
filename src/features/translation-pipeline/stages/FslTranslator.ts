@@ -3,6 +3,7 @@ import type { FslTranslator as IFslTranslator } from "../interfaces";
 import { globalDictionary } from "@/features/fsl-translation/dictionary/gestureDictionary";
 import { globalResolver } from "@/features/fsl-translation/dictionary/unknownWordResolver";
 import { applyGrammarRules } from "@/features/fsl-translation/grammar/fslGrammar";
+import { resolveDisplayLabel, type LabelLanguage } from "@/features/fsl-translation/dictionary/displayLabel";
 
 export class FslTranslatorService implements IFslTranslator {
   readonly name = "FslTranslator";
@@ -46,13 +47,21 @@ export class FslTranslatorService implements IFslTranslator {
       }
 
       if (match) {
+        const form = words.slice(i, i + span).join(" ");
         resolved.push({
-          original: words.slice(i, i + span).join(" "),
+          original: form,
           gloss: match.gloss,
           confidence: 0.95,
           strategy: "direct",
           category: match.category,
+          // The gloss stays the animation key. displayLabel is presentation
+          // only and never reaches asset resolution.
           animationKey: match.animationAsset ?? match.gloss,
+          displayLabel: resolveDisplayLabel(
+            match,
+            language as LabelLanguage,
+            globalDictionary.matchSource(form),
+          ),
         });
         i += span;
         continue;
@@ -76,6 +85,9 @@ export class FslTranslatorService implements IFslTranslator {
     const mapped: GlossTranslation[] = glossTokens.map((g, i) => ({
       ...resolved[i],
       gloss: g,
+      // Grammar can rewrite a gloss. A label derived from the old one would
+      // then name a different sign, so it only survives an unchanged gloss.
+      displayLabel: resolved[i] && g === resolved[i].gloss ? resolved[i].displayLabel : undefined,
     }));
 
     if (ctx) {

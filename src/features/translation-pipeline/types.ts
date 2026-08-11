@@ -26,6 +26,14 @@ export interface GlossTranslation {
   category?: string;
   animationKey?: string;
   expressionTag?: ExpressionTag;
+  /**
+   * What to show the user for this sign, in their language.
+   *
+   * Presentation only. The gloss above stays the identity -- the asset key,
+   * the database row, and the path in /api/animations/[gloss]. SALAMAT and
+   * THANK YOU are two labels for one published animation.
+   */
+  displayLabel?: string;
 }
 
 export interface OptimizedGloss {
@@ -35,6 +43,8 @@ export interface OptimizedGloss {
   strategy: string;
   category?: string;
   animationKey?: string;
+  /** Presentation only; never resolves an asset. */
+  displayLabel?: string;
   expressionTag?: ExpressionTag;
   isFiller: boolean;
   isDuplicate: boolean;
@@ -57,6 +67,8 @@ export type PlaybackAction = "play" | "pause" | "transition" | "loop" | "stop";
 export interface AnimationPlanItem {
   gloss: string;
   original: string;
+  /** Language-appropriate label. Never used to resolve an asset. */
+  displayLabel?: string;
   animationKey: string;
   confidence: number;
   startTime: number;

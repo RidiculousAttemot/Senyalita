@@ -8,6 +8,7 @@ import type { AnimationPlanItem, TranslationPipelineResult } from "@/features/tr
 import { FingerspellingEngine } from "@/features/sign-animation/player/FingerspellingEngine";
 import type { AnimationClip } from "@/features/sign-animation/types";
 import { globalLoader } from "@/features/sign-animation/hooks/useAnimationClip";
+import { speechLocaleFor } from "@/features/fsl-translation/dictionary/displayLabel";
 import { useProgressiveSignTranslation } from "./useProgressiveSignTranslation";
 import type { FallbackProgress } from "./useProgressiveSignTranslation";
 import { SignComposer } from "./components/SignComposer";
@@ -221,7 +222,14 @@ export function TypeToSignInterface() {
   const handleSpeak = useCallback(() => {
     if (typeof window === "undefined" || !window.speechSynthesis || !message.trim()) return;
     const utterance = new SpeechSynthesisUtterance(message);
-    utterance.lang = "tl-PH";
+    // Follow the language actually detected, rather than assuming Filipino.
+    // This was hardcoded to "tl-PH", so typing "thank you" in English was read
+    // aloud by a Filipino voice. Before a translation runs there is nothing to
+    // detect, so the browser's own locale is the better guess than either.
+    const detected = resultRef.current?.language.language;
+    utterance.lang = detected
+      ? speechLocaleFor(detected)
+      : (typeof navigator !== "undefined" ? navigator.language : "en-US");
     window.speechSynthesis.speak(utterance);
   }, [message]);
 

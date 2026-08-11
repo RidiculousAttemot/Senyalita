@@ -108,6 +108,7 @@ export class AnimationPlannerService implements IAnimationPlanner {
         gloss: gloss.gloss,
         original: gloss.original,
         animationKey: gloss.animationKey ?? gloss.gloss,
+        displayLabel: gloss.displayLabel,
         confidence: gloss.confidence,
         startTime: currentTime + (i > 0 ? this.config.transitionDuration : 0),
         duration,
