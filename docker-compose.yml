@@ -1,11 +1,27 @@
-version: "3.9"
+# `version:` is obsolete — Compose v2 ignores it and warns.
 
 services:
   web:
-    build: .
+    build:
+      context: .
+      # Build-time only. NEXT_PUBLIC_* is inlined into the client bundle by
+      # `next build`, so these cannot be supplied at runtime — see Dockerfile.
+      # Sourced from the shell environment, which `env_file` does NOT populate;
+      # export them or run with `--env-file .env.local`.
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?set it, or the built client cannot reach Supabase}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:?set it, or the built client cannot reach Supabase}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
+      # Off by default, matching production. See DOCKER.md before turning it on:
+      # it exposes /api/admin, which holds the service-role client.
+      - ADMIN_ENABLED=${ADMIN_ENABLED:-false}
+    # Runtime secrets only: SUPABASE_SERVICE_ROLE_KEY, DATABASE_URL. This file
+    # is .env.local, not .env — the latter does not exist in this project, and
+    # compose failed to start rather than falling back.
     env_file:
-      - .env
+      - .env.local
+    restart: unless-stopped

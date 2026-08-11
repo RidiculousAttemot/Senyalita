@@ -1,9 +1,56 @@
-.git
-.gitignore
+# Files excluded from the Docker build context.
+#
+# Mirrors .vercelignore, for the same reason and with one syntax difference
+# that matters. Before this list, `COPY . .` sent roughly 73 GB to the daemon:
+# datasets/ is 37 GB and tmp/ is 36 GB of MediaPipe extraction scratch. Both are
+# gitignored, so neither shows up in a `git status` sanity check — the context
+# is built from the working tree, not from git.
+#
+# ROOT-ANCHORING. Docker matches these against the path relative to the context
+# root, so `models` names the top-level directory only. That is the behaviour
+# this file depends on, because public/models MUST ship: it carries the served
+# BiLSTM (model.json + weights.bin + labels.json) and the self-hosted MediaPipe
+# .task and WASM. A leading slash makes the intent explicit rather than relying
+# on a reader knowing the matching rule, and the negation below is belt and
+# braces — if either the rule or this file is ever misread, public/models is
+# still re-included.
+
+# Dependencies and build output — the image installs and builds these itself
 node_modules
 .next
 out
+
+# 2.3 GB, and the build does not read it
+.git
+.gitignore
+
+# Large data that is never served from the app bundle
+datasets
+/tmp
+/models
+.venv
+
+# Tooling and analysis with no runtime role
+scripts
+docs
+phases
 coverage
-*.log
+e2e
+tests
+playwright-report
+test-results
+.agents
+.claude
+.vscode
+
+# Secrets. NEXT_PUBLIC_* values arrive as build args instead — see Dockerfile.
 .env
 .env.*
+
+# Editor and OS noise
+*.log
+.DS_Store
+Thumbs.db
+
+# The served model and MediaPipe runtime must reach the image.
+!public/models

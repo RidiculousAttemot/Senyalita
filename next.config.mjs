@@ -1,6 +1,19 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  /**
+   * Traced server bundle, for the Docker runtime stage.
+   *
+   * Without it the image has to copy the whole of node_modules. Standalone
+   * emits .next/standalone with only the modules actually reachable from the
+   * server, which is what the runtime stage copies.
+   *
+   * Harmless outside Docker: Vercel ignores it, and `next dev` and `next start`
+   * are unaffected. It does NOT include public/ or .next/static — those are
+   * copied separately, and forgetting them yields a server that boots and
+   * serves 404s for every asset.
+   */
+  output: "standalone",
   webpack: (config, { dev }) => {
     // Next 14.2.5's bundled webpack hardcodes output.hashFunction to
     // "xxhash64", which routes through webpack's WASM hash implementation.
