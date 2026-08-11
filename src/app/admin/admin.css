@@ -52,6 +52,17 @@
 .admin-console-email { max-width: 220px; overflow: hidden; border-left: 1px solid var(--admin-border); color: var(--admin-muted); font-weight: 600; padding-left: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .admin-console-content { width: min(100% - 64px, 1480px); margin: 0 auto; padding: 32px 0 48px; }
 
+/* Standing context, not an alert: it is always true, so it must not compete
+   with the messages that are only sometimes true. */
+.admin-console-scope-note {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 0 0 20px; padding: 10px 14px;
+  border: 1px solid var(--admin-border); border-radius: 10px;
+  background: var(--admin-surface);
+  color: var(--admin-muted); font-size: 12.5px; line-height: 1.6;
+}
+.admin-console-scope-note svg { flex-shrink: 0; margin-top: 2px; }
+
 @media (max-width: 900px) {
   .admin-console-menu-button { display: grid; }
 }

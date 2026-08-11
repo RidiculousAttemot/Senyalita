@@ -45,6 +45,28 @@ export default function AdminShell({ children, isAuthenticated, email }: AdminSh
           </div>
         </header>
         <main id="main-content" className="admin-console-content">
+          {/*
+            Two facts that are not visible from inside the console, and that
+            each caused real confusion.
+
+            The console is not part of the deployed site: it exists only where
+            ADMIN_ENABLED is set, and every admin path 404s otherwise. Someone
+            looking for it on the live URL will not find it and should not
+            conclude it is broken.
+
+            What it changes IS live. Published assets are written to Supabase,
+            which the deployed site reads directly — so publishing from
+            localhost updates production immediately, with no deploy. That is
+            the surprising direction, and it belongs on screen rather than in a
+            comment in the availability module.
+          */}
+          <p className="admin-console-scope-note">
+            <ShieldCheck size={14} aria-hidden />
+            <span>
+              This console runs locally and is not part of the deployed site.
+              Publishing writes to the shared database, so changes go live immediately.
+            </span>
+          </p>
           {children}
         </main>
       </div>
