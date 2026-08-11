@@ -208,8 +208,20 @@ export function SignToTextInterface() {
     return p;
   }, [modelLabels]);
 
+  /**
+   * Speech synthesis is not universal, and this is the surface most likely to
+   * meet a browser without it. Both speak paths called window.speechSynthesis
+   * unguarded, so on a device lacking it `.cancel()` threw a TypeError rather
+   * than the feature simply being unavailable.
+   */
+  const [speechSupported, setSpeechSupported] = useState(true);
+  useEffect(() => {
+    setSpeechSupported(typeof window !== "undefined" && "speechSynthesis" in window);
+  }, []);
+
   const speak = useCallback((text: string) => {
     if (!speakEnabled) return;
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
   }, [speakEnabled]);
@@ -600,6 +612,7 @@ export function SignToTextInterface() {
   const handleSpace = () => setOutputText((previousText) => previousText + " ");
   const handleSpeak = () => {
     if (!outputText || typeof window === "undefined") return;
+    if (!("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(new SpeechSynthesisUtterance(outputText));
   };
@@ -906,10 +919,14 @@ export function SignToTextInterface() {
           <div className="flex flex-wrap items-center justify-between gap-3 px-6 pt-5">
             <h2 id="transcript-heading" className="font-display text-lg font-bold tracking-tight text-senyalita-dark">Transcript</h2>
             <div className="hidden flex-wrap gap-2 md:flex">
-              <TranscriptChip onClick={() => setSpeakEnabled((enabled) => !enabled)} active={speakEnabled} icon={<Volume2 className="h-3.5 w-3.5" />}>
-                Speak: {speakEnabled ? "on" : "off"}
-              </TranscriptChip>
-              <TranscriptChip onClick={handleSpeak} disabled={!outputText}>Speak now</TranscriptChip>
+              {speechSupported && (
+                <>
+                  <TranscriptChip onClick={() => setSpeakEnabled((enabled) => !enabled)} active={speakEnabled} icon={<Volume2 className="h-3.5 w-3.5" />}>
+                    Speak: {speakEnabled ? "on" : "off"}
+                  </TranscriptChip>
+                  <TranscriptChip onClick={handleSpeak} disabled={!outputText}>Speak now</TranscriptChip>
+                </>
+              )}
               <TranscriptChip onClick={commitPrediction} disabled={!currentPrediction} icon={<Zap className="h-3.5 w-3.5" />}>
                 [{formatTranscriptCommitShortcut(commitShortcut)}] Add sign
               </TranscriptChip>
@@ -938,6 +955,26 @@ export function SignToTextInterface() {
             <motion.button type="button" onClick={commitPrediction} disabled={!currentPrediction} whileTap={{ scale: 0.97 }} className="col-span-2 inline-flex h-11 items-center justify-center gap-2 rounded-full bg-senyalita-primary text-sm font-semibold text-white shadow-lg shadow-senyalita-primary/25 disabled:bg-slate-300 disabled:shadow-none">
               <Zap className="h-4 w-4" />Add sign
             </motion.button>
+            {/*
+              Speaking the transcript is the point of Sign-to-Text — it is how a
+              signed sentence reaches someone who does not sign. Both speak
+              controls lived only in the md:flex row above, so on a phone the
+              transcript could be built and never spoken. Everything else in
+              that row had a counterpart here; these two were simply missed.
+
+              "Set key" is deliberately still absent: it binds a keyboard
+              shortcut, and there is no keyboard to bind on a phone.
+            */}
+            {speechSupported && (
+              <>
+                <TranscriptChip onClick={handleSpeak} disabled={!outputText} full icon={<Volume2 className="h-3.5 w-3.5" />}>
+                  Speak now
+                </TranscriptChip>
+                <TranscriptChip onClick={() => setSpeakEnabled((enabled) => !enabled)} active={speakEnabled} full>
+                  Speak: {speakEnabled ? "on" : "off"}
+                </TranscriptChip>
+              </>
+            )}
             <TranscriptChip onClick={handleSpace} full>Add space</TranscriptChip>
             <TranscriptChip onClick={handleBackspace} disabled={!outputText} full>Backspace</TranscriptChip>
             <TranscriptChip onClick={handleCopy} disabled={!outputText} full icon={<Copy className="h-3.5 w-3.5" />}>Copy transcript</TranscriptChip>
