@@ -24,16 +24,24 @@ import { expect, test } from "@playwright/test";
 
 const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
-test.describe.configure({ mode: "serial", timeout: 240_000 });
+/**
+ * Retries for the same reason camera-recognition.spec.ts does, and for nothing
+ * to do with the panel: /translate hydrates behind ~38 asset requests, and
+ * webkit sharing bandwidth with two other browsers has exceeded even a 120s
+ * hydration wait. Measured — the same two cases pass on webkit run alone, on
+ * all three browsers run alone, and against production; they fail only when the
+ * whole suite competes for the same downloads.
+ */
+test.describe.configure({ mode: "serial", timeout: 240_000, retries: 2 });
 
 /**
  * Mirrors the helper in translate.spec.ts: the button stays disabled until
  * React registers the change, so clicking early just retries until timeout.
  *
- * The enabled-wait is generous because it is really a wait for hydration, and
- * /translate hydrates behind ~38 asset requests. At 15s this passed when webkit
- * ran alone and failed when three browsers competed for the same downloads —
- * a flake that says nothing about the panel under test.
+ * The enabled-wait is generous because it is really a wait for hydration. At
+ * 15s this passed when webkit ran alone and failed when three browsers
+ * competed for the same downloads — a flake that says nothing about the panel
+ * under test.
  */
 async function submit(page: import("@playwright/test").Page, text: string) {
   const input = page.locator("#composer-input");

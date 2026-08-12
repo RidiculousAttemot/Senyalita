@@ -36,8 +36,18 @@ test.skip(!fixturesReady, "Run `npm run e2e:fixtures` first — Y4M fixtures are
  * enough to miss even a generous deadline, so these retry where the rest of
  * the suite does not. Measured: the letter case is stable, the motion case
  * needed retries to pass consistently.
+ *
+ * The timeout is file-wide because without it these tests could not pass at
+ * all. Individual waits here ask for 90-150s -- openEvaluation alone allows
+ * 120s for "Camera active" -- while the tests inherited Playwright's 30s
+ * default, so the test was killed long before its own assertion was allowed to
+ * finish. Three of them failed every run on "Test timeout of 30000ms
+ * exceeded", never on a wrong prediction: with a workable budget the letter
+ * case predicts "b" from letter-b.y4m and the motion case keeps predicting.
+ * Only the one block that set its own 240s survived, which is what made the
+ * pattern visible.
  */
-test.describe.configure({ retries: 2 });
+test.describe.configure({ retries: 2, timeout: 240_000 });
 
 /** The page's own status chip, which reflects the camera, not the model. */
 const cameraStatus = (page: Page) => page.locator(".status").first();

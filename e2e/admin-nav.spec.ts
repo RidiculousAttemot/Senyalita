@@ -35,6 +35,14 @@ import { ADMIN_NAVIGATION } from "../src/lib/admin/navigation";
  */
 
 // package.json sets "type": "module", so __dirname does not exist here.
+/**
+ * The dev server to probe. Parameterised because the port is not always 3000:
+ * a second Next process on this repo gets 3001, and since both share .next
+ * only one can be running anyway. Defaults to the usual port, so an unset
+ * environment behaves exactly as before.
+ */
+const BASE = process.env.E2E_BASE_URL ?? process.env.E2E_BASE ?? "http://localhost:3000";
+
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const APP_DIR = path.join(REPO_ROOT, "src", "app");
 const SRC_DIR = path.join(REPO_ROOT, "src");
@@ -192,11 +200,11 @@ test.describe("admin navigation integrity", () => {
     // list so a route that is never linked still cannot ship exposed.
     // Warm up first: the login page is the redirect target for all six, so
     // paying its compile cost once keeps the loop off the timeout.
-    await page.goto("http://localhost:3000/admin/login", { waitUntil: "domcontentloaded" });
+    await page.goto(`${BASE}/admin/login`, { waitUntil: "domcontentloaded" });
 
     for (const item of ADMIN_NAVIGATION.flatMap((section) => section.items)) {
       if (!item.href) continue;
-      const response = await page.goto(`http://localhost:3000${item.href}`, {
+      const response = await page.goto(`${BASE}${item.href}`, {
         waitUntil: "domcontentloaded",
       });
       expect(response?.status(), `${item.href} returned ${response?.status()}`).toBeLessThan(400);
