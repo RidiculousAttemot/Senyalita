@@ -388,19 +388,45 @@ export function TypeToSignInterface() {
           )}
         </AnimatePresence>
 
-        <AnimatePresence mode="wait">
-          {loading && <TranslationPipeline key="pipeline" activeStage={pipelineStage} />}
-          {!loading && translationResult && (
-            <TranslationResult
-              key={`result-${sequenceKey}`}
-              source={translationResult.source}
-              normalized={translationResult.normalized}
-              language={translationResult.language}
-              entries={translationResult.entries}
-              clipCount={translationResult.clipCount}
-            />
-          )}
-        </AnimatePresence>
+        {/* Swapped by plain conditionals, not AnimatePresence.
+
+            These two were a single `<AnimatePresence mode="wait">` pair, and the
+            result panel never appeared: the FSL gloss row and the "spelled letter
+            by letter" note were unreachable on every translation the app has ever
+            done. `mode="wait"` holds the incoming child until the outgoing one
+            reports its exit animation complete, and that report never came, so
+            the finished translation stayed hidden behind a progress checklist
+            reading "Ready".
+
+            The exit never starts when both of these hold, which is every
+            translation this screen performs:
+
+              - the pipeline has been on screen long enough to finish its enter
+                animation (any real asset fetch), and
+              - the update that removes it arrives outside a React event handler
+                — here the hook's `stage: "done"` after `await Promise.all`.
+
+            Removing it inside a click handler instead works fine, which is why
+            nothing else on the page shows this. Giving each panel its own
+            AnimatePresence does not help: the pipeline's exit still hangs, so it
+            just sticks around next to the result instead of in place of it.
+
+            So neither panel is allowed to gate on an exit animation. Both still
+            animate in — `initial`/`animate` need no AnimatePresence — and each
+            leaves the instant the other is due, which is the swap `mode="wait"`
+            was there to stage in the first place. Content must not be reachable
+            only via an animation callback. */}
+        {loading && <TranslationPipeline activeStage={pipelineStage} />}
+        {!loading && translationResult && (
+          <TranslationResult
+            key={`result-${sequenceKey}`}
+            source={translationResult.source}
+            normalized={translationResult.normalized}
+            language={translationResult.language}
+            entries={translationResult.entries}
+            clipCount={translationResult.clipCount}
+          />
+        )}
 
         <section
           aria-labelledby="suggestions-heading"
