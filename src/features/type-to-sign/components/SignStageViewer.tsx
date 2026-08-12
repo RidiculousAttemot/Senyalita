@@ -11,6 +11,7 @@ import type {
   PlaybackProgress, SignAnimationPlayerHandle,
 } from "@/features/sign-animation/player/SignAnimationPlayer";
 import type { AnimationClip, ViewMode } from "@/features/sign-animation/types";
+import { computePlayhead } from "../playhead";
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
@@ -101,6 +102,31 @@ export function SignStageViewer({
   const handleProgress = useCallback((p: PlaybackProgress) => setProgress(p), []);
   const handleComplete = useCallback(() => setFinished(true), []);
 
+  /**
+   * Moves the readout to a position we just asked the engine for, without
+   * waiting to be told about it.
+   *
+   * The scrubber is a controlled input whose value comes from the last progress
+   * sample, and samples only arrive from the engine's frame loop. Pausing stops
+   * that loop, so a seek made while paused or after the sign finished had
+   * nothing to report the new position: the thumb sprang straight back to where
+   * it was dragged from and the clip never moved. Seeking during playback was
+   * the same thing for a tenth of a second, which read as the control fighting
+   * the drag.
+   */
+  const setPlayhead = useCallback((clipIndex: number, clipTime: number) => {
+    const clip = clips[clipIndex];
+    if (!clip) return;
+    setIndex(clipIndex);
+    setProgress({
+      clipTime,
+      clipDuration: clip.asset.duration / 1000,
+      index: clipIndex,
+      total: clips.length,
+      fps: clip.asset.fps,
+    });
+  }, [clips]);
+
   const togglePlay = useCallback(() => {
     const player = playerRef.current;
     if (!player) return;
@@ -108,6 +134,7 @@ export function SignStageViewer({
       player.replay();
       setFinished(false);
       setIsPaused(false);
+      setPlayhead(0, 0);
       return;
     }
     if (isPaused) {
@@ -117,36 +144,41 @@ export function SignStageViewer({
       player.pause();
       setIsPaused(true);
     }
-  }, [finished, isPaused]);
+  }, [finished, isPaused, setPlayhead]);
 
   const restart = useCallback(() => {
     playerRef.current?.replay();
     setIsPaused(false);
     setFinished(false);
-  }, []);
+    setPlayhead(0, 0);
+  }, [setPlayhead]);
 
   const jumpTo = useCallback((target: number) => {
     if (target < 0 || target >= clips.length) return;
     playerRef.current?.seekToClip(target);
-    setIndex(target);
     setIsPaused(false);
     setFinished(false);
-  }, [clips.length]);
+    setPlayhead(target, 0);
+  }, [clips.length, setPlayhead]);
 
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) document.exitFullscreen();
     else stageRef.current?.requestFullscreen?.();
   }, []);
 
+  // Every readout below reads one playhead, so the clock, the scrubber, the
+  // gloss and the timeline can never disagree about where the sequence is.
+  const playhead = computePlayhead(clips, progress, index, finished);
+
   /** Saves the current stage frame, so a sign can go straight into a slide. */
   const downloadFrame = useCallback(() => {
     const canvas = stageRef.current?.querySelector("canvas");
     if (!canvas) return;
     const link = document.createElement("a");
-    link.download = `${clips[index]?.gesture ?? "sign"}-frame.png`;
+    link.download = `${clips[playhead.index]?.gesture ?? "sign"}-frame.png`;
     link.href = canvas.toDataURL("image/png");
     link.click();
-  }, [clips, index]);
+  }, [clips, playhead.index]);
 
   const hasClips = clips.length > 0;
   /**
@@ -175,34 +207,23 @@ export function SignStageViewer({
   // simply be `loading || !painted` — that would re-cover a stage that is
   // already playing.
   const showLoader = (loading && !hasClips) || (hasClips && !painted);
-  const current = hasClips ? clips[Math.min(index, clips.length - 1)] : null;
-  const clipProgress = progress && progress.clipDuration > 0
-    ? Math.min(1, progress.clipTime / progress.clipDuration)
-    : 0;
-  const totalDuration = clips.reduce((sum, c) => sum + c.asset.duration, 0) / 1000;
-
-  const frameTotal = clips.reduce((sum, c) => sum + c.asset.totalFrames, 0);
-  const framesBefore = clips.slice(0, index).reduce((sum, c) => sum + c.asset.totalFrames, 0);
-  const secondsBefore = clips.slice(0, index).reduce((sum, c) => sum + c.asset.duration, 0) / 1000;
-  const localFrame = current
-    ? Math.min(current.asset.totalFrames - 1, Math.round((progress?.clipTime ?? 0) * current.asset.fps))
-    : 0;
-  const frameNumber = hasClips ? framesBefore + localFrame + 1 : 0;
-  const elapsedSeconds = secondsBefore + (progress?.clipTime ?? 0);
+  const current = hasClips ? clips[playhead.index] : null;
+  const { clipProgress, frameNumber, frameTotal, elapsedSeconds, totalSeconds: totalDuration } = playhead;
 
   const scrubToFrame = useCallback((globalFrame: number) => {
     let remaining = globalFrame;
     for (let i = 0; i < clips.length; i++) {
       const count = clips[i].asset.totalFrames;
       if (remaining < count || i === clips.length - 1) {
-        playerRef.current?.seekTo(i, Math.max(0, Math.min(count - 1, remaining)) / clips[i].asset.fps);
-        setIndex(i);
+        const seconds = Math.max(0, Math.min(count - 1, remaining)) / clips[i].asset.fps;
+        playerRef.current?.seekTo(i, seconds);
         setFinished(false);
+        setPlayhead(i, seconds);
         return;
       }
       remaining -= count;
     }
-  }, [clips]);
+  }, [clips, setPlayhead]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -259,32 +280,47 @@ export function SignStageViewer({
           <>
             <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-white/95 via-white/70 to-transparent p-4">
               <div className="flex flex-col gap-1.5">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={current?.gesture}
-                    initial={{ opacity: 0, y: -6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 6 }}
-                    transition={{ duration: 0.2 }}
-                    className="flex items-center gap-2"
+                {/* Not wrapped in AnimatePresence, and keyed on the clip
+                    rather than the gloss.
+
+                    Under `mode="wait"` this caption stopped naming the sign on
+                    screen: it stuck on the first sign's label for the rest of
+                    the sequence while the stage played every other one. The
+                    incoming label is held until the outgoing one reports its
+                    exit animation complete, and that report never arrives for
+                    an element that has finished animating in and is then
+                    removed by an update from outside a React event handler --
+                    which is every clip change here, since they come from the
+                    engine's requestAnimationFrame loop. Same failure as the
+                    result panel on this page; see TypeToSignInterface.
+
+                    Keyed on clip id, not gesture, so a repeated letter still
+                    re-announces -- "LETTER" spells two Ts, and a key that did
+                    not change between them left the caption sitting still
+                    through the second one. */}
+                <motion.div
+                  key={current?.id}
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="flex items-center gap-2"
+                >
+                  <span
+                    data-testid="stage-gloss"
+                    className={`font-display font-bold tracking-tight text-senyalita-dark ${
+                      presentationMode ? "text-[clamp(2rem,4vw,4rem)] leading-none" : "text-xl"
+                    }`}
                   >
-                    <span
-                      data-testid="stage-gloss"
-                      className={`font-display font-bold tracking-tight text-senyalita-dark ${
-                        presentationMode ? "text-[clamp(2rem,4vw,4rem)] leading-none" : "text-xl"
-                      }`}
-                    >
-                      {/* The label, not the gloss. current.gesture stays the
-                          gloss and is still the lookup key on the line below. */}
-                      {current?.displayLabel ?? current?.gesture}
+                    {/* The label, not the gloss. current.gesture stays the
+                        gloss and is still the lookup key on the line below. */}
+                    {current?.displayLabel ?? current?.gesture}
+                  </span>
+                  {current && fingerspelledGlosses.has(current.gesture) && (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                      spelled
                     </span>
-                    {current && fingerspelledGlosses.has(current.gesture) && (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">
-                        spelled
-                      </span>
-                    )}
-                  </motion.div>
-                </AnimatePresence>
+                  )}
+                </motion.div>
                 {clips.length > 1 && (
                   <span
                     data-testid="stage-counter"
@@ -292,7 +328,7 @@ export function SignStageViewer({
                       presentationMode ? "text-[clamp(1rem,1.6vw,1.5rem)]" : "text-[11px]"
                     }`}
                   >
-                    Sign {index + 1} of {clips.length}
+                    Sign {playhead.index + 1} of {clips.length}
                   </span>
                 )}
               </div>
@@ -353,7 +389,7 @@ export function SignStageViewer({
         />
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <IconButton label="Previous sign" onClick={() => jumpTo(index - 1)} disabled={!hasClips || index === 0}>
+          <IconButton label="Previous sign" onClick={() => jumpTo(playhead.index - 1)} disabled={!hasClips || playhead.index === 0}>
             <ChevronLeft className="h-4 w-4" />
           </IconButton>
           <IconButton label="Restart" onClick={restart} disabled={!hasClips}>
@@ -369,7 +405,7 @@ export function SignStageViewer({
           >
             {isPaused || finished ? <Play className="ml-0.5 h-6 w-6" /> : <Pause className="h-6 w-6" />}
           </motion.button>
-          <IconButton label="Next sign" onClick={() => jumpTo(index + 1)} disabled={!hasClips || index >= clips.length - 1}>
+          <IconButton label="Next sign" onClick={() => jumpTo(playhead.index + 1)} disabled={!hasClips || playhead.index >= clips.length - 1}>
             <ChevronRight className="h-4 w-4" />
           </IconButton>
 
@@ -415,7 +451,7 @@ export function SignStageViewer({
       {hasClips && (
         <MotionTimeline
           clips={clips}
-          index={index}
+          index={playhead.index}
           clipProgress={clipProgress}
           finished={finished}
           fingerspelledGlosses={fingerspelledGlosses}
