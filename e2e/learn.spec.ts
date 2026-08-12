@@ -95,7 +95,12 @@ test.describe("Learn FSL", () => {
     await expect(page.getByRole("heading", { name: /want to try it yourself/i })).toBeVisible();
 
     await cta.click();
-    await expect(page).toHaveURL(new RegExp("/translate$"));
+    // Generous, because this is a Next <Link>: once hydrated the click is a
+    // soft navigation, so the URL does not change until the RSC payload for
+    // /translate arrives. Under a loaded dev server that outlasts the 5s
+    // default, and the test failed with the URL still reading /learn -- a
+    // report about throughput, not about the link.
+    await expect(page).toHaveURL(new RegExp("/translate$"), { timeout: 120_000 });
     // Landed on the real translator, not a redirect stub.
     await expect(page.locator("#composer-input")).toBeVisible({ timeout: 150_000 });
   });
@@ -142,9 +147,18 @@ test.describe("Learn FSL", () => {
     expect(before).toBeGreaterThan(0);
 
     // "wikipedia" appears in tutorial creators but in no letter or phrase.
-    await page.getByTestId("learn-search").fill("wikipedia");
-
-    await expect.poll(async () => page.getByTestId("sign-A").count(), { timeout: 15_000 }).toBe(0);
+    // Re-filled inside the poll on purpose. The search box is a controlled
+    // React input, so a fill that lands before hydration sets the DOM value
+    // and is then thrown away when React renders its own state -- the box
+    // looks filled, nothing filters, and a one-shot fill never recovers.
+    // Retrying the input is what makes this a test of the filter rather than
+    // a test of how quickly the page hydrates.
+    await expect
+      .poll(async () => {
+        await page.getByTestId("learn-search").fill("wikipedia");
+        return page.getByTestId("sign-A").count();
+      }, { timeout: 120_000 })
+      .toBe(0);
     const after = await page.getByTestId("tutorial-link").count();
     expect(after).toBeGreaterThan(0);
     expect(after).toBeLessThan(before);
