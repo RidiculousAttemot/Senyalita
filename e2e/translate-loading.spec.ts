@@ -30,14 +30,36 @@ const canvasInk = (page: Page) => page.evaluate(() => {
   return { present: true, ink };
 });
 
+/**
+ * The overlay, found by testid rather than by its wording.
+ *
+ * This matched text, and the text it matched was mostly wrong. The stage
+ * cycles through "Preparing translation…", "Extracting landmarks…", "Loading
+ * animation…" and "Almost ready…" every 900ms, and only the third matched —
+ * so for roughly three seconds of every four the loader was covering the stage
+ * and this reported it absent. The blank canvas underneath was then counted as
+ * an uncovered blank, which is the exact defect this file exists to catch, so
+ * the probe manufactured its own failures.
+ *
+ * Half the terms it did match ("Detecting language", "Normalizing", "Finding
+ * glosses", "Generating animation") belong to the pipeline checklist in
+ * TranslationResult, which is not inside the stage at all and never could have
+ * matched here.
+ */
 const loaderVisible = (page: Page) =>
-  page.locator('[data-testid="sign-stage"]').getByText(/Loading|Detecting language|Normalizing|Finding glosses|Generating animation/i)
-    .first().isVisible().catch(() => false);
+  page.locator('[data-testid="stage-loader"]').first().isVisible().catch(() => false);
 
 const translate = async (page: Page, text: string) => {
   await page.goto(`${BASE}/translate`);
   await page.locator("textarea").first().fill(text);
-  await page.getByRole("button", { name: /^Translate$/ }).click();
+  // Wait for hydration before clicking. The button is disabled until React
+  // registers the fill, so clicking early retries against a disabled control
+  // until the test times out — reported as "locator.click: Test timeout", which
+  // says nothing about loading behaviour. /translate hydrates behind ~38 asset
+  // requests, so webkit under a loaded server needs real room here.
+  const button = page.getByRole("button", { name: /^Translate$/ });
+  await expect(button).toBeEnabled({ timeout: 120_000 });
+  await button.click();
 };
 
 /**

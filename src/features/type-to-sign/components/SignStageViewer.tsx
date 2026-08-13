@@ -589,6 +589,11 @@ function LoadingStage({ loaded, total }: { loaded: number; total: number }) {
       // waiting to watch — the loader and the first sign were visible together
       // for the length of the transition.
       exit={{ opacity: 0, transition: { duration: 0 } }}
+      // Identifies the overlay structurally. Tests used to detect it by
+      // matching its wording, which silently stopped working: three of the
+      // four messages it cycles through matched nothing, so for most of every
+      // cycle the loader was on screen and reported absent.
+      data-testid="stage-loader"
       className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-white/80 backdrop-blur-sm"
     >
       <SkeletonPlaceholder />
