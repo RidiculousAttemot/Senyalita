@@ -58,7 +58,14 @@ const observeUntilPainted = async (page: Page, timeoutMs: number) => {
     // The sign advancing while the overlay still covers it: the viewer meets
     // it already in progress. A static opening pose under the loader is fine
     // and expected — a *changing* one is not.
-    if (loader && previousInk !== null && canvas.ink > 0 && canvas.ink !== previousInk) {
+    //
+    // `previousInk > 0` is what makes that distinction real. Without it the
+    // very arrival of the opening pose was counted: the stage is blank under
+    // the loader, frame 0 is painted, and ink goes 0 -> 13254 while the
+    // overlay is still up for the commit that takes it down. That is the
+    // designed sequence, and flagging it contradicted the sentence above.
+    // Measured: every failure this probe reported was previousInk=0.
+    if (loader && previousInk !== null && previousInk > 0 && canvas.ink > 0 && canvas.ink !== previousInk) {
       playingUnderLoaderSamples += 1;
     }
     previousInk = canvas.ink;
