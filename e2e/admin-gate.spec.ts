@@ -22,8 +22,17 @@ import { expect, test } from "@playwright/test";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const APP_DIR = path.join(REPO_ROOT, "src", "app");
 
+// E2E_BASE_URL is the name the other six specs read; this one read E2E_BASE,
+// which nothing sets. Pointing the suite at a non-default port therefore moved
+// every spec except this one, and this one quietly kept asking port 3000 --
+// where, if nothing is listening, every admin route "is not reachable" and the
+// failure reads as a broken admin gate rather than a wrong host. The whole
+// point of this file is to prove the admin still works locally, so testing the
+// wrong host silently is the one way it can be worse than useless.
+//
+// E2E_BASE stays as a fallback so an existing invocation does not break.
 // 127.0.0.1 for the same IPv6 reason as e2e/public-shell.spec.ts.
-const LOCAL = process.env.E2E_BASE ?? "http://127.0.0.1:3000";
+const LOCAL = process.env.E2E_BASE_URL ?? process.env.E2E_BASE ?? "http://127.0.0.1:3000";
 const PRODUCTION = process.env.PRODUCTION_URL ?? "https://signlangvisual.vercel.app";
 
 /** Route groups -- "(dashboard)" -- are organisational and contribute no URL segment. */
