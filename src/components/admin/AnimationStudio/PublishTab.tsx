@@ -24,6 +24,7 @@ import type { AnimationValidationResult } from "@/lib/animationLibrary";
 import { validateAsset, analyzeQuality, generateMetadata } from "@/features/ai-assist";
 import type { ValidationResult, AnimationMetadata, QualityAnalysis } from "@/features/ai-assist";
 import { describePayloadBudget, measureBytes } from "@/lib/admin/payloadBudget";
+import { AliasEditor } from "../AliasEditor";
 import { isQuantisableAsset, quantiseAsset } from "@/lib/landmarkPrecision";
 
 interface PublishTabProps {
@@ -58,6 +59,9 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  // Kept so the words editor can appear the moment the sign exists. A sign
+  // published without words is unreachable by typing, and nothing said so.
+  const [publishedAssetId, setPublishedAssetId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [validation, setValidation] = useState<AnimationValidationResult | null>(null);
   const [aiValidation, setAiValidation] = useState<ValidationResult | null>(null);
@@ -175,7 +179,8 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
         throw new Error("The source video is no longer available. Re-upload it before publishing.");
       }
 
-      const { versionId } = await animationLibrary.upload(sourceFile, trimmedGloss);
+      const { assetId, versionId } = await animationLibrary.upload(sourceFile, trimmedGloss);
+      setPublishedAssetId(assetId);
 
       await animationLibrary.performAction(versionId, "complete-processing", {
         asset: asset as unknown as Record<string, unknown>,

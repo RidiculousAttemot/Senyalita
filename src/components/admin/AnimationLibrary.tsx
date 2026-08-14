@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { AnimationLibraryAsset } from "@/lib/animationLibrary";
 import { animationLibrary } from "@/lib/animationLibrary";
+import { AliasEditor } from "./AliasEditor";
 
 type SortOption = "recent" | "published" | "gloss";
 
@@ -38,6 +39,15 @@ export function AnimationLibraryPage() {
   const [sort, setSort] = useState<SortOption>("recent");
   const [selectedAsset, setSelectedAsset] = useState<AnimationLibraryAsset | null>(null);
   const [previewJson, setPreviewJson] = useState<string | null>(null);
+  /**
+   * Which glosses anyone can actually reach by typing.
+   *
+   * A published sign with no words is unreachable, and nothing on this page
+   * said so — the asset looked complete because publishing had succeeded.
+   * Read from the public alias route so this is the same answer the translator
+   * would give.
+   */
+  const [glossesWithWords, setGlossesWithWords] = useState<Set<string> | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const loadAssets = useCallback(async () => {
@@ -52,6 +62,21 @@ export function AnimationLibraryPage() {
       setLoading(false);
     }
   }, [search, statusFilter, sort]);
+
+  const loadAliasCoverage = useCallback(async () => {
+    try {
+      const res = await fetch("/api/animations/aliases");
+      if (!res.ok) return;
+      const body = (await res.json()) as { aliases: { gloss: string }[] };
+      setGlossesWithWords(new Set(body.aliases.map((a) => a.gloss.toUpperCase())));
+    } catch {
+      // Leave it null. Unknown is not the same as none, and flagging every
+      // asset as unreachable because one request failed would be worse than
+      // saying nothing.
+    }
+  }, []);
+
+  useEffect(() => { void loadAliasCoverage(); }, [loadAliasCoverage]);
 
   useEffect(() => {
     loadAssets();
@@ -261,6 +286,18 @@ export function AnimationLibraryPage() {
                       </span>
                     </div>
 
+                    {/* Unreachable by typing. Published is not the same as
+                        usable, and this was the difference nothing showed. */}
+                    {glossesWithWords && !glossesWithWords.has(asset.gloss.toUpperCase()) && (
+                      <span
+                        className="al-card-status"
+                        style={{ background: "#FFFBEB", color: "#92400E", marginTop: 6, width: "fit-content" }}
+                      >
+                        <AlertTriangle size={12} />
+                        No words — cannot be typed
+                      </span>
+                    )}
+
                     <div className="al-card-body">
                       <div className="al-card-stat">
                         <span className="lbl">Frames</span>
@@ -343,6 +380,46 @@ export function AnimationLibraryPage() {
                 );
               })
             )}
+          </div>
+        )}
+
+        {/* Clicking a card used to set this state and render nothing, so the
+            only effect was a discarded request. It opens the words editor. */}
+        {selectedAsset && (
+          <div
+            role="dialog"
+            aria-label={`Words that play ${selectedAsset.gloss}`}
+            style={{
+              position: "fixed", inset: 0, zIndex: 50, display: "grid", placeItems: "center",
+              background: "rgba(15,23,42,0.45)", padding: 20,
+            }}
+            onClick={() => setSelectedAsset(null)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: "min(560px, 100%)", maxHeight: "80vh", overflowY: "auto",
+                border: "1px solid var(--admin-border)", borderRadius: 12,
+                background: "var(--admin-surface)", padding: 20,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <strong style={{ fontSize: "1rem" }}>{selectedAsset.gloss}</strong>
+                <button
+                  type="button"
+                  aria-label="Close"
+                  onClick={() => setSelectedAsset(null)}
+                  style={{ border: "none", background: "transparent", cursor: "pointer", color: "#64748b" }}
+                >
+                  <XCircle size={18} />
+                </button>
+              </div>
+              <AliasEditor
+                assetId={selectedAsset.id}
+                gloss={selectedAsset.gloss}
+                onCountChange={loadAliasCoverage}
+              />
+            </div>
           </div>
         )}
       </div>

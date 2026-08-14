@@ -8,6 +8,7 @@ import type { AnimationClip } from "@/features/sign-animation/types";
 import type { AnimationPlanItem, TranslationPipelineResult } from "@/features/translation-pipeline/types";
 import { computeReadyPrefix, type SettledSlot } from "./orderedFlush";
 import { sourceLabel } from "./sourceLabel";
+import { aliasIndex } from "@/features/fsl-translation/dictionary/aliasIndex";
 
 export type TranslationStage = "idle" | "translating" | "loading" | "done" | "error";
 
@@ -92,6 +93,13 @@ export function useProgressiveSignTranslation(options: UseProgressiveSignTransla
     const isStale = () => generationRef.current !== myGeneration;
 
     setState({ ...idleState, stage: "translating" });
+
+    // Admin-added mappings are fetched at runtime, but the pipeline is
+    // synchronous, so they have to be in memory before it runs. Awaited here
+    // rather than inside the matcher: one request per page load, and a first
+    // translation that would otherwise race the fetch and silently fall back
+    // to the built-in dictionary alone.
+    await aliasIndex.load();
 
     let result: TranslationPipelineResult;
     try {

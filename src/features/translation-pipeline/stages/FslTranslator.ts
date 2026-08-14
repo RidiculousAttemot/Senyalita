@@ -1,6 +1,6 @@
 import type { GlossTranslation, TranslationContext, DetectedLanguage } from "../types";
 import type { FslTranslator as IFslTranslator } from "../interfaces";
-import { globalDictionary } from "@/features/fsl-translation/dictionary/gestureDictionary";
+import { maxPhraseWords, resolvePhrase, type PhraseMatch } from "@/features/fsl-translation/dictionary/phraseResolver";
 import { globalResolver } from "@/features/fsl-translation/dictionary/unknownWordResolver";
 import { applyGrammarRules } from "@/features/fsl-translation/grammar/fslGrammar";
 
@@ -27,17 +27,21 @@ export class FslTranslatorService implements IFslTranslator {
     // multi-word forms have at least one token that resolves standalone, so
     // this was never specific to THANK YOU.
     //
-    // The window is bounded by the longest form the dictionary actually holds,
-    // asked of the dictionary rather than hardcoded.
-    const maxWindow = globalDictionary.maxPhraseWords();
+    // The window is bounded by the longest form either store actually holds,
+    // asked of them rather than hardcoded. Admin-added phrases count: bounded
+    // by the source dictionary alone, an alias longer than anything in it would
+    // never be offered for lookup and would look unsaved.
+    const maxWindow = maxPhraseWords();
 
     for (let i = 0; i < words.length; ) {
-      let match: ReturnType<typeof globalDictionary.lookup> | undefined;
+      let match: PhraseMatch | undefined;
       let span = 0;
 
       for (let n = Math.min(maxWindow, words.length - i); n >= 1; n--) {
         const phrase = words.slice(i, i + n).join(" ").toLowerCase().trim();
-        const hit = globalDictionary.lookup(phrase);
+        // One resolver, so precedence between admin-added and built-in
+        // mappings is stated once; see dictionary/phraseResolver.ts.
+        const hit = resolvePhrase(phrase);
         if (hit) {
           match = hit;
           span = n;
@@ -52,7 +56,7 @@ export class FslTranslatorService implements IFslTranslator {
           confidence: 0.95,
           strategy: "direct",
           category: match.category,
-          animationKey: match.animationAsset ?? match.gloss,
+          animationKey: match.animationKey,
         });
         i += span;
         continue;

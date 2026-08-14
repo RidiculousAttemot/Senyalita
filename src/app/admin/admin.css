@@ -32,6 +32,18 @@
   color: var(--admin-ink);
 }
 
+/*
+ * ONE structure, stated once: the sidebar runs the full height on the left,
+ * the topbar sits beside it, and both are --admin-chrome. The content well is
+ * the light canvas inside that frame.
+ *
+ * Previously the sidebar was a light cream column (its stylesheet had been
+ * left behind by the palette migration) under a dark full-bleed-looking
+ * header, with a 76px branding block beside a 64px header so their borders
+ * missed each other. Neither "sidebar full height" nor "header across the top"
+ * was actually committed to, so the eye could read it either way and both
+ * readings looked wrong.
+ */
 .admin-console-main { min-width: 0; flex: 1; }
 .admin-console-topbar { min-height: 64px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); background: var(--admin-chrome); color: var(--admin-chrome-ink); }
 .admin-console-topbar .admin-console-workspace-name { color: var(--admin-chrome-ink); }
@@ -62,6 +74,63 @@
   color: var(--admin-muted); font-size: 12.5px; line-height: 1.6;
 }
 .admin-console-scope-note svg { flex-shrink: 0; margin-top: 2px; }
+
+/* --- Words that play a sign -------------------------------------------- */
+.alias-editor { display: grid; gap: 10px; }
+.alias-editor-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.alias-editor-title { margin: 0; color: var(--admin-ink); font-size: 0.86rem; font-weight: 750; }
+.alias-editor-hint { margin: 3px 0 0; color: var(--admin-muted); font-size: 0.75rem; line-height: 1.5; }
+.alias-editor-hint code, .alias-editor-preview code {
+  border-radius: 4px; background: #F1F5F9; font-family: ui-monospace, monospace; font-size: 0.72rem; padding: 1px 5px;
+}
+.alias-group { display: grid; gap: 5px; }
+.alias-group-label {
+  margin: 0; color: var(--admin-muted); font-size: 0.66rem; font-weight: 800;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.alias-list { display: grid; gap: 4px; list-style: none; margin: 0; padding: 0; }
+.alias-row {
+  display: flex; align-items: center; gap: 8px;
+  border: 1px solid var(--admin-border); border-radius: 8px;
+  background: var(--admin-surface); padding: 6px 8px 6px 11px;
+}
+.alias-row.is-canonical { border-color: #93C5FD; background: #EFF6FF; }
+.alias-phrase { flex: 1; font-family: ui-monospace, monospace; font-size: 0.79rem; }
+.alias-badge {
+  border-radius: 999px; background: #DBEAFE; color: #1D4ED8;
+  font-size: 0.63rem; font-weight: 750; padding: 2px 7px; white-space: nowrap;
+}
+.alias-row-actions { display: flex; gap: 2px; }
+.alias-row-actions button {
+  display: grid; width: 24px; height: 24px; place-items: center;
+  border: 1px solid transparent; border-radius: 6px; background: transparent;
+  color: var(--admin-muted); cursor: pointer;
+}
+.alias-row-actions button:hover:not(:disabled) { border-color: var(--admin-border); background: #F8FAFC; color: var(--admin-ink); }
+.alias-row-actions button:disabled { cursor: not-allowed; opacity: 0.3; }
+.alias-add { display: flex; gap: 6px; }
+.alias-add select, .alias-add input {
+  min-height: 34px; border: 1px solid var(--admin-border); border-radius: 8px;
+  background: var(--admin-surface); color: var(--admin-ink); font-size: 0.79rem; padding: 0 9px;
+}
+.alias-add input { flex: 1; font-family: ui-monospace, monospace; }
+.alias-add button.primary {
+  display: inline-flex; min-height: 34px; align-items: center; gap: 5px;
+  border: 1px solid #2563EB; border-radius: 8px; background: #2563EB; color: #fff;
+  font-size: 0.78rem; font-weight: 700; padding: 0 12px; cursor: pointer;
+}
+.alias-add button.primary:disabled { border-color: #CBD5E1; background: #CBD5E1; cursor: not-allowed; }
+.alias-editor-empty, .alias-editor-warning, .alias-editor-error, .alias-editor-preview, .alias-editor-foot {
+  display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 0.74rem; line-height: 1.5;
+}
+.alias-editor-empty {
+  border: 1px solid #FCD34D; border-radius: 8px; background: #FFFBEB; color: #92400E; padding: 8px 10px;
+}
+.alias-editor-warning { color: #92400E; }
+.alias-editor-error { color: #B91C1C; }
+.alias-editor-preview, .alias-editor-foot { color: var(--admin-muted); }
+.alias-spin { animation: alias-spin 1s linear infinite; }
+@keyframes alias-spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 900px) {
   .admin-console-menu-button { display: grid; }
@@ -129,6 +198,52 @@
 .admin-model-summary-stats strong { color: #fff; font-size: 1rem; }
 .admin-activity-panel { overflow: hidden; }
 .admin-activity-panel > div:last-child { margin-top: 16px; }
+
+/*
+ * The activity table.
+ *
+ * AdminDataTable has always rendered .admin-table-wrap / .admin-table /
+ * .admin-sort-button / .role-pill / .admin-table-truncate, and NONE of those
+ * selectors existed in any stylesheet. It was a bare <table>: no padding, no
+ * widths, no border-collapse. Browsers shrink-to-fit such a table and butt the
+ * cells against each other, so adjacent headers ran together into "ItemSeverity"
+ * and "RecordedTelemetry event captured" -- which reads as data landing in the
+ * wrong column but is only two cells with no gap between them. The bindings
+ * were right the whole time: "P" is a real gesture_label and "low confidence"
+ * is the low_confidence event type with its underscore replaced.
+ *
+ * table-layout: fixed with an explicit colgroup, so the header and body share
+ * one set of widths by construction rather than by whatever the content
+ * happened to negotiate.
+ *
+ * The wrapper carries overflow-x, which it also never had. An unstyled wide
+ * table has nothing to scroll inside, so it pushed the whole document wide and
+ * put a horizontal scrollbar across the bottom of the window instead. The
+ * table now scrolls within its own panel and the page does not move.
+ */
+.admin-table-wrap { width: 100%; overflow-x: auto; }
+.admin-table { width: 100%; min-width: 780px; border-collapse: collapse; table-layout: fixed; color: #475569; font-size: 0.78rem; }
+.admin-table th { border-bottom: 1px solid var(--admin-border); color: #64748B; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.07em; padding: 0 12px 10px; text-align: left; text-transform: uppercase; }
+.admin-table td { overflow: hidden; border-bottom: 1px solid #E2E8F0; padding: 11px 12px; text-overflow: ellipsis; vertical-align: middle; white-space: nowrap; }
+.admin-table th:first-child, .admin-table td:first-child { padding-left: 0; }
+.admin-table th:last-child, .admin-table td:last-child { padding-right: 0; }
+.admin-table tbody tr:last-child td { border-bottom: 0; }
+.admin-table tbody tr:hover { background: #F8FAFC; }
+.admin-table td strong { color: var(--admin-ink); font-weight: 750; }
+.admin-table--compact td { padding-top: 9px; padding-bottom: 9px; }
+/* Only the free-text column truncates; the fixed-shape ones must stay whole. */
+.admin-table-truncate { overflow: hidden; color: var(--admin-muted); text-overflow: ellipsis; white-space: nowrap; }
+
+.admin-sort-button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; letter-spacing: inherit; padding: 0; text-transform: inherit; }
+.admin-sort-button:hover { color: var(--admin-accent); }
+.admin-sort-button:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 3px; }
+.admin-sort-button[aria-sort="ascending"], .admin-sort-button[aria-sort="descending"] { color: var(--admin-accent); }
+.admin-sort-caret { font-size: 0.7em; opacity: 0.75; }
+
+.role-pill { display: inline-block; min-width: 58px; border-radius: 999px; font-size: 0.64rem; font-weight: 800; letter-spacing: 0.04em; padding: 3px 8px; text-align: center; text-transform: uppercase; }
+.role-low { background: #F1F5F9; color: #475569; }
+.role-medium { background: #FEF3C7; color: #92400E; }
+.role-high { background: #FEE2E2; color: #B91C1C; }
 
 @media (max-width: 1100px) { .admin-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .admin-service-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 720px) { .admin-dashboard-header, .admin-dashboard-actions { flex-direction: column; } .admin-dashboard-actions { width: 100%; } .admin-action-button { justify-content: center; } .admin-chart-grid, .admin-dashboard-secondary-grid, .admin-quick-action-grid { grid-template-columns: 1fr; } }

@@ -1468,6 +1468,47 @@ type Tables = {
     };
     Relationships: [];
   };
+  // Admin-managed word→sign mappings. The gloss stays the identity: a phrase
+  // here points at an asset and is never itself an asset lookup key.
+  animation_asset_aliases: {
+    Row: {
+      id: string;
+      asset_id: string;
+      phrase: string;
+      language: "en" | "tl";
+      is_canonical: boolean;
+      sort_order: number;
+      created_by: string | null;
+      created_at: string;
+      updated_at: string;
+    };
+    Insert: {
+      id?: string;
+      asset_id: string;
+      phrase: string;
+      language: "en" | "tl";
+      is_canonical?: boolean;
+      sort_order?: number;
+      created_by?: string | null;
+      created_at?: string;
+      updated_at?: string;
+    };
+    Update: {
+      phrase?: string;
+      language?: "en" | "tl";
+      is_canonical?: boolean;
+      sort_order?: number;
+      updated_at?: string;
+    };
+    Relationships: [
+      {
+        foreignKeyName: "animation_asset_aliases_asset_id_fkey";
+        columns: ["asset_id"];
+        referencedRelation: "animation_assets";
+        referencedColumns: ["id"];
+      },
+    ];
+  };
   animation_asset_versions: {
     Row: {
       id: string;
