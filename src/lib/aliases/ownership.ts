@@ -7,8 +7,10 @@
  *
  * The two sets are disjoint by construction, which is the property worth
  * having: there is no precedence to resolve in the normal case, and no way for
- * the same phrase to be defined twice and drift. A generated test asserts the
- * disjointness rather than trusting it.
+ * the same phrase to be defined twice and drift. Enforced at the only moment
+ * it could be violated -- adding an alias -- by feeding sourceDictionaryClaims
+ * into the conflict check, so claiming a built-in phrase for a different sign
+ * is refused rather than silently overriding it.
  *
  * WHY THIS SPLIT AND NOT "DATABASE FOR EVERYTHING"
  *   Aliases attach to an asset. Of 209 dictionary entries, 208 have no asset to
@@ -53,4 +55,32 @@ export const ALIAS_PRECEDENCE: readonly AliasSource[] = ["database", "source-dic
 /** True when the database is allowed to own this gloss's lexical forms. */
 export function databaseOwnsGloss(gloss: string, glossesWithAssets: ReadonlySet<string>): boolean {
   return glossesWithAssets.has(gloss.trim().toUpperCase());
+}
+
+/**
+ * Every phrase the built-in dictionary already claims, and for which gloss.
+ *
+ * Conflict detection has to see these, not only the phrases already in the
+ * database. Checking the database alone would let "salamat" -- a built-in form
+ * of THANK YOU -- be claimed for a different sign, and because the database
+ * wins during the overlap, the built-in mapping would be silently overridden
+ * with nothing anywhere saying so.
+ *
+ * Claiming one for the *same* gloss stays allowed: that is adoption, the
+ * one-way move that happens when a gloss gains an animation.
+ */
+export function sourceDictionaryClaims(
+  entries: readonly { gloss: string; synonyms: string[]; english: string[]; filipino: string[] }[],
+): { phrase: string; gloss: string }[] {
+  const claims: { phrase: string; gloss: string }[] = [];
+  const seen = new Set<string>();
+  for (const entry of entries) {
+    for (const form of [...entry.synonyms, ...entry.english, ...entry.filipino]) {
+      const phrase = form.trim().toLowerCase();
+      if (!phrase || seen.has(phrase)) continue;
+      seen.add(phrase);
+      claims.push({ phrase, gloss: entry.gloss.toUpperCase() });
+    }
+  }
+  return claims;
 }

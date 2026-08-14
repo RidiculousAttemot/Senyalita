@@ -12,6 +12,8 @@ import {
 } from "@/lib/supabase/queries/animationAliases";
 import { prepareAliasPhrase } from "@/lib/aliases/normalisePhrase";
 import { detectAliasConflicts, isRefusal } from "@/lib/aliases/conflicts";
+import { sourceDictionaryClaims } from "@/lib/aliases/ownership";
+import { BUILT_IN_DICTIONARY } from "@/features/fsl-translation/dictionary/gestureDictionary";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -72,10 +74,13 @@ export async function POST(request: NextRequest) {
     if (!asset) return NextResponse.json({ error: "That animation no longer exists." }, { status: 404 });
 
     const gloss = (asset as { gloss: string }).gloss;
+    // Both stores, not just the database. A built-in phrase claimed for a
+    // different sign would otherwise be accepted and then silently win, since
+    // the database takes precedence during the overlap.
     const conflicts = detectAliasConflicts({
       phrase: prepared.value.phrase,
       gloss,
-      claimed: await listClaimedPhrases(),
+      claimed: [...(await listClaimedPhrases()), ...sourceDictionaryClaims(BUILT_IN_DICTIONARY)],
     });
 
     if (isRefusal(conflicts)) {
