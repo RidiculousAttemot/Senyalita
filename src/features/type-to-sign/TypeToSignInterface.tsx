@@ -11,6 +11,7 @@ import { globalLoader } from "@/features/sign-animation/hooks/useAnimationClip";
 import { useProgressiveSignTranslation } from "./useProgressiveSignTranslation";
 import type { FallbackProgress } from "./useProgressiveSignTranslation";
 import { fingerspellSource, spellableCharacters } from "./sourceLabel";
+import { aliasIndex } from "@/features/fsl-translation/dictionary/aliasIndex";
 import { SignComposer } from "./components/SignComposer";
 import { SignStageViewer } from "./components/SignStageViewer";
 import {
@@ -210,10 +211,15 @@ export function TypeToSignInterface() {
   // hover) before the user even clicks Translate, so the click-to-first-frame
   // gap shrinks further. Runs the real (synchronous, sub-5ms) pipeline just
   // to get accurate gloss keys rather than guessing from raw words.
-  const prefetchCurrentMessage = useCallback((text: string) => {
+  const prefetchCurrentMessage = useCallback(async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
     try {
+      // Admin-added mappings first, or this warms the wrong keys. Measured on
+      // production: "maraming salamat po" is one sign via an alias, but the
+      // prefetch resolved it through the source dictionary alone and fetched
+      // MANY as well — a request for a sign the translation never uses.
+      await aliasIndex.load();
       const keys = globalPipeline.translate(trimmed).animationPlan.items.map((i) => i.animationKey);
       void globalLoader.preload(keys.filter(Boolean)).catch(() => {
         // Warming is best-effort; fetchAsset has already logged the reason.
@@ -228,7 +234,7 @@ export function TypeToSignInterface() {
   // constantly-changing partial words).
   useEffect(() => {
     if (!message.trim()) return;
-    const timer = setTimeout(() => prefetchCurrentMessage(message), 400);
+    const timer = setTimeout(() => { void prefetchCurrentMessage(message); }, 400);
     return () => clearTimeout(timer);
   }, [message, prefetchCurrentMessage]);
 
@@ -409,7 +415,7 @@ export function TypeToSignInterface() {
                 key={phrase}
                 type="button"
                 onClick={() => setMessage(phrase)}
-                onMouseEnter={() => prefetchCurrentMessage(phrase)}
+                onMouseEnter={() => { void prefetchCurrentMessage(phrase); }}
                 className="rounded-full border border-senyalita-border bg-white px-4 py-2 text-[13px] font-medium text-senyalita-muted transition-all duration-150 hover:-translate-y-0.5 hover:border-senyalita-primary/40 hover:bg-senyalita-primary/5 hover:text-senyalita-primary hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary"
               >
                 {phrase}
