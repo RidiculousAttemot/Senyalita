@@ -214,3 +214,64 @@ export async function listPublishedGlosses(): Promise<string[]> {
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => (row.gloss as string).toUpperCase());
 }
+
+/**
+ * A signed URL for the recording a sign was extracted from.
+ *
+ * The published asset JSON carries `video: "/api/videos/<gloss>/<file>"`, a
+ * filesystem route that reads datasets/raw/user_videos. That directory is
+ * excluded from deployments, so the reference is dead in production for every
+ * asset -- and the string is baked in at publish time, so all 38 published
+ * assets carry it. Human, Split and Overlay had nothing to draw.
+ *
+ * The recordings were in Storage the whole time: every published version has a
+ * source_video_path, and all 38 objects exist at 10-16 MB. Only the reference
+ * was wrong, which is why this resolves from source_video_path rather than
+ * trusting the stored field.
+ *
+ * Deliberately a separate lookup from the landmark one. /api/animations/[gloss]
+ * 307-redirects to Storage, so the server never holds the JSON body and cannot
+ * rewrite the field on the way past.
+ */
+export async function getPublishedSourceVideoSignedUrl(gloss: string): Promise<SignedAssetLookup> {
+  const supabase = createSupabaseServiceClient();
+
+  let asset: { published_version_id: string | null } | null = null;
+  for (const candidate of glossLookupCandidates(gloss)) {
+    const { data, error } = await supabase
+      .from("animation_assets")
+      .select("published_version_id")
+      .eq("gloss", candidate)
+      .maybeSingle();
+
+    if (error) return { outcome: "failed", stage: "asset", message: error.message };
+    if (data?.published_version_id) {
+      asset = data;
+      break;
+    }
+  }
+
+  if (!asset?.published_version_id) return { outcome: "absent" };
+
+  const { data: version, error: versionError } = await supabase
+    .from("animation_asset_versions")
+    .select("status, source_video_path")
+    .eq("id", asset.published_version_id)
+    .maybeSingle();
+
+  if (versionError) return { outcome: "failed", stage: "version", message: versionError.message };
+  // A published sign without a recording is legitimate -- landmarks are what
+  // playback needs. "absent" lets the caller 404 and the player fall back.
+  if (version?.status !== "published" || !version.source_video_path) return { outcome: "absent" };
+
+  const { data: signed, error: signError } = await supabase.storage
+    .from("animation-source-videos")
+    .createSignedUrl(version.source_video_path, SIGNED_URL_TTL_SECONDS);
+
+  if (signError) return { outcome: "failed", stage: "sign", message: signError.message };
+  if (!signed?.signedUrl) {
+    return { outcome: "failed", stage: "sign", message: "storage returned no signed URL and no error" };
+  }
+
+  return { outcome: "found", url: signed.signedUrl };
+}

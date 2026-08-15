@@ -193,7 +193,26 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
   // Follows the clip actually playing, so a multi-sign sequence swaps to each
   // sign's own recording instead of pinning the first one.
   const currentClipAsset = currentAsset ?? clips[0]?.asset;
-  const videoSrc = currentClipAsset?.video;
+  /**
+   * The recording, resolved from the gloss rather than from `asset.video`.
+   *
+   * That field holds "/api/videos/<gloss>/<file>" -- a filesystem route reading
+   * datasets/raw/user_videos, which deployments exclude, so it is dead in
+   * production for every asset. It is written at publish time, so all 38
+   * published assets carry the dead path and no rewrite reaches them.
+   *
+   * The recordings are in Storage and always were: every published version has
+   * a source_video_path and all 38 objects exist. /api/animations/[gloss]/video
+   * signs one, so asking by gloss sidesteps the baked-in field entirely.
+   *
+   * Derived, not stateful: asset identity is stable because the loader caches
+   * by gloss, and repeated letters in a fingerspelled word share one asset AND
+   * one gloss, so first-match is the right match.
+   */
+  const currentClip = clips.find((clip) => clip.asset === currentClipAsset) ?? clips[0];
+  const videoSrc = currentClip?.gesture
+    ? `/api/animations/${encodeURIComponent(currentClip.gesture)}/video`
+    : undefined;
 
   /**
    * Announce "there is something to look at" once every visible surface has
