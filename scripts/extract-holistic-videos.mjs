@@ -43,12 +43,29 @@ const extractFrames = (videoPath, frameDir) => {
   });
 };
 
+/**
+ * `--only "GOOD MORNING"` restricts the run to one label (repeatable).
+ *
+ * Without it this walks every directory under INPUT_ROOT, which is now 130 --
+ * i.e. the entire batch. That is the right default for the batch itself and the
+ * wrong one for verifying a single sign, where extracting 129 others is both a
+ * long wait and a large accidental state change.
+ */
+/** Re-extract even when the output already exists. See the skip below. */
+const FORCE = process.argv.includes("--force");
+
+const ONLY = process.argv.reduce((acc, arg, i) => {
+  if (arg === "--only" && process.argv[i + 1]) acc.push(process.argv[i + 1].toLowerCase());
+  return acc;
+}, []);
+
 const collectVideos = () => {
   const videos = [];
   const entries = fs.readdirSync(INPUT_ROOT, { withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const label = entry.name;
+    if (ONLY.length > 0 && !ONLY.includes(label.toLowerCase())) continue;
     const labelDir = path.join(INPUT_ROOT, label);
     const files = fs.readdirSync(labelDir).filter(f => /\.(mp4|mov|webm|avi|MP4|MOV)$/i.test(f));
     for (const file of files) {
@@ -173,6 +190,28 @@ const main = async () => {
     const frameDir = path.join(TMP_DIR, `v_${String(i).padStart(4, "0")}`);
     console.log(`\n[${i + 1}/${videos.length}] ${v.label}/${v.file}`);
 
+    /**
+     * Resume rather than restart.
+     *
+     * A 92-sign run takes hours and is unattended. Without this, any
+     * interruption -- a crash, a closed laptop, a Ctrl-C to fix one bad video --
+     * means re-extracting everything already done. Existence of the output is
+     * the whole condition: no manifest to keep in sync, nothing to go stale, and
+     * correct even if the process was killed mid-write of a LATER sign.
+     *
+     * --force re-extracts anyway, for when a video is replaced in place.
+     */
+    const existingPath = path.join(
+      OUTPUT_DIR,
+      v.label,
+      `${path.basename(v.file, path.extname(v.file))}_asset.json`,
+    );
+    if (!FORCE && fs.existsSync(existingPath)) {
+      console.log("    already extracted — skipping (use --force to re-extract)");
+      stats.skip = (stats.skip ?? 0) + 1;
+      continue;
+    }
+
     try {
       const { files: frameFiles, imageWidth, imageHeight } = await extractFrames(v.videoPath, frameDir);
       if (frameFiles.length === 0) { console.log("    No frames"); stats.fail++; continue; }
@@ -233,7 +272,13 @@ const main = async () => {
         duration: lastTs - firstTs,
         totalFrames: animFrames.length,
         frames: animFrames,
-        video: `/api/videos/${encodeURIComponent(v.label)}/${encodeURIComponent(v.file)}`,
+        // No `video` field. It used to hold "/api/videos/<label>/<file>", baked in
+        // at extraction time -- a URL frozen into stored data, which went stale the
+        // moment recordings moved to Storage and left every published asset pointing
+        // at a dead path. The player resolves the recording from the gloss instead,
+        // via /api/animations/[gloss]/video, so nothing reads this field any more
+        // (re-confirmed 2026-08-17: zero live readers). Re-adding it would put the
+        // dead path back into every asset this script produces.
         imageWidth,
         imageHeight,
         metadata: {
