@@ -25,6 +25,23 @@ export type { ViewMode } from "../types";
 const LANDMARK_MODES = new Set<ViewMode>(["skeleton", "split", "overlay"]);
 
 /**
+ * Whether the canvas should be driven by the landmark renderer.
+ *
+ * "human" is deliberately absent from LANDMARK_MODES: it shows a recording, and
+ * painting landmarks underneath one is wasted work and a possible artefact. But
+ * when the recording fails -- the normal state for most of the library, which
+ * has landmarks and no video -- human falls back to a canvas, and that canvas
+ * has to be rendered by something. It previously fell through to the advanced
+ * renderer, which is never initialised on this path, so the pane stayed blank.
+ *
+ * Takes both values as arguments rather than reading either itself, so each call
+ * site supplies whichever it legitimately has: the two dependency-free callbacks
+ * read refs, the effects read state.
+ */
+const usesLandmarkRenderer = (mode: ViewMode, videoFailed: boolean) =>
+  LANDMARK_MODES.has(mode) || (mode === "human" && videoFailed);
+
+/**
  * Shown when a sign has landmarks but no recording -- the normal state for most
  * of the library, not an error.
  *
@@ -197,6 +214,9 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
   // onFrame is installed once, so mutable props it reads must go through refs.
   const viewModeRef = useRef(viewMode);
   viewModeRef.current = viewMode;
+  // Same reason as viewModeRef. Declared here so the callbacks below can close
+  // over it; kept in sync just after the useState that owns the value.
+  const videoFailedRef = useRef(false);
   const speedRef = useRef(speed);
   speedRef.current = speed;
   const [currentAsset, setCurrentAsset] = useState<GestureAnimationAsset | null>(null);
@@ -246,7 +266,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
     const asset = clip?.asset;
     const frame = asset?.frames?.[0];
     if (!asset || !frame || !canvasRef.current) return;
-    if (LANDMARK_MODES.has(viewModeRef.current)) {
+    if (usesLandmarkRenderer(viewModeRef.current, videoFailedRef.current)) {
       const renderer = exactRendererRef.current;
       if (!renderer) return;
       if (asset.imageWidth && asset.imageHeight) {
@@ -279,6 +299,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
   // bug, which is exactly where the last video outage sent debugging. Track
   // failure so the pane falls back to the skeleton or a note instead.
   const [videoFailed, setVideoFailed] = useState(false);
+  videoFailedRef.current = videoFailed;
   useEffect(() => {
     setVideoFailed(false);
     // A new recording has not decoded anything yet. Only matters before the
@@ -432,7 +453,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
             driftFramesRef.current = Math.round(delta * fpsForDrift);
           }
 
-          if (LANDMARK_MODES.has(viewModeRef.current)) {
+          if (usesLandmarkRenderer(viewModeRef.current, videoFailedRef.current)) {
             if (exactRendererRef.current && clip?.asset) {
               const asset = clip.asset;
               if (asset.imageWidth && asset.imageHeight) {
@@ -570,7 +591,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
     // Both renderers share one canvas, so only the active one may resize it:
     // assigning canvas.width resets the bitmap, and the inactive renderer has
     // no frame to repaint, so it would blank what the active one just drew.
-    if (LANDMARK_MODES.has(viewMode)) {
+    if (usesLandmarkRenderer(viewMode, videoFailed)) {
       exactRendererRef.current?.setBackgroundColor(
         // Overlay draws on top of the recording, so it must not paint a base.
         viewMode === "overlay"
@@ -587,7 +608,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
   }, [renderWidth, renderHeight, theme, showLabels, showNonManual, highContrast, backgroundColor, viewMode]);
 
   useEffect(() => {
-    engineRef.current?.setExactMode(LANDMARK_MODES.has(viewMode));
+    engineRef.current?.setExactMode(usesLandmarkRenderer(viewMode, videoFailed));
   }, [viewMode]);
 
   useEffect(() => {
@@ -603,7 +624,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    if (LANDMARK_MODES.has(viewMode)) {
+    if (usesLandmarkRenderer(viewMode, videoFailed)) {
       exactRendererRef.current?.attach(canvas);
       exactRendererRef.current?.setSize(renderWidth, renderHeight);
     } else {
