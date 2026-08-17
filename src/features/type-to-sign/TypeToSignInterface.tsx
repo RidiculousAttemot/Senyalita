@@ -383,7 +383,7 @@ export function TypeToSignInterface() {
               className="flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50/80 p-3.5 backdrop-blur-xl"
             >
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-              <p className="text-[13px] leading-snug text-amber-800">{error}</p>
+              <p className="text-[0.8125rem] leading-snug text-amber-800">{error}</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -406,7 +406,7 @@ export function TypeToSignInterface() {
           aria-labelledby="suggestions-heading"
           className="rounded-[22px] border border-senyalita-border bg-white/70 p-5 backdrop-blur-xl"
         >
-          <h2 id="suggestions-heading" className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-senyalita-muted">
+          <h2 id="suggestions-heading" className="mb-3 text-[0.6875rem] font-bold uppercase tracking-[0.14em] text-senyalita-muted">
             Try a phrase
           </h2>
           <div className="flex flex-wrap gap-2">
@@ -416,7 +416,7 @@ export function TypeToSignInterface() {
                 type="button"
                 onClick={() => setMessage(phrase)}
                 onMouseEnter={() => { void prefetchCurrentMessage(phrase); }}
-                className="rounded-full border border-senyalita-border bg-white px-4 py-2 text-[13px] font-medium text-senyalita-muted transition-all duration-150 hover:-translate-y-0.5 hover:border-senyalita-primary/40 hover:bg-senyalita-primary/5 hover:text-senyalita-primary hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary"
+                className="rounded-full border border-senyalita-border bg-white px-4 py-2 text-[0.8125rem] font-medium text-senyalita-muted transition-all duration-150 hover:-translate-y-0.5 hover:border-senyalita-primary/40 hover:bg-senyalita-primary/5 hover:text-senyalita-primary hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary"
               >
                 {phrase}
               </button>

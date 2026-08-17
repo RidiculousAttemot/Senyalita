@@ -663,7 +663,7 @@ export function SignToTextInterface() {
             {handOverlays.map((hand, index) => (
               <span
                 key={`${hand.handedness}-${index}`}
-                className="pointer-events-none absolute -translate-x-1/2 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-lg"
+                className="pointer-events-none absolute -translate-x-1/2 rounded-full bg-amber-500 px-2 py-0.5 text-[0.625rem] font-bold uppercase tracking-wide text-white shadow-lg"
                 style={{
                   left: `${(settings.mirrored ? 1 - hand.x : hand.x) * 100}%`,
                   top: `calc(${hand.y * 100}% + 12px)`,
@@ -676,7 +676,7 @@ export function SignToTextInterface() {
             <div className="absolute left-4 top-4 flex flex-wrap items-center gap-2">
               <span
                 aria-live="polite"
-                className="flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-[11px] font-semibold text-white ring-1 ring-inset ring-white/15 backdrop-blur-md"
+                className="flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-[0.6875rem] font-semibold text-white ring-1 ring-inset ring-white/15 backdrop-blur-md"
               >
                 <span
                   className={cn(
@@ -712,7 +712,7 @@ export function SignToTextInterface() {
                 )}
               </span>
               {status === "active" && (
-                <span className="hidden rounded-full bg-black/45 px-3 py-1.5 text-[11px] font-semibold text-white ring-1 ring-inset ring-white/15 backdrop-blur-md sm:inline-flex">
+                <span className="hidden rounded-full bg-black/45 px-3 py-1.5 text-[0.6875rem] font-semibold text-white ring-1 ring-inset ring-white/15 backdrop-blur-md sm:inline-flex">
                   {recognition.motionState === "gesturing" ? "Moving" : "Steady"}
                 </span>
               )}
@@ -787,7 +787,7 @@ export function SignToTextInterface() {
                   aria-live="polite"
                   className="absolute bottom-4 right-4 min-w-[132px] overflow-hidden rounded-2xl bg-black/55 px-4 pb-3 pt-2.5 ring-1 ring-inset ring-white/15 backdrop-blur-md"
                 >
-                  <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-white/55">Detected</p>
+                  <p className="text-[0.5625rem] font-bold uppercase tracking-[0.16em] text-white/55">Detected</p>
                   <p className="mt-0.5 font-display text-3xl font-bold leading-none text-white">
                     {translateLabel(currentPrediction.label)}
                   </p>
@@ -799,7 +799,7 @@ export function SignToTextInterface() {
                       transition={{ duration: 0.2 }}
                     />
                   </div>
-                  <p className="mt-1 text-[10px] font-semibold tabular-nums text-white/60">
+                  <p className="mt-1 text-[0.625rem] font-semibold tabular-nums text-white/60">
                     {Math.round(currentPrediction.confidence * 100)}% confident
                   </p>
                 </motion.div>
@@ -829,7 +829,7 @@ export function SignToTextInterface() {
                     <span className="h-9 w-9 animate-spin rounded-full border-[3px] border-white/20 border-t-amber-400" />
                   </span>
                   <p className="text-base font-semibold text-white">Loading translation engine…</p>
-                  <p className="mt-1.5 text-[13px] text-slate-300">
+                  <p className="mt-1.5 text-[0.8125rem] text-slate-300">
                     Setting up hand tracking. This takes a moment.
                   </p>
                 </motion.div>
@@ -847,7 +847,7 @@ export function SignToTextInterface() {
                   <span className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-senyalita-primary/15 text-senyalita-secondary ring-1 ring-inset ring-senyalita-primary/30">
                     <Video className="h-7 w-7" />
                   </span>
-                  <p className="max-w-md text-[15px] font-medium leading-relaxed text-slate-200">
+                  <p className="max-w-md text-[0.9375rem] font-medium leading-relaxed text-slate-200">
                     Start the camera, then sign{" "}
                     <span className="font-semibold text-senyalita-secondary">letters (A–Z) or numbers (0–9)</span>
                     {" "}— hold each sign steady.
@@ -868,7 +868,7 @@ export function SignToTextInterface() {
           {/* Recognition bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-senyalita-border/70 bg-white/60 px-5 py-4">
             <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-senyalita-muted">Recognition model</p>
+              <p className="text-[0.6875rem] font-bold uppercase tracking-[0.14em] text-senyalita-muted">Recognition model</p>
               {/* data-prediction carries the bare label so a test can read what
                   the model said without parsing the human-facing string, which
                   also holds a confidence percentage and localised copy. */}
@@ -899,7 +899,7 @@ export function SignToTextInterface() {
           <div className="overflow-hidden rounded-[22px] border border-senyalita-border bg-white/70 backdrop-blur-xl">
             <DebugOverlay recognitionState={recognition.state} mediapipeFps={mediapipeFps} captureFps={captureFps} inferenceTimeMs={recognition.inferenceTimeMs} bufferLength={recognition.bufferLength} bufferCap={recognition.bufferCap} minimumFrames={recognition.minimumFrames} motionState={recognition.motionState} motionPeak={recognition.motionPeak} />
             <div className="border-t border-senyalita-border/70 bg-senyalita-warm/60 p-4">
-              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-senyalita-muted">Camera debug</p>
+              <p className="mb-2 text-[0.6875rem] font-bold uppercase tracking-[0.14em] text-senyalita-muted">Camera debug</p>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-senyalita-muted">
                 <span>Camera: <strong className="font-semibold text-senyalita-dark">{cameraStreamRef.current ? "Ready" : "Off"}</strong></span>
                 <span>Permission: <strong className="font-semibold text-senyalita-dark">{navigator.permissions ? "API available" : "N/A"}</strong></span>
@@ -946,7 +946,7 @@ export function SignToTextInterface() {
               readOnly
               data-testid="transcript"
               aria-live="polite"
-              className="min-h-[80px] resize-none rounded-2xl border border-senyalita-border bg-white px-4 py-3.5 text-[17px] leading-relaxed text-senyalita-dark shadow-none placeholder:text-slate-400 focus-visible:ring-0"
+              className="min-h-[80px] resize-none rounded-2xl border border-senyalita-border bg-white px-4 py-3.5 text-[1.0625rem] leading-relaxed text-senyalita-dark shadow-none placeholder:text-slate-400 focus-visible:ring-0"
               placeholder="Detected signs appear here when you add them."
             />
           </div>
@@ -981,11 +981,11 @@ export function SignToTextInterface() {
             <TranscriptChip onClick={handleClear} disabled={!outputText} tone="danger" full icon={<X className="h-3.5 w-3.5" />}>Clear</TranscriptChip>
           </div>
 
-          <p className="mt-4 border-t border-senyalita-border/70 bg-white/60 px-6 py-3.5 text-center text-[11px] text-senyalita-muted">
+          <p className="mt-4 border-t border-senyalita-border/70 bg-white/60 px-6 py-3.5 text-center text-[0.6875rem] text-senyalita-muted">
             <span className="md:hidden">Hold a sign steady, then tap Add detected sign.</span>
             <span className="hidden md:inline">
               Hold a sign steady, then press{" "}
-              <kbd className="rounded border border-senyalita-border bg-white px-1.5 py-0.5 font-sans text-[10px] font-semibold text-senyalita-dark">
+              <kbd className="rounded border border-senyalita-border bg-white px-1.5 py-0.5 font-sans text-[0.625rem] font-semibold text-senyalita-dark">
                 {formatTranscriptCommitShortcut(commitShortcut)}
               </kbd>{" "}
               or use Add sign to place it in the transcript.
@@ -1010,7 +1010,7 @@ export function SignToTextInterface() {
 
         <section className="rounded-[22px] border border-senyalita-border bg-white/70 p-5 backdrop-blur-xl">
           <h2 className="mb-2 font-display text-base font-bold tracking-tight text-senyalita-dark">For FSL signers</h2>
-          <p className="text-[13px] leading-relaxed text-senyalita-muted">
+          <p className="text-[0.8125rem] leading-relaxed text-senyalita-muted">
             Keep your hands centered in the camera frame. Hold a sign briefly, then pause before the next sign for clearer recognition.
           </p>
         </section>
@@ -1028,7 +1028,7 @@ export function SignToTextInterface() {
         </section>
 
         <section className="min-h-[140px] rounded-[22px] border border-senyalita-border bg-white/70 p-5 backdrop-blur-xl">
-          <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-senyalita-muted">Live transcript</h2>
+          <h2 className="mb-3 text-[0.6875rem] font-bold uppercase tracking-[0.14em] text-senyalita-muted">Live transcript</h2>
           <p className={cn("line-clamp-4 text-sm leading-relaxed", outputText ? "text-senyalita-dark" : "text-slate-400")}>
             {outputText || "Recognized signs will appear here…"}
           </p>
@@ -1043,7 +1043,7 @@ export function SignToTextInterface() {
           Fixed min-height so switching modes does not shift the layout.
         */}
         <section className="min-h-[196px] rounded-[22px] border border-senyalita-border bg-white/70 p-5 backdrop-blur-xl">
-          <h2 className="mb-4 text-[11px] font-bold uppercase tracking-[0.14em] text-senyalita-muted">
+          <h2 className="mb-4 text-[0.6875rem] font-bold uppercase tracking-[0.14em] text-senyalita-muted">
             {selectedMode === "phrase-signs"
               ? `Supported phrase signs (${partition.phrases.length})`
               : "Supported characters"}
@@ -1056,14 +1056,14 @@ export function SignToTextInterface() {
             gap is what put "0123456789" here in the first place.
           */}
           {modelLabels.length === 0 ? (
-            <p className="text-[11px] text-slate-400">Loading supported signs…</p>
+            <p className="text-[0.6875rem] text-slate-400">Loading supported signs…</p>
           ) : selectedMode === "phrase-signs" ? (
             <div className="max-h-[148px] overflow-y-auto pr-1">
               <ul className="flex flex-wrap gap-1.5">
                 {partition.phrases.map((phrase) => (
                   <li
                     key={phrase}
-                    className="rounded-md border border-senyalita-border bg-white px-1.5 py-0.5 text-[11px] font-medium text-senyalita-muted"
+                    className="rounded-md border border-senyalita-border bg-white px-1.5 py-0.5 text-[0.6875rem] font-medium text-senyalita-muted"
                   >
                     {translateLabel(phrase)}
                   </li>
@@ -1072,22 +1072,22 @@ export function SignToTextInterface() {
             </div>
           ) : (
             <>
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              <p className="mb-2 text-[0.625rem] font-semibold uppercase tracking-wider text-slate-400">
                 Letters ({partition.letters.length})
               </p>
               <div className="mb-4 flex flex-wrap gap-1.5">
                 {partition.letters.map((letter) => (
-                  <span key={letter} className="flex h-6 w-6 items-center justify-center rounded-md border border-senyalita-primary/15 bg-senyalita-primary/[0.07] font-mono text-[11px] font-bold uppercase text-senyalita-primary">
+                  <span key={letter} className="flex h-6 w-6 items-center justify-center rounded-md border border-senyalita-primary/15 bg-senyalita-primary/[0.07] font-mono text-[0.6875rem] font-bold uppercase text-senyalita-primary">
                     {letter}
                   </span>
                 ))}
               </div>
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              <p className="mb-2 text-[0.625rem] font-semibold uppercase tracking-wider text-slate-400">
                 Numbers ({partition.numbers.length})
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {partition.numbers.map((label) => (
-                  <span key={label} className="flex h-6 min-w-6 items-center justify-center rounded-md border border-senyalita-border bg-white px-1 font-mono text-[11px] font-bold text-senyalita-muted">
+                  <span key={label} className="flex h-6 min-w-6 items-center justify-center rounded-md border border-senyalita-border bg-white px-1 font-mono text-[0.6875rem] font-bold text-senyalita-muted">
                     {numberDisplay(label)}
                   </span>
                 ))}
@@ -1123,7 +1123,7 @@ function TranscriptChip({
       aria-pressed={active}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border font-medium transition-all duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none",
-        full ? "h-11 w-full justify-center text-[13px]" : "h-8 px-3 text-xs",
+        full ? "h-11 w-full justify-center text-[0.8125rem]" : "h-8 px-3 text-xs",
         tone === "danger"
           ? "border-rose-200 bg-white text-rose-600 hover:-translate-y-0.5 hover:border-rose-300 hover:bg-rose-50 hover:shadow-sm"
           : active

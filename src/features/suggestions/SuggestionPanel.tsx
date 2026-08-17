@@ -37,7 +37,7 @@ export function SuggestionPanel({
       className="rounded-[22px] border border-senyalita-border bg-white/70 p-5 backdrop-blur-xl"
     >
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 id="suggestion-heading" className="text-[11px] font-bold uppercase tracking-[0.14em] text-senyalita-muted">
+        <h2 id="suggestion-heading" className="text-[0.6875rem] font-bold uppercase tracking-[0.14em] text-senyalita-muted">
           Spelled letters
         </h2>
         <div className="flex items-center gap-1">
@@ -96,7 +96,7 @@ export function SuggestionPanel({
             exit={{ opacity: 0, y: -6 }}
             className="mt-4"
           >
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-senyalita-muted">
+            <p className="mb-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider text-senyalita-muted">
               Did you mean
             </p>
             <button
@@ -112,11 +112,11 @@ export function SuggestionPanel({
               </span>
               <span className="flex shrink-0 items-center gap-2">
                 {top.language && (
-                  <span className="rounded-full bg-senyalita-accent/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-senyalita-accent">
+                  <span className="rounded-full bg-senyalita-accent/15 px-2 py-0.5 text-[0.625rem] font-bold uppercase tracking-wide text-senyalita-accent">
                     {LANGUAGE_LABEL[top.language]}
                   </span>
                 )}
-                <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-senyalita-muted">
+                <span className="rounded-full bg-white px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-senyalita-muted">
                   {KIND_LABEL[top.kind]}
                 </span>
                 <CornerDownLeft className="h-3.5 w-3.5 text-senyalita-muted transition-transform group-hover:translate-x-0.5" />
@@ -128,7 +128,7 @@ export function SuggestionPanel({
 
       {rest.length > 0 && (
         <div className="mt-3">
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-senyalita-muted">
+          <p className="mb-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider text-senyalita-muted">
             Other suggestions
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -143,7 +143,7 @@ export function SuggestionPanel({
                 className="flex items-center gap-1.5 rounded-full border border-senyalita-border bg-white px-3 py-1.5 font-mono text-xs font-semibold text-senyalita-muted transition-all duration-150 hover:-translate-y-0.5 hover:border-senyalita-primary/40 hover:bg-senyalita-primary/5 hover:text-senyalita-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary"
               >
                 {suggestion.language && (
-                  <span className="rounded-full bg-senyalita-accent/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-senyalita-accent">
+                  <span className="rounded-full bg-senyalita-accent/15 px-1.5 py-0.5 text-[0.5625rem] font-bold uppercase tracking-wide text-senyalita-accent">
                     {LANGUAGE_LABEL[suggestion.language]}
                   </span>
                 )}

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AccessibilityMenu } from "@/features/accessibility/AccessibilityMenu";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -96,7 +97,10 @@ export function Header() {
             </button>
           </nav>
 
-          <div className="justify-self-center md:justify-self-end">
+          <div className="flex items-center gap-2 justify-self-center md:justify-self-end">
+            {/* Always present, whichever direction is open: someone who needs
+                larger text needs it on both tabs. */}
+            <AccessibilityMenu compact />
             {translationMode === "sign-to-text" && (
               <button
                 type="button"
@@ -163,12 +167,15 @@ export function Header() {
           <span className="font-display text-xl font-bold leading-none tracking-tight text-senyalita-dark">Senyalita</span>
         </Link>
 
-        <Link
-          href="/translate"
-          className="inline-flex h-10 items-center gap-2 rounded-full bg-senyalita-primary px-5 text-sm font-semibold text-white shadow-lg shadow-senyalita-primary/25 transition-all duration-150 hover:shadow-xl hover:shadow-senyalita-primary/35 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary"
-        >
-          Open translator
-        </Link>
+        <div className="flex items-center gap-2">
+          <AccessibilityMenu compact />
+          <Link
+            href="/translate"
+            className="inline-flex h-10 items-center gap-2 rounded-full bg-senyalita-primary px-5 text-sm font-semibold text-white shadow-lg shadow-senyalita-primary/25 transition-all duration-150 hover:shadow-xl hover:shadow-senyalita-primary/35 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary"
+          >
+            Open translator
+          </Link>
+        </div>
       </div>
     </header>
   );

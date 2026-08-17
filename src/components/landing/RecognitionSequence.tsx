@@ -135,7 +135,7 @@ export function RecognitionSequence({ id }: { id?: string }) {
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="absolute right-4 top-4 rounded-full border border-senyalita-accent/30 bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-senyalita-accent shadow-sm backdrop-blur"
+            className="absolute right-4 top-4 rounded-full border border-senyalita-accent/30 bg-white/90 px-2.5 py-1 text-[0.6875rem] font-semibold text-senyalita-accent shadow-sm backdrop-blur"
           >
             96% match
           </motion.div>
@@ -147,7 +147,7 @@ export function RecognitionSequence({ id }: { id?: string }) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute left-4 top-4 rounded-full bg-senyalita-dark/80 px-2.5 py-1 text-[10px] font-medium text-white backdrop-blur"
+              className="absolute left-4 top-4 rounded-full bg-senyalita-dark/80 px-2.5 py-1 text-[0.625rem] font-medium text-white backdrop-blur"
             >
               Click or use ← → to step
             </motion.span>
@@ -166,7 +166,7 @@ export function RecognitionSequence({ id }: { id?: string }) {
               {rendering && <Volume2 className="h-4 w-4 shrink-0 text-senyalita-accent" />}
               <div className="text-center leading-tight">
                 <p className="text-sm font-bold text-senyalita-dark">Kamusta</p>
-                <p className="text-[11px] text-senyalita-muted">{rendering ? "Playing FSL animation" : "Hello — recognized"}</p>
+                <p className="text-[0.6875rem] text-senyalita-muted">{rendering ? "Playing FSL animation" : "Hello — recognized"}</p>
               </div>
             </motion.div>
           )}

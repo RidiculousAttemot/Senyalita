@@ -279,7 +279,7 @@ export function SignStageViewer({
                       {current?.displayLabel ?? current?.gesture}
                     </span>
                     {current && fingerspelledGlosses.has(current.gesture) && (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.625rem] font-bold uppercase tracking-wider text-amber-700">
                         spelled
                       </span>
                     )}
@@ -289,7 +289,7 @@ export function SignStageViewer({
                   <span
                     data-testid="stage-counter"
                     className={`font-medium tabular-nums text-senyalita-muted ${
-                      presentationMode ? "text-[clamp(1rem,1.6vw,1.5rem)]" : "text-[11px]"
+                      presentationMode ? "text-[clamp(1rem,1.6vw,1.5rem)]" : "text-[0.6875rem]"
                     }`}
                   >
                     Sign {index + 1} of {clips.length}
@@ -316,7 +316,7 @@ export function SignStageViewer({
                   exit={{ opacity: 0, y: 8 }}
                   className="absolute bottom-20 left-1/2 flex -translate-x-1/2 items-center gap-2.5 rounded-full border border-white/70 bg-white/80 px-4 py-2 shadow-lg backdrop-blur-md"
                 >
-                  <span className="text-[11px] font-semibold text-senyalita-muted">Skeleton</span>
+                  <span className="text-[0.6875rem] font-semibold text-senyalita-muted">Skeleton</span>
                   <input
                     type="range"
                     min={0}
@@ -326,7 +326,7 @@ export function SignStageViewer({
                     aria-label="Skeleton opacity"
                     className="h-1 w-28 cursor-pointer accent-senyalita-primary"
                   />
-                  <span className="w-9 text-right text-[11px] font-semibold tabular-nums text-senyalita-dark">
+                  <span className="w-9 text-right text-[0.6875rem] font-semibold tabular-nums text-senyalita-dark">
                     {Math.round(overlayOpacity * 100)}%
                   </span>
                 </motion.label>
@@ -337,7 +337,7 @@ export function SignStageViewer({
       </div>
 
       <div className="rounded-[22px] border border-senyalita-border bg-white/80 p-4 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.5)] backdrop-blur-xl">
-        <div className="mb-2 flex items-baseline justify-between text-[11px] font-medium tabular-nums text-senyalita-muted">
+        <div className="mb-2 flex items-baseline justify-between text-[0.6875rem] font-medium tabular-nums text-senyalita-muted">
           <span>{formatTime(elapsedSeconds)}</span>
           <span>−{formatTime(Math.max(0, totalDuration - elapsedSeconds))}</span>
         </div>
@@ -467,8 +467,8 @@ function ViewModeSwitch({ value, onChange }: { value: ViewMode; onChange: (v: Vi
 function MetaStat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-[9px] font-semibold uppercase tracking-[0.12em] text-senyalita-muted">{label}</dt>
-      <dd className="text-[13px] font-bold tabular-nums text-senyalita-dark">{value}</dd>
+      <dt className="text-[0.5625rem] font-semibold uppercase tracking-[0.12em] text-senyalita-muted">{label}</dt>
+      <dd className="text-[0.8125rem] font-bold tabular-nums text-senyalita-dark">{value}</dd>
     </div>
   );
 }
@@ -538,12 +538,12 @@ function MotionTimeline({
                 className={`absolute inset-y-0 left-0 transition-[width] duration-100 ${active ? "bg-senyalita-primary/15" : "bg-transparent"}`}
                 style={{ width: `${fill * 100}%` }}
               />
-              <span className={`relative block truncate font-mono text-[11px] font-bold ${
+              <span className={`relative block truncate font-mono text-[0.6875rem] font-bold ${
                 active ? "text-senyalita-primary" : done ? "text-senyalita-accent" : "text-senyalita-muted"
               }`}>
                 {clip.displayLabel ?? clip.gesture}
               </span>
-              <span className="relative block text-[9px] tabular-nums text-senyalita-muted/70">
+              <span className="relative block text-[0.5625rem] tabular-nums text-senyalita-muted/70">
                 {(clip.asset.duration / 1000).toFixed(1)}s
                 {fingerspelledGlosses.has(clip.gesture) && " · spelled"}
               </span>
@@ -605,7 +605,7 @@ function LoadingStage({ loaded, total }: { loaded: number; total: number }) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.2 }}
-            className="text-[13px] font-semibold text-senyalita-dark"
+            className="text-[0.8125rem] font-semibold text-senyalita-dark"
           >
             {determinate ? `Loading sign ${Math.min(loaded + 1, total)} of ${total}` : LOADING_STAGES[stage]}
           </motion.p>
@@ -666,12 +666,12 @@ function EmptyStage() {
       <h3 className="mb-2 font-display text-2xl font-bold tracking-tight text-senyalita-dark">
         Translate to Filipino Sign Language
       </h3>
-      <p className="mb-7 max-w-[320px] text-[15px] leading-relaxed text-senyalita-muted">
+      <p className="mb-7 max-w-[320px] text-[0.9375rem] leading-relaxed text-senyalita-muted">
         Type a sentence and press Translate. The generated animation will appear here.
       </p>
       <ul className="flex flex-wrap justify-center gap-2">
         {["Letters", "Numbers", "Words", "Phrases", "Fingerspelling"].map((item) => (
-          <li key={item} className="rounded-full border border-senyalita-border bg-white px-3 py-1 text-[11px] font-medium text-senyalita-muted">
+          <li key={item} className="rounded-full border border-senyalita-border bg-white px-3 py-1 text-[0.6875rem] font-medium text-senyalita-muted">
             {item}
           </li>
         ))}

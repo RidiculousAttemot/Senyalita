@@ -118,7 +118,7 @@ export function ResearchPipelineSection() {
                   )}>
                     {stage.label}
                   </p>
-                  <p className="mt-1 text-[11px] leading-tight text-senyalita-muted">{stage.detail}</p>
+                  <p className="mt-1 text-[0.6875rem] leading-tight text-senyalita-muted">{stage.detail}</p>
                 </motion.button>
               );
             })}
@@ -137,7 +137,7 @@ export function ResearchPipelineSection() {
               aria-live="polite"
             >
               <div className="flex items-center gap-2.5">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-senyalita-primary/10 text-[11px] font-bold text-senyalita-primary">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-senyalita-primary/10 text-[0.6875rem] font-bold text-senyalita-primary">
                   {selected + 1}
                 </span>
                 <h3 className="text-base font-semibold text-senyalita-dark">{active.label}</h3>

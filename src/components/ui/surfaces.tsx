@@ -104,7 +104,7 @@ export function SectionHeader({
     <div className={cn("flex items-center justify-between gap-2", className)} {...rest}>
       <span
         className={cn(
-          "flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em]",
+          "flex items-center gap-2 text-[0.6875rem] font-bold uppercase tracking-[0.14em]",
           TONE[tone].header,
         )}
       >
@@ -155,7 +155,7 @@ export function ToggleRow({
       )}
       <span className="min-w-0 flex-1">
         <span className={cn("block text-xs font-medium", t.label)}>{label}</span>
-        {hint && <span className={cn("block text-[10px] leading-snug", t.hint)}>{hint}</span>}
+        {hint && <span className={cn("block text-[0.625rem] leading-snug", t.hint)}>{hint}</span>}
       </span>
       <span
         aria-hidden="true"
@@ -202,7 +202,7 @@ export function SegmentedControl<T extends string>({
           title={o.hint}
           onClick={() => onChange(o.value)}
           className={cn(
-            "rounded-full py-1.5 text-[11px] font-semibold transition-colors",
+            "rounded-full py-1.5 text-[0.6875rem] font-semibold transition-colors",
             FOCUS_RING,
             t.focus,
             value === o.value ? t.segmentActive : t.segmentIdle,
@@ -261,10 +261,10 @@ export function OptionRow({
           {badge}
         </span>
         {description && (
-          <span className={cn("block text-[10px] leading-snug", t.hint)}>{description}</span>
+          <span className={cn("block text-[0.625rem] leading-snug", t.hint)}>{description}</span>
         )}
         {caveat && (
-          <span className="mt-0.5 block text-[10px] leading-snug text-amber-200/70">{caveat}</span>
+          <span className="mt-0.5 block text-[0.625rem] leading-snug text-amber-200/70">{caveat}</span>
         )}
       </span>
     </button>
@@ -294,7 +294,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "rounded px-1.5 py-px text-[9px] font-bold uppercase tracking-wide",
+        "rounded px-1.5 py-px text-[0.5625rem] font-bold uppercase tracking-wide",
         BADGE[tone],
         className,
       )}
@@ -310,7 +310,7 @@ export function Chip({ className, children }: { className?: string; children: Re
     <span
       className={cn(
         "flex items-center justify-center rounded-md border border-senyalita-primary/15",
-        "bg-senyalita-primary/[0.07] px-1.5 py-0.5 font-mono text-[11px] font-bold",
+        "bg-senyalita-primary/[0.07] px-1.5 py-0.5 font-mono text-[0.6875rem] font-bold",
         "uppercase text-senyalita-primary",
         className,
       )}
@@ -336,7 +336,7 @@ export function Notice({
     info: "bg-senyalita-primary/12 text-senyalita-secondary",
   } as const;
   return (
-    <p className={cn("rounded-md px-2.5 py-1.5 text-[10px] leading-snug", styles[tone], className)}>
+    <p className={cn("rounded-md px-2.5 py-1.5 text-[0.625rem] leading-snug", styles[tone], className)}>
       {children}
     </p>
   );
@@ -361,18 +361,18 @@ export function Field({
   const t = TONE[tone];
   return (
     <div className={cn("space-y-1", className)}>
-      <label htmlFor={htmlFor} className={cn("block text-[11px] font-medium", t.hint)}>
+      <label htmlFor={htmlFor} className={cn("block text-[0.6875rem] font-medium", t.hint)}>
         {label}
       </label>
       {children}
-      {hint && <p className={cn("text-[10px] leading-snug", t.hint)}>{hint}</p>}
+      {hint && <p className={cn("text-[0.625rem] leading-snug", t.hint)}>{hint}</p>}
     </div>
   );
 }
 
 export const inputClasses = (tone: SurfaceTone = "dark", className?: string) =>
   cn(
-    "w-full rounded-lg border px-3 py-2 text-[13px] outline-none transition-colors",
+    "w-full rounded-lg border px-3 py-2 text-[0.8125rem] outline-none transition-colors",
     TONE[tone].input,
     FOCUS_RING,
     TONE[tone].focus,

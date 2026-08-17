@@ -3,6 +3,10 @@ import localFont from "next/font/local";
 import { cn } from "@/lib/utils";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import {
+  ACCESSIBILITY_BOOT_SCRIPT,
+  AccessibilityProvider,
+} from "@/features/accessibility/AccessibilityProvider";
 
 /**
  * Inter, self-hosted. Previously `Inter` from next/font/google.
@@ -48,16 +52,27 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={cn("scroll-smooth", inter.variable)}>
+      <head>
+        {/*
+          Applies the saved contrast and text size before first paint.
+          Without it the page renders at the default and jumps once React
+          hydrates, and that flash lands on exactly the people who turned the
+          setting on.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: ACCESSIBILITY_BOOT_SCRIPT }} />
+      </head>
       <body className="flex min-h-screen flex-col bg-warm-ivory font-sans text-deep-navy">
-        <a
-          href="#main-content"
-          className="absolute top-0 left-0 z-50 -translate-y-full bg-vibrant-sky p-4 text-white focus:translate-y-0"
-        >
-          Skip to main content
-        </a>
-        <Header />
-        <main id="main-content" className="flex-grow">{children}</main>
-        <Footer />
+        <AccessibilityProvider>
+          <a
+            href="#main-content"
+            className="absolute top-0 left-0 z-50 -translate-y-full bg-vibrant-sky p-4 text-white focus:translate-y-0"
+          >
+            Skip to main content
+          </a>
+          <Header />
+          <main id="main-content" className="flex-grow">{children}</main>
+          <Footer />
+        </AccessibilityProvider>
       </body>
     </html>
   );

@@ -51,6 +51,50 @@ body {
   color: hsl(var(--foreground));
 }
 
+/* --- Accessibility preferences -----------------------------------------
+ *
+ * Driven by data attributes on <html>, set before first paint by the boot
+ * script in the root layout and kept in step by AccessibilityProvider. CSS
+ * rather than React state so every surface responds, including the ones that
+ * never call the hook.
+ */
+
+/* Text size scales the root, which is why the public app's font sizes were
+ * converted from px to rem: 91 of them were fixed, so a third of the text
+ * would have ignored this setting and the page would have looked broken
+ * rather than larger. */
+html[data-text-size="large"]  { font-size: 112.5%; }
+html[data-text-size="larger"] { font-size: 125%; }
+
+/* High contrast.
+ *
+ * The palette is hardcoded hex in tailwind.config.ts rather than CSS
+ * variables, so this overrides the generated utilities directly instead of
+ * redefining tokens. Targeted at the pairs that actually fail: muted body text
+ * (#64748B on white is 4.76:1, under the 4.5:1 floor once it is small), hairline
+ * borders, and the translucent surfaces that wash both out. */
+html[data-contrast="high"] {
+  --senyalita-contrast-ink: #0B1220;
+  --senyalita-contrast-line: #1E293B;
+}
+html[data-contrast="high"] .text-senyalita-muted,
+html[data-contrast="high"] .text-slate-400,
+html[data-contrast="high"] .text-slate-500 { color: var(--senyalita-contrast-ink); }
+html[data-contrast="high"] .text-senyalita-text { color: #000; }
+html[data-contrast="high"] .border-senyalita-border,
+html[data-contrast="high"] .border-senyalita-border\/70 { border-color: var(--senyalita-contrast-line); }
+/* Translucency is the other half of the problem: a border at 70% over a
+ * backdrop-blurred panel is not the colour it claims to be. */
+html[data-contrast="high"] .bg-white\/80,
+html[data-contrast="high"] .bg-white\/70,
+html[data-contrast="high"] .bg-senyalita-warm\/85 { background-color: #fff; }
+html[data-contrast="high"] .backdrop-blur-xl { backdrop-filter: none; }
+/* Focus has to be obvious, not tasteful, when contrast is on. */
+html[data-contrast="high"] :focus-visible {
+  outline: 3px solid #1D4ED8 !important;
+  outline-offset: 2px !important;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

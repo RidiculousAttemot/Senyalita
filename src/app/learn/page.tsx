@@ -112,13 +112,13 @@ export default function LearnPage() {
     <div className="min-h-screen bg-senyalita-warm">
       <main id="main-content" className="mx-auto max-w-[1160px] px-4 py-10 sm:px-6 lg:py-14">
         <header className="mb-8">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-senyalita-primary">
+          <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.18em] text-senyalita-primary">
             Learn FSL
           </p>
           <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-senyalita-dark sm:text-4xl">
             The signs this system knows
           </h1>
-          <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-senyalita-muted">
+          <p className="mt-3 max-w-2xl text-[0.9375rem] leading-relaxed text-senyalita-muted">
             Every letter and number below has a recorded sign you can play. The phrase list is what
             the camera can recognise when you sign to it — a different, larger set, and most of it
             has no animation yet.
@@ -200,7 +200,7 @@ export default function LearnPage() {
 
           {playable.length > 0 && (
             <div className="mt-5">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-senyalita-muted">
+              <p className="mb-2 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-senyalita-muted">
                 Playable ({playable.length})
               </p>
               <div className="flex flex-wrap gap-2">
@@ -220,7 +220,7 @@ export default function LearnPage() {
           )}
 
           <div className="mt-6">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-senyalita-muted">
+            <p className="mb-2 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-senyalita-muted">
               Recognised, no animation yet ({recognisedOnly.length})
             </p>
             {recognisedOnly.length === 0 ? (
@@ -235,7 +235,7 @@ export default function LearnPage() {
                   <li key={entry.label}>
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-senyalita-border bg-white/70 px-3 py-1.5 text-xs text-senyalita-dark">
                       {entry.label}
-                      <span className="text-[10px] uppercase tracking-wide text-senyalita-muted">
+                      <span className="text-[0.625rem] uppercase tracking-wide text-senyalita-muted">
                         {entry.category}
                       </span>
                     </span>
@@ -265,7 +265,7 @@ export default function LearnPage() {
               if (group.length === 0) return null;
               return (
                 <section key={topic.id} className="mt-5">
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-senyalita-muted">
+                  <p className="mb-2 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-senyalita-muted">
                     {topic.label}
                   </p>
                   <ul className="grid gap-3 sm:grid-cols-2">
@@ -288,7 +288,7 @@ export default function LearnPage() {
                           {/* Attribution is not optional: this is other people's work. */}
                           <span className="mt-3 flex items-center gap-2">
                             <Badge tone="neutral">{t.kind}</Badge>
-                            <span className="text-[11px] text-senyalita-muted">by {t.creator}</span>
+                            <span className="text-[0.6875rem] text-senyalita-muted">by {t.creator}</span>
                           </span>
                         </Link>
                       </li>
@@ -312,7 +312,7 @@ export default function LearnPage() {
             <h2 className="font-display text-2xl font-bold tracking-tight text-senyalita-dark">
               Want to try it yourself?
             </h2>
-            <p className="mx-auto mt-2 max-w-lg text-[15px] leading-relaxed text-senyalita-muted">
+            <p className="mx-auto mt-2 max-w-lg text-[0.9375rem] leading-relaxed text-senyalita-muted">
               Sign to the camera and read it back as text, or type a message and watch it signed.
             </p>
           </div>

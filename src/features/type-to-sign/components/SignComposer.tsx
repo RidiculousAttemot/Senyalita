@@ -73,7 +73,7 @@ export function SignComposer({
             <motion.span
               initial={{ opacity: 0, scale: 0.94 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="rounded-full border border-senyalita-primary/20 bg-senyalita-primary/10 px-2.5 py-1 text-[11px] font-semibold text-senyalita-primary"
+              className="rounded-full border border-senyalita-primary/20 bg-senyalita-primary/10 px-2.5 py-1 text-[0.6875rem] font-semibold text-senyalita-primary"
             >
               {LANGUAGE_LABEL[detectedLanguage]}
             </motion.span>
@@ -83,7 +83,7 @@ export function SignComposer({
               initial={{ opacity: 0, scale: 0.94 }}
               animate={{ opacity: 1, scale: 1 }}
               title="Share of words with a recorded FSL sign"
-              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+              className={`rounded-full px-2.5 py-1 text-[0.6875rem] font-semibold ${
                 quality >= 80
                   ? "bg-senyalita-accent/10 text-senyalita-accent"
                   : quality >= 50
@@ -110,7 +110,7 @@ export function SignComposer({
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Type something to translate into Filipino Sign Language..."
-          className="w-full resize-none rounded-2xl border border-senyalita-border bg-white px-4 py-3.5 text-[17px] leading-relaxed text-senyalita-dark outline-none transition-all placeholder:text-slate-400 focus:border-senyalita-primary/50 focus:ring-4 focus:ring-senyalita-primary/10"
+          className="w-full resize-none rounded-2xl border border-senyalita-border bg-white px-4 py-3.5 text-[1.0625rem] leading-relaxed text-senyalita-dark outline-none transition-all placeholder:text-slate-400 focus:border-senyalita-primary/50 focus:ring-4 focus:ring-senyalita-primary/10"
         />
       </div>
 
@@ -132,12 +132,12 @@ export function SignComposer({
       {dictationError && (
         <div role="alert" className="mx-6 mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/80 px-3.5 py-2.5">
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
-          <p className="text-[12px] leading-snug text-amber-800">{dictationError}</p>
+          <p className="text-[0.75rem] leading-snug text-amber-800">{dictationError}</p>
         </div>
       )}
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-senyalita-border/70 bg-white/60 px-6 py-4">
-        <p className="text-[11px] tabular-nums text-senyalita-muted">
+        <p className="text-[0.6875rem] tabular-nums text-senyalita-muted">
           {words} {words === 1 ? "word" : "words"} · {value.length}/{MAX_CHARS}
           <span className="ml-2 hidden sm:inline">Ctrl+Enter to translate</span>
         </p>

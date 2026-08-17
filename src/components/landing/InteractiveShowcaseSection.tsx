@@ -143,7 +143,7 @@ export function InteractiveShowcaseSection() {
                         type="button"
                         onClick={() => setInput(ex)}
                         onMouseEnter={() => ensureEngine()}
-                        className="rounded-full border border-senyalita-border bg-white px-2.5 py-1 text-[11px] font-medium text-senyalita-muted transition-colors hover:border-senyalita-primary/40 hover:text-senyalita-primary"
+                        className="rounded-full border border-senyalita-border bg-white px-2.5 py-1 text-[0.6875rem] font-medium text-senyalita-muted transition-colors hover:border-senyalita-primary/40 hover:text-senyalita-primary"
                       >
                         {ex}
                       </button>
@@ -158,7 +158,7 @@ export function InteractiveShowcaseSection() {
                   FSL gloss
                 </span>
                 {isLive && liveMeta && (
-                  <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-senyalita-accent/10 px-2 py-0.5 text-[10px] font-semibold text-senyalita-accent">
+                  <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-senyalita-accent/10 px-2 py-0.5 text-[0.625rem] font-semibold text-senyalita-accent">
                     <Sparkles className="h-3 w-3" />
                     {liveMeta.language} · {liveMeta.ms.toFixed(0)}ms
                   </span>
@@ -210,7 +210,7 @@ export function InteractiveShowcaseSection() {
                     animate={{ opacity: 1, y: 0 }}
                     className="absolute inset-x-0 bottom-0 text-center"
                   >
-                    <span className="rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-senyalita-dark shadow-sm backdrop-blur">
+                    <span className="rounded-full bg-white/90 px-3 py-1 text-[0.6875rem] font-semibold text-senyalita-dark shadow-sm backdrop-blur">
                       {shownGloss.length} sign{shownGloss.length === 1 ? "" : "s"} ready
                     </span>
                   </motion.div>
@@ -255,7 +255,7 @@ export function InteractiveShowcaseSection() {
                         onClick={() => { setStep(i); setPlaying(false); }}
                         aria-current={i === step ? "step" : undefined}
                         className={cn(
-                          "rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors",
+                          "rounded-full px-2.5 py-1 text-[0.6875rem] font-medium transition-colors",
                           i === step ? "bg-senyalita-dark text-white" : "text-senyalita-muted hover:bg-white",
                         )}
                       >

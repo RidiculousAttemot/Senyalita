@@ -139,7 +139,7 @@ export function CameraSettingsPanel({
       </div>
 
       <div className="border-t border-white/10 px-4 py-3">
-        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">Recognition mode</p>
+        <p className="mb-2 text-[0.625rem] font-bold uppercase tracking-[0.14em] text-white/45">Recognition mode</p>
         <div className="space-y-1">
           {/*
             The caveat is stated on the mode itself, not tucked away: someone
@@ -174,7 +174,7 @@ export function CameraSettingsPanel({
       </div>
 
       <div className="border-t border-white/10 px-4 py-3">
-        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">Detection sensitivity</p>
+        <p className="mb-2 text-[0.625rem] font-bold uppercase tracking-[0.14em] text-white/45">Detection sensitivity</p>
         <SegmentedControl
           tone="dark"
           value={settings.sensitivity}
@@ -185,7 +185,7 @@ export function CameraSettingsPanel({
             hint: SENSITIVITY_LABELS[s].hint,
           }))}
         />
-        <p className="mt-2 text-[10px] leading-snug text-white/45">{SENSITIVITY_LABELS[settings.sensitivity].hint}</p>
+        <p className="mt-2 text-[0.625rem] leading-snug text-white/45">{SENSITIVITY_LABELS[settings.sensitivity].hint}</p>
         {sensitivityPending && cameraActive && (
           <Notice tone="warn" className="mt-1.5">
             Restart the camera to apply this — the detector is built when capture starts.

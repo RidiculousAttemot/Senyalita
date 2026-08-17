@@ -64,7 +64,7 @@ export function TranslationPipeline({ activeStage }: { activeStage: number }) {
                 {done && <Check className="h-2.5 w-2.5" strokeWidth={3.5} />}
                 {active && <Loader2 className="h-2.5 w-2.5 animate-spin" strokeWidth={3} />}
               </span>
-              <span className={`text-[13px] transition-colors ${
+              <span className={`text-[0.8125rem] transition-colors ${
                 done || active ? "text-senyalita-dark" : "text-slate-400"
               }`}>
                 {label}
@@ -95,18 +95,18 @@ export function TranslationResult({
         <h2 id="translation-heading" className="font-display text-lg font-bold tracking-tight text-senyalita-dark">
           Translation
         </h2>
-        <span className="rounded-full border border-senyalita-accent/20 bg-senyalita-accent/10 px-2.5 py-1 text-[11px] font-semibold text-senyalita-accent">
+        <span className="rounded-full border border-senyalita-accent/20 bg-senyalita-accent/10 px-2.5 py-1 text-[0.6875rem] font-semibold text-senyalita-accent">
           {language}
         </span>
       </div>
 
       <div className="space-y-2 px-6 py-4">
         <Stage index={0} label="Input">
-          <p className="text-[15px] leading-snug text-senyalita-dark">{source}</p>
+          <p className="text-[0.9375rem] leading-snug text-senyalita-dark">{source}</p>
         </Stage>
 
         <Stage index={1} label="Normalized">
-          <p className="font-mono text-[13px] leading-snug text-senyalita-muted">{normalized}</p>
+          <p className="font-mono text-[0.8125rem] leading-snug text-senyalita-muted">{normalized}</p>
         </Stage>
 
         <Stage index={2} label="FSL gloss">
@@ -117,7 +117,7 @@ export function TranslationResult({
                 initial={{ opacity: 0, scale: 0.92 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.2 + i * 0.05, duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                className={`rounded-lg px-2.5 py-1.5 font-mono text-[13px] font-bold tracking-wide ${
+                className={`rounded-lg px-2.5 py-1.5 font-mono text-[0.8125rem] font-bold tracking-wide ${
                   entry.fingerspelled
                     ? "bg-amber-100 text-amber-800"
                     : "bg-senyalita-primary/10 text-senyalita-primary"
@@ -130,7 +130,7 @@ export function TranslationResult({
         </Stage>
 
         <Stage index={3} label="Animation" last>
-          <p className="text-[13px] text-senyalita-muted">
+          <p className="text-[0.8125rem] text-senyalita-muted">
             <span className="font-semibold text-senyalita-dark">{clipCount}</span>{" "}
             {clipCount === 1 ? "sign" : "signs"} ready to play
           </p>
@@ -142,7 +142,7 @@ export function TranslationResult({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.35 }}
-          className="border-t border-senyalita-border/70 bg-amber-50/60 px-6 py-3 text-[12px] leading-relaxed text-amber-800"
+          className="border-t border-senyalita-border/70 bg-amber-50/60 px-6 py-3 text-[0.75rem] leading-relaxed text-amber-800"
         >
           <span className="font-semibold">Spelled letter by letter:</span>{" "}
           {/* The source words, matching the letters actually signed. Naming the
@@ -174,7 +174,7 @@ function Stage({
       {!last && <span aria-hidden="true" className="absolute left-[5px] top-4 h-full w-px bg-senyalita-border" />}
       <span aria-hidden="true" className="absolute left-0 top-[7px] h-2.5 w-2.5 rounded-full border-2 border-senyalita-primary/40 bg-white" />
       <div className="rounded-xl bg-slate-50/70 px-3 py-2">
-        <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-senyalita-muted">{label}</p>
+        <p className="mb-1 text-[0.625rem] font-bold uppercase tracking-[0.12em] text-senyalita-muted">{label}</p>
         {children}
       </div>
     </motion.div>

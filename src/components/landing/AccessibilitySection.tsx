@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import {
+  TEXT_SIZES as ACCESSIBILITY_TEXT_SIZES,
+  useAccessibility,
+} from "@/features/accessibility/AccessibilityProvider";
 import { motion, useReducedMotion } from "framer-motion";
 import {
   Contrast, KeyRound, Smartphone, Type, Gauge, MonitorPlay, Accessibility, Check,
@@ -31,8 +34,15 @@ const TEXT_SIZES = [
 
 export function AccessibilitySection() {
   const prefersReducedMotion = useReducedMotion();
-  const [highContrast, setHighContrast] = useState(false);
-  const [sizeIdx, setSizeIdx] = useState(0);
+  // These are the real settings, not a preview.
+  //
+  // They were local useState beside the line "These controls are real. Watch
+  // the sample below respond." — they moved the sample card and nothing else,
+  // and were discarded on navigation. For a product whose stated audience is
+  // Deaf and Hard-of-Hearing users, an accessibility control that only
+  // pretends to work is worse than none at all.
+  const { highContrast, setHighContrast, textSize, setTextSize } = useAccessibility();
+  const sizeIdx = Math.max(0, ACCESSIBILITY_TEXT_SIZES.indexOf(textSize));
 
   return (
     <section id="accessibility" className="scroll-mt-20 bg-senyalita-dark px-6 py-24 text-white md:py-28">
@@ -54,12 +64,12 @@ export function AccessibilitySection() {
         <div className="mx-auto mt-12 max-w-3xl rounded-3xl border border-white/10 bg-white/[0.04] p-6 md:p-8">
           <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
             <div>
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Contrast</p>
+              <p className="mb-2 text-[0.6875rem] font-semibold uppercase tracking-wider text-slate-500">Contrast</p>
               <button
                 type="button"
                 role="switch"
                 aria-checked={highContrast}
-                onClick={() => setHighContrast((v) => !v)}
+                onClick={() => setHighContrast(!highContrast)}
                 className={cn(
                   "flex h-8 w-14 items-center rounded-full border px-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-senyalita-accent",
                   highContrast ? "justify-end border-senyalita-accent bg-senyalita-accent/30" : "justify-start border-white/20 bg-white/10",
@@ -71,13 +81,13 @@ export function AccessibilitySection() {
             </div>
 
             <div>
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Text size</p>
+              <p className="mb-2 text-[0.6875rem] font-semibold uppercase tracking-wider text-slate-500">Text size</p>
               <div className="flex gap-1.5">
                 {TEXT_SIZES.map((s, i) => (
                   <button
                     key={s.label}
                     type="button"
-                    onClick={() => setSizeIdx(i)}
+                    onClick={() => setTextSize(ACCESSIBILITY_TEXT_SIZES[i])}
                     aria-pressed={i === sizeIdx}
                     className={cn(
                       "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-senyalita-accent",
@@ -93,7 +103,8 @@ export function AccessibilitySection() {
             </div>
 
             <p className="ml-auto max-w-[13rem] text-xs leading-relaxed text-slate-500">
-              These controls are real. Watch the sample below respond.
+              These controls are real — they change the whole app, and are kept
+              on this device.
             </p>
           </div>
 
@@ -116,7 +127,7 @@ export function AccessibilitySection() {
               </span>
               <span
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                  "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[0.6875rem] font-semibold transition-colors",
                   highContrast ? "bg-white text-black" : "bg-senyalita-accent/10 text-senyalita-accent",
                 )}
               >

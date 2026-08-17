@@ -36,7 +36,7 @@ export function Footer() {
     <footer className="bg-[#FDF8F0] border-t border-stone-200/50">
       <div className="max-w-[1000px] mx-auto px-6 py-16">
         <div className="flex flex-col items-center">
-            <span className="text-[10px] font-bold tracking-[0.2em] text-stone-400 uppercase mb-4 block">A project by team</span>
+            <span className="text-[0.625rem] font-bold tracking-[0.2em] text-stone-400 uppercase mb-4 block">A project by team</span>
             <div className="flex items-center gap-2 mb-12">
               <span className="font-display text-2xl font-bold text-gray-900 tracking-tight">
                 Senyalita
