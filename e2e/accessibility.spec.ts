@@ -88,6 +88,62 @@ test.describe("accessibility settings", () => {
     expect(await rootFontSize(page)).toBe("18px");
   });
 
+  test("high contrast never makes text less readable than it was", async ({ page }) => {
+    /**
+     * The regression this exists for: the first version of the rule darkened
+     * muted text everywhere, including the landing page's dark sections, which
+     * put #0B1220 on #0F172A — 1.05:1, invisible. Turning the accessibility
+     * setting on made those screens unreadable. Scoping it by descendant
+     * selector then broke the inverse case, a white card nested inside a dark
+     * section.
+     *
+     * So this measures the real thing: computed colour against the nearest
+     * painted background, on both grounds, with the setting on.
+     */
+    await page.goto(`${BASE}/`);
+    await page.evaluate(() => {
+      localStorage.setItem("senyalita:accessibility", JSON.stringify({ highContrast: true, textSize: "default" }));
+    });
+    await page.reload();
+    await page.locator("#accessibility").scrollIntoViewIfNeeded();
+
+    const ratios = await page.evaluate(() => {
+      const parse = (c: string) => (c.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
+      const lum = (rgb: number[]) => {
+        const [r, g, b] = rgb.map((v) => {
+          const s = v / 255;
+          return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+        });
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      };
+      const ground = (el: Element): number[] => {
+        let node: Element | null = el;
+        while (node) {
+          const bg = getComputedStyle(node).backgroundColor;
+          const parts = parse(bg);
+          const alpha = Number((bg.match(/[\d.]+/g) ?? [])[3] ?? 1);
+          if (parts.length === 3 && alpha > 0.6) return parts;
+          node = node.parentElement;
+        }
+        return [255, 255, 255];
+      };
+      const ratio = (el: Element) => {
+        const [a, b] = [lum(parse(getComputedStyle(el).color)), lum(ground(el))].sort((x, y) => y - x);
+        return (a + 0.05) / (b + 0.05);
+      };
+
+      const section = document.querySelector("#accessibility")!;
+      // Body copy directly on the dark section ground.
+      const onDark = section.querySelector("p.text-slate-400")!;
+      // The sample card: a white panel nested inside that dark section.
+      const onLight = section.querySelector(".bg-white p")!;
+      return { onDark: ratio(onDark), onLight: ratio(onLight) };
+    });
+
+    expect(ratios.onDark, "text on the dark section must stay readable").toBeGreaterThanOrEqual(4.5);
+    expect(ratios.onLight, "text on a light card inside it must stay readable").toBeGreaterThanOrEqual(4.5);
+  });
+
   test("the landing page's own controls change the real setting", async ({ page }) => {
     // This is where the claim was made. The section carried two controls and
     // the line "These controls are real" while being local useState that moved

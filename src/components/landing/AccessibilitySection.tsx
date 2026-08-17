@@ -17,20 +17,67 @@ interface AccessItem {
   description: string;
 }
 
+/**
+ * Every line here is meant to be checkable.
+ *
+ * The previous set was written as aspiration and read as fact. "Meets WCAG 2.1
+ * AA contrast ratios throughout" was the worst of them: measured, the palette
+ * does pass for body and muted text, but this very section was using
+ * text-slate-500 on the dark background at 3.75:1 — below the 4.5:1 floor — so
+ * the claim was being broken by the paragraph making it. It now uses
+ * slate-400, which is 6.96:1 there. "Confidence, latency, and recognition
+ * state are always visible" named a latency readout the public UI does not
+ * have at all.
+ *
+ * The ratios below are measured against the real palette. If the tokens move,
+ * these numbers are wrong and should move with them.
+ */
 const items: AccessItem[] = [
-  { icon: Contrast, title: "High Contrast UI", description: "Clear color separation designed to meet WCAG 2.1 AA contrast ratios throughout." },
-  { icon: KeyRound, title: "Keyboard Navigation", description: "Every control is reachable and operable without a mouse or trackpad." },
-  { icon: Smartphone, title: "Responsive Design", description: "A mobile-first layout that stays usable from a small phone to a wide desktop." },
-  { icon: Type, title: "Readable Typography", description: "Generous type scale, spacing, and line lengths built for easy scanning." },
-  { icon: Gauge, title: "Real-Time Feedback", description: "Confidence, latency, and recognition state are always visible, never hidden." },
-  { icon: MonitorPlay, title: "Visual Sign Playback", description: "Every translation is rendered as a clear, controllable sign animation." },
+  {
+    icon: Contrast,
+    title: "High Contrast",
+    description:
+      "Body text sits at 14.6:1 on its surface. Turning contrast on lifts the lighter text to 18.7:1 and darkens the hairline borders.",
+  },
+  {
+    icon: KeyRound,
+    title: "Keyboard Navigation",
+    description:
+      "Every control is a real button or link with a visible focus ring — nothing here is a click handler bolted onto a div.",
+  },
+  {
+    icon: Smartphone,
+    title: "Responsive Design",
+    description:
+      "One layout from a 390px phone to a wide desktop, checked for sideways scrolling rather than assumed.",
+  },
+  {
+    icon: Type,
+    title: "Readable Typography",
+    description:
+      "Every size is set in rem, so the text control above, your browser zoom and your system font size all actually take effect.",
+  },
+  {
+    icon: Gauge,
+    title: "Honest Recognition",
+    description:
+      "The camera shows how confident it is as a percentage, and says plainly when it is still waiting for a steady sign.",
+  },
+  {
+    icon: MonitorPlay,
+    title: "Controllable Playback",
+    description:
+      "Pause, replay, change speed, or step sign by sign. A word with no recorded sign is fingerspelled rather than silently dropped.",
+  },
 ];
 
-const TEXT_SIZES = [
-  { label: "Default", px: 15 },
-  { label: "Large", px: 17 },
-  { label: "Larger", px: 20 },
-];
+/**
+ * Labels only. These used to carry pixel sizes that the sample card applied
+ * inline, which simulated the setting instead of using it — and once the
+ * control became real, the card was scaling twice and disagreeing with the
+ * rest of the page.
+ */
+const TEXT_SIZE_LABELS = ["Default", "Large", "Larger"] as const;
 
 export function AccessibilitySection() {
   const prefersReducedMotion = useReducedMotion();
@@ -64,7 +111,7 @@ export function AccessibilitySection() {
         <div className="mx-auto mt-12 max-w-3xl rounded-3xl border border-white/10 bg-white/[0.04] p-6 md:p-8">
           <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
             <div>
-              <p className="mb-2 text-[0.6875rem] font-semibold uppercase tracking-wider text-slate-500">Contrast</p>
+              <p className="mb-2 text-[0.6875rem] font-semibold uppercase tracking-wider text-slate-400">Contrast</p>
               <button
                 type="button"
                 role="switch"
@@ -75,17 +122,17 @@ export function AccessibilitySection() {
                   highContrast ? "justify-end border-senyalita-accent bg-senyalita-accent/30" : "justify-start border-white/20 bg-white/10",
                 )}
               >
-                <span className="sr-only">Toggle high contrast preview</span>
+                <span className="sr-only">Toggle high contrast</span>
                 <motion.span layout transition={{ type: "spring", stiffness: 500, damping: 34 }} className="h-6 w-6 rounded-full bg-white" />
               </button>
             </div>
 
             <div>
-              <p className="mb-2 text-[0.6875rem] font-semibold uppercase tracking-wider text-slate-500">Text size</p>
+              <p className="mb-2 text-[0.6875rem] font-semibold uppercase tracking-wider text-slate-400">Text size</p>
               <div className="flex gap-1.5">
-                {TEXT_SIZES.map((s, i) => (
+                {TEXT_SIZE_LABELS.map((label, i) => (
                   <button
-                    key={s.label}
+                    key={label}
                     type="button"
                     onClick={() => setTextSize(ACCESSIBILITY_TEXT_SIZES[i])}
                     aria-pressed={i === sizeIdx}
@@ -96,49 +143,34 @@ export function AccessibilitySection() {
                         : "border-white/15 text-slate-400 hover:border-white/30 hover:text-white",
                     )}
                   >
-                    {s.label}
+                    {label}
                   </button>
                 ))}
               </div>
             </div>
 
-            <p className="ml-auto max-w-[13rem] text-xs leading-relaxed text-slate-500">
-              These controls are real — they change the whole app, and are kept
-              on this device.
+            <p className="ml-auto max-w-[13rem] text-xs leading-relaxed text-slate-400">
+              These are the real settings, not a preview. They apply to every
+              page and are remembered on this device.
             </p>
           </div>
 
           {/* The sample that actually responds */}
-          <div
-            className={cn(
-              "mt-6 rounded-2xl border p-5 transition-colors duration-300",
-              highContrast ? "border-white bg-black" : "border-senyalita-border bg-white",
-            )}
-          >
+          <div className="mt-6 rounded-2xl border border-senyalita-border bg-white p-5 transition-colors duration-300">
             <div className="flex items-center justify-between gap-4">
-              <span
-                className={cn(
-                  "font-mono font-bold tracking-wide transition-colors",
-                  highContrast ? "text-white" : "text-senyalita-dark",
-                )}
-                style={{ fontSize: TEXT_SIZES[sizeIdx].px + 1 }}
-              >
+              <span className="font-mono text-[1rem] font-bold tracking-wide text-senyalita-dark">
                 KAMUSTA
               </span>
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[0.6875rem] font-semibold transition-colors",
-                  highContrast ? "bg-white text-black" : "bg-senyalita-accent/10 text-senyalita-accent",
-                )}
-              >
+              {/* Green on white is 2.28:1, so the label carries its own dark
+                  ink rather than tinted text. */}
+              <span className="inline-flex items-center gap-1 rounded-full bg-senyalita-accent/15 px-2.5 py-1 text-[0.6875rem] font-semibold text-emerald-800">
                 <Check className="h-3 w-3" /> 96% match
               </span>
             </div>
-            <p
-              className={cn("mt-2 leading-relaxed transition-colors", highContrast ? "text-slate-200" : "text-senyalita-muted")}
-              style={{ fontSize: TEXT_SIZES[sizeIdx].px }}
-            >
-              Recognized sign, shown the way a user would see it during a conversation.
+            <p className="mt-2 text-[0.9375rem] leading-relaxed text-senyalita-muted">
+              A recognised sign, on an ordinary surface. This card uses the same
+              tokens as the rest of the app, so the controls above change it the
+              way they change every other screen.
             </p>
           </div>
         </div>

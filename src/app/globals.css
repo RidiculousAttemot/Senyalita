@@ -73,16 +73,50 @@ html[data-text-size="larger"] { font-size: 125%; }
  * redefining tokens. Targeted at the pairs that actually fail: muted body text
  * (#64748B on white is 4.76:1, under the 4.5:1 floor once it is small), hairline
  * borders, and the translucent surfaces that wash both out. */
+/*
+ * Carried by inheritance, not by descendant selectors.
+ *
+ * "Darken the muted text" is only right on a light ground. The first version
+ * applied it everywhere and turned the landing page's dark sections to #0B1220
+ * on #0F172A — about 1.05:1, invisible — so switching high contrast on made
+ * those screens unreadable, the worst possible failure for this setting.
+ *
+ * Scoping it to dark sections by descendant selector then broke the other way:
+ * the sample card is a white panel *inside* a dark section, so its text was
+ * lightened onto white. Nesting means "inside a dark section" and "on a dark
+ * ground" are different questions.
+ *
+ * So each surface declares the ink for whatever sits on it, and the utilities
+ * read the nearest declaration. A light card inside a dark section resets it
+ * back on the way down, which is what inheritance is for, and it holds for
+ * arbitrary nesting rather than for the cases someone remembered to list.
+ */
 html[data-contrast="high"] {
-  --senyalita-contrast-ink: #0B1220;
-  --senyalita-contrast-line: #1E293B;
+  --senyalita-ink: #0B1220;
+  --senyalita-line: #1E293B;
+}
+html[data-contrast="high"] .bg-senyalita-dark,
+html[data-contrast="high"] .bg-slate-900,
+html[data-contrast="high"] .bg-black {
+  --senyalita-ink: #F8FAFC;
+  --senyalita-line: rgba(248, 250, 252, 0.55);
+}
+/* Any light panel restores the light ground for its own contents. */
+html[data-contrast="high"] .bg-white,
+html[data-contrast="high"] .bg-senyalita-surface,
+html[data-contrast="high"] .bg-senyalita-warm,
+html[data-contrast="high"] .bg-white\/80,
+html[data-contrast="high"] .bg-white\/70 {
+  --senyalita-ink: #0B1220;
+  --senyalita-line: #1E293B;
 }
 html[data-contrast="high"] .text-senyalita-muted,
 html[data-contrast="high"] .text-slate-400,
-html[data-contrast="high"] .text-slate-500 { color: var(--senyalita-contrast-ink); }
-html[data-contrast="high"] .text-senyalita-text { color: #000; }
+html[data-contrast="high"] .text-slate-500 { color: var(--senyalita-ink); }
+html[data-contrast="high"] .text-senyalita-text,
+html[data-contrast="high"] .text-senyalita-dark { color: var(--senyalita-ink); }
 html[data-contrast="high"] .border-senyalita-border,
-html[data-contrast="high"] .border-senyalita-border\/70 { border-color: var(--senyalita-contrast-line); }
+html[data-contrast="high"] .border-senyalita-border\/70 { border-color: var(--senyalita-line); }
 /* Translucency is the other half of the problem: a border at 70% over a
  * backdrop-blurred panel is not the colour it claims to be. */
 html[data-contrast="high"] .bg-white\/80,
