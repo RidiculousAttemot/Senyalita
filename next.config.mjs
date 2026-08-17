@@ -2,6 +2,18 @@
 const nextConfig = {
   reactStrictMode: true,
   /**
+   * Build output directory, switchable so a local production build can run
+   * WITHOUT clobbering a dev server's .next.
+   *
+   * `next build` and `next dev` share .next by default. This repo regularly has
+   * more than one dev server up at once, so a production build taken to
+   * reproduce a dev-only behaviour would break them mid-session. Setting
+   * NEXT_DIST_DIR=.next-prod gives the build its own tree.
+   *
+   * Unset everywhere else, so Vercel, Docker and `next dev` keep using .next.
+   */
+  distDir: process.env.NEXT_DIST_DIR || ".next",
+  /**
    * Traced server bundle, for the Docker runtime stage.
    *
    * Without it the image has to copy the whole of node_modules. Standalone

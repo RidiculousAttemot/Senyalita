@@ -32,6 +32,19 @@ datasets/processed/**/*.json
 datasets/raw/**/*.ndjson
 datasets/processed/**/*.ndjson
 datasets/archive/
+
+# Source recordings. Only .json/.ndjson were excluded before, so video matched
+# nothing and 185 files under datasets/raw/user_videos are already tracked --
+# which is a large part of why .git is 2.3 GB. Those stay tracked; removing
+# them is a history question, not an ignore-rule one. This keeps new batches
+# out: an import is ~1.1 GB, and the deploy exclusions in .vercelignore and
+# .dockerignore already keep the whole directory out of builds either way.
+datasets/**/*.mp4
+datasets/**/*.MOV
+datasets/**/*.mov
+datasets/**/*.webm
+datasets/**/*.avi
+
 !datasets/raw/**/.gitkeep
 !datasets/processed/**/.gitkeep
 
@@ -85,3 +98,8 @@ Thumbs.db
 /playwright/.cache/
 /playwright/.auth/
 
+
+# Local production-build harness output (NEXT_DIST_DIR=.next-prod). Kept out
+# of git so it cannot be swept into a commit, and out of the deploy/image
+# contexts for the same reason .next is.
+.next-prod/

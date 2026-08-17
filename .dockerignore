@@ -54,3 +54,6 @@ Thumbs.db
 
 # The served model and MediaPipe runtime must reach the image.
 !public/models
+
+# Local production-build harness output.
+.next-prod/
