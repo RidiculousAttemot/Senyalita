@@ -88,6 +88,29 @@ test.describe("accessibility settings", () => {
     expect(await rootFontSize(page)).toBe("18px");
   });
 
+  test("the landing page's own controls change the real setting", async ({ page }) => {
+    // This is where the claim was made. The section carried two controls and
+    // the line "These controls are real" while being local useState that moved
+    // one sample card. If they ever drift back to a private copy, the page
+    // goes back to advertising something it does not do.
+    await page.goto(`${BASE}/`);
+    await page.locator("#accessibility").scrollIntoViewIfNeeded();
+
+    const contrast = page.locator('#accessibility [role="switch"]');
+    await expect(contrast).toBeVisible({ timeout: 150_000 });
+    await contrast.click();
+
+    await expect.poll(() => page.getAttribute("html", "data-contrast")).toBe("high");
+
+    await page.locator("#accessibility").getByRole("button", { name: "Larger", exact: true }).click();
+    await expect.poll(() => rootFontSize(page)).toBe("20px");
+
+    // And it is the same setting, not a page-local one: it survives to another page.
+    await page.goto(`${BASE}/translate`);
+    expect(await page.getAttribute("html", "data-contrast")).toBe("high");
+    expect(await rootFontSize(page)).toBe("20px");
+  });
+
   test("the setting applies on other pages too", async ({ page }) => {
     await openMenu(page);
     await page.getByTestId("accessibility-size-larger").click();
