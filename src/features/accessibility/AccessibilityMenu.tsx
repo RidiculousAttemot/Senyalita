@@ -36,6 +36,15 @@ export function AccessibilityMenu({ compact = false }: { compact?: boolean }) {
 
   return (
     <div ref={containerRef} className="relative">
+      {/*
+        Deliberately not a quiet icon.
+
+        This started as a muted-grey glyph on white behind a hairline border,
+        which read as decoration rather than a control — the wrong outcome for
+        the one button on the page whose whole purpose is being findable by
+        someone who is struggling to read the rest of it. It now carries the
+        brand colour, a filled tint, and its name wherever there is room.
+      */}
       <button
         type="button"
         data-testid="accessibility-trigger"
@@ -43,12 +52,20 @@ export function AccessibilityMenu({ compact = false }: { compact?: boolean }) {
         aria-expanded={open}
         aria-label="Accessibility settings"
         onClick={() => setOpen((v) => !v)}
-        className={`flex items-center gap-2 rounded-full border border-senyalita-border bg-white text-senyalita-muted transition-colors hover:border-senyalita-primary/40 hover:text-senyalita-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary ${
-          compact ? "h-9 w-9 justify-center" : "h-9 px-3"
-        }`}
+        className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-senyalita-primary/35 bg-senyalita-primary/10 text-senyalita-primary shadow-sm transition-all duration-150 hover:border-senyalita-primary/60 hover:bg-senyalita-primary/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary ${
+          compact ? "h-10 px-3" : "h-10 px-4"
+        } ${open ? "border-senyalita-primary bg-senyalita-primary/20" : ""}`}
       >
-        <Accessibility className="h-4 w-4" aria-hidden="true" />
-        {!compact && <span className="text-[0.8125rem] font-semibold">Accessibility</span>}
+        <Accessibility className="h-[1.125rem] w-[1.125rem] shrink-0" strokeWidth={2.25} aria-hidden="true" />
+        {/*
+          Named wherever the row can carry it. The compact variant sits in the
+          translate header beside the mode switcher and the camera button, and
+          at tablet width the three together squeezed "Start camera" onto two
+          lines — so the label waits for lg there and the icon carries it below.
+        */}
+        <span className={compact ? "hidden text-[0.8125rem] font-bold lg:inline" : "text-[0.8125rem] font-bold"}>
+          Accessibility
+        </span>
       </button>
 
       {open && (

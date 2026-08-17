@@ -106,7 +106,7 @@ export function Header() {
                 type="button"
                 onClick={() => window.dispatchEvent(new Event("senyalita:camera-toggle"))}
                 className={cn(
-                  "inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold transition-all duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary",
+                  "inline-flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-5 text-sm font-semibold transition-all duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary",
                   cameraActive
                     ? "border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
                     : "bg-senyalita-primary text-white shadow-lg shadow-senyalita-primary/25 hover:shadow-xl hover:shadow-senyalita-primary/35 hover:brightness-110",
