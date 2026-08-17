@@ -25,6 +25,20 @@ export type { ViewMode } from "../types";
 const LANDMARK_MODES = new Set<ViewMode>(["skeleton", "split", "overlay"]);
 
 /**
+ * Shown when a sign has landmarks but no recording -- the normal state for most
+ * of the library, not an error.
+ *
+ * Module scope on purpose. This lived inside the `split` branch, which is why
+ * split was the only one of the four view modes that told the user anything:
+ * human and overlay rendered nothing at all in the absent case. Three copies of
+ * the style would drift apart; one declaration cannot.
+ */
+const UNAVAILABLE_STYLE: React.CSSProperties = {
+  position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+  fontSize: 11, fontWeight: 600, color: "#94A3B8", textAlign: "center", padding: "0 16px",
+};
+
+/**
  * How often per-frame playback values are pushed into React.
  *
  * 10Hz. The only thing that renders them is a progress bar, which already
@@ -821,6 +835,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
           {videoSrc && !videoFailed
             ? <video ref={videoRef} src={videoSrc} {...videoProps} style={fillBox} />
             : <canvas ref={canvasRef} width={renderWidth} height={renderHeight} style={fillBox} />}
+          {videoSrc && videoFailed && <span style={UNAVAILABLE_STYLE}>Recording unavailable</span>}
         </div>
       );
     }
@@ -837,6 +852,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
             height={renderHeight}
             style={{ ...fillBox, background: "transparent", opacity: overlayOpacity, pointerEvents: "none" }}
           />
+          {videoSrc && videoFailed && <span style={UNAVAILABLE_STYLE}>Recording unavailable</span>}
         </div>
       );
     }
@@ -849,10 +865,6 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
         color: "#475569", background: "rgba(255,255,255,0.82)", backdropFilter: "blur(6px)",
         padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", pointerEvents: "none",
       };
-      const unavailable: React.CSSProperties = {
-        position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 11, fontWeight: 600, color: "#94A3B8", textAlign: "center", padding: "0 16px",
-      };
       const pane: React.CSSProperties = { position: "relative", flex: 1, minWidth: 0, height: "100%" };
       return (
         <div style={{ display: "flex", gap: 6, width: "100%", height: "100%" }}>
@@ -860,7 +872,7 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
             {videoSrc && !videoFailed && (
               <video ref={videoRef} src={videoSrc} {...videoProps} style={fillBox} />
             )}
-            {videoSrc && videoFailed && <span style={unavailable}>Recording unavailable</span>}
+            {videoSrc && videoFailed && <span style={UNAVAILABLE_STYLE}>Recording unavailable</span>}
             <span style={paneLabel}>Human</span>
           </div>
           <div style={pane}>
