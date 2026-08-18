@@ -28,6 +28,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
+import { validateAnimationAsset } from "../src/lib/animationValidationRules.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ASSET_DIR = path.join(ROOT, "datasets", "processed", "user_holistic_assets");
@@ -40,6 +41,15 @@ const args = process.argv.slice(2);
 const APPLY = args.includes("--apply");
 const onlyArg = args.find((a) => a.startsWith("--only="));
 const ONLY = onlyArg ? onlyArg.slice("--only=".length).split(",").map((s) => s.trim().toLowerCase()) : null;
+
+// Landmark JSON only. Playback needs nothing else -- source video feeds
+// Human/Split/Overlay, and those modes are the still-open blank-pane bug.
+//
+// Not cosmetic: animation-source-videos already holds 490 MB of the 612 MB in
+// use against a 1 GB cap, and this batch carries 1.07 GB of video. Uploading it
+// would fail around sign 35 of 91 and leave the library half-populated. The
+// local copies under datasets/raw/user_videos are the archive.
+const SKIP_VIDEO = args.includes("--skip-video");
 
 function loadEnv() {
   const envPath = path.join(ROOT, ".env.local");
@@ -121,11 +131,42 @@ async function main() {
     originalBytes += raw.length;
     optimisedBytes += payload.length;
 
-    const video = findSourceVideo(dir, parsed.metadata?.sourceFile);
+    const video = SKIP_VIDEO ? null : findSourceVideo(dir, parsed.metadata?.sourceFile);
     const summary =
       `${gloss.padEnd(4)} ${(raw.length / 1048576).toFixed(1)}MB -> ${(payload.length / 1048576).toFixed(1)}MB` +
       `  frames=${parsed.totalFrames}  takes=${files.length}` +
       `  video=${video ? path.basename(video) : "NOT FOUND"}`;
+
+    /**
+     * Validate BEFORE uploading, and in the dry run too.
+     *
+     * The seeder had no validation at all: an asset with no frames, no fps and
+     * no duration published cleanly to production and rendered nothing, while
+     * the run reported "published: 1, failed: 0". The studio path had been
+     * validating all along -- this is the same rule set, imported rather than
+     * copied.
+     *
+     * Running it in the dry run is what makes the whole gate provable without
+     * touching the shared production database: a malformed fixture reaches the
+     * rejection and the halt with nothing written anywhere.
+     */
+    const verdict = validateAnimationAsset(optimised, { gloss });
+    if (!verdict.valid) {
+      console.error(`
+  REJECTED ${gloss} — ${verdict.errors.map((e) => e.code).join(", ")}
+${verdict.errors.map((e) => "    " + e.message).join(String.fromCharCode(10))}
+
+  ${uploaded} sign(s) published before this, ${skipped} skipped.
+  Nothing further was attempted. Already-published glosses are skipped on
+  re-run, so fix the asset above and resume with:
+
+    node scripts/seed-animation-assets.mjs --apply${SKIP_VIDEO ? " --skip-video" : ""}
+`);
+      failures.push({ gloss, error: verdict.errors.map((e) => e.code).join(",") });
+      process.exitCode = 1;
+      break;
+    }
+    for (const w of verdict.warnings) console.log(`  ${gloss.padEnd(4)} warning: ${w.code}`);
 
     if (!APPLY) { console.log(`  ${summary}`); continue; }
 
@@ -197,8 +238,32 @@ async function main() {
       console.log(`  ${summary}  PUBLISHED`);
       uploaded++;
     } catch (err) {
-      console.log(`  ${gloss.padEnd(4)} FAILED — ${err.message}`);
+      /**
+       * Halt, do not continue.
+       *
+       * Extraction continues past failures because one bad video should not cost
+       * 91 good extractions, and nothing is published by it. Seeding is the
+       * opposite: it writes to the shared production database, so continuing past
+       * a failure produces exactly the half-populated library the storage
+       * preflight exists to prevent -- and a half-populated library is
+       * indistinguishable from a finished one.
+       *
+       * Cheap to recover from now that the run is resumable: already-published
+       * glosses are skipped, so the resume command below picks up where this
+       * stopped without redoing anything.
+       */
+      console.error(`
+  FAILED on ${gloss} — ${err.message}
+
+  ${uploaded} sign(s) published before this, ${skipped} skipped.
+  Nothing further was attempted. Already-published glosses are skipped on
+  re-run, so fix the cause above and resume with:
+
+    node scripts/seed-animation-assets.mjs --apply${SKIP_VIDEO ? " --skip-video" : ""}
+`);
       failures.push({ gloss, error: err.message });
+      process.exitCode = 1;
+      break;
     }
   }
 
