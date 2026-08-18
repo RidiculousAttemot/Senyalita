@@ -11,7 +11,15 @@ const TV_DIR = path.join(ROOT, "node_modules", "@mediapipe", "tasks-vision");
 const INPUT_ROOT = path.join(ROOT, "datasets", "raw", "user_videos");
 const OUTPUT_DIR = path.join(ROOT, "datasets", "processed", "user_holistic_assets");
 const TMP_DIR = path.join(ROOT, "tmp", "holistic_extract");
-const PORT = 8771;
+/**
+ * The frame server binds an EPHEMERAL port (0) and reports back what it got.
+ *
+ * It used to be fixed at 8771. A stale extractor still holding that port made a
+ * fresh run die with EADDRINUSE on its SECOND video -- after the first had
+ * already logged normally, so the log read as slow progress for 46 minutes
+ * rather than as a crash. An ephemeral port cannot collide, which removes the
+ * failure rather than adding a pre-flight check someone has to remember.
+ */
 const TARGET_FPS = 30;
 const MAX_FRAMES = 300;
 
@@ -160,7 +168,9 @@ class VideoServer {
   }
 
   async start() {
-    await new Promise((resolve) => this.server.listen(PORT, resolve));
+    await new Promise((resolve) => this.server.listen(0, resolve));
+    this.port = this.server.address().port;
+    return this.port;
   }
 
   stop() {
@@ -188,7 +198,12 @@ const main = async () => {
   for (let i = 0; i < videos.length; i++) {
     const v = videos[i];
     const frameDir = path.join(TMP_DIR, `v_${String(i).padStart(4, "0")}`);
-    console.log(`\n[${i + 1}/${videos.length}] ${v.label}/${v.file}`);
+    // Timestamped, because a dead run and a slow run look identical in a log that
+    // only prints on completion: a crashed extractor once read as normal progress
+    // for 46 minutes before anyone checked.
+    const videoStart = Date.now();
+    console.log(`
+[${i + 1}/${videos.length}] ${new Date().toISOString().slice(11, 19)} ${v.label}/${v.file}`);
 
     /**
      * Resume rather than restart.
@@ -223,13 +238,25 @@ const main = async () => {
       const useFrames = Math.min(frameFiles.length, MAX_FRAMES);
 
       const server = new VideoServer(frameDir, useFrames);
-      await server.start();
+      const port = await server.start();
 
       const page = await browser.newPage();
       let results = null;
       try {
         page.on("pageerror", (err) => console.log("    [browser error]", err.message));
-        await page.goto(`http://localhost:${PORT}/`, { waitUntil: "networkidle0", timeout: 60000 });
+        // domcontentloaded, NOT networkidle0.
+        //
+        // The page starts fetching its N frame PNGs the moment it loads, so
+        // "no connections for 500ms" is not reached until every frame has been
+        // pulled. For a ~300-frame video that exceeded the 60s navigation
+        // timeout and the extraction failed -- while ~170-frame videos settled
+        // in time and passed. All 16 failures in a 278-video run were long
+        // videos, including all 3 that hit the MAX_FRAMES cap.
+        //
+        // The goto never needed to wait for the frames at all: completion is
+        // signalled by the document title and waited on below with its own
+        // 600s budget.
+        await page.goto(`http://localhost:${port}/`, { waitUntil: "domcontentloaded", timeout: 60000 });
         await page.waitForFunction(
           () => document.title.startsWith("done") || document.title.startsWith("err"),
           { timeout: 600000 }
@@ -290,7 +317,7 @@ const main = async () => {
         },
       };
       fs.writeFileSync(outPath, JSON.stringify(asset, null, 2));
-      console.log(`    Saved: ${animFrames.length} frames -> ${path.relative(ROOT, outPath)}`);
+      console.log(`    Saved: ${animFrames.length} frames -> ${path.relative(ROOT, outPath)} (${((Date.now() - videoStart) / 1000).toFixed(0)}s)`);
       stats.ok++;
     } catch (e) {
       console.log(`    FAILED: ${(e.message || e).slice(0, 150)}`);
