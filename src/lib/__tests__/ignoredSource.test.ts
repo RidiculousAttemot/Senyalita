@@ -39,6 +39,15 @@ function ignoredUnder(dir: string): string[] {
     .map((line) => line.slice(3).trim());
 }
 
+function untrackedUnder(dir: string): string[] {
+  const stdout = execFileSync(
+    "git",
+    ["ls-files", "--others", "--exclude-standard", "--", dir],
+    { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
+  );
+  return stdout.split(String.fromCharCode(10)).map((l) => l.trim()).filter(Boolean);
+}
+
 describe("no source file is hidden from the repository", () => {
   it("nothing under src/ is git-ignored", () => {
     const ignored = ignoredUnder("src");
@@ -47,6 +56,19 @@ describe("no source file is hidden from the repository", () => {
       `These files exist locally but are excluded from git, so they are missing ` +
         `from every clone and deployment:\n  ${ignored.join("\n  ")}\n` +
         `Anchor the offending .gitignore pattern with a leading slash.`,
+    ).toEqual([]);
+  });
+
+  it("nothing under src/ is untracked", () => {
+    const untracked = untrackedUnder("src");
+    expect(
+      untracked,
+      [
+        "These files exist locally but were never committed, so they are",
+        "missing from every clone and deployment:",
+        ...untracked,
+        "Commit them, or move them out of src/ if they are genuinely scratch.",
+      ].join(" "),
     ).toEqual([]);
   });
 

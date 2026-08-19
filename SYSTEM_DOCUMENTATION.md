@@ -81,6 +81,12 @@ degrades rather than breaking.
 `e2e/player-absent-recording.spec.ts`. Do not reclaim it; it is ~11 MB, and
 deleting it silently halves that spec's coverage.
 
+The extraction also left 148 ALTERNATE TAKES on disk (~1.60 GB) that the seeder
+never reads -- it publishes files[0] only. They are kept deliberately: that
+choice of take is arbitrary, so if a published sign turns out to be a poor
+recording, re-seeding from an alternate is far cheaper than re-recording. Do not
+reclaim them from a disk report without reading this.
+
 **Recovery:** every recording is in `datasets/raw/user_videos/`, and the seeder
 uploads video by default (without `--skip-video`). THANK YOU's published take is
 additionally backed up at `datasets/raw/source-video-backup/`.

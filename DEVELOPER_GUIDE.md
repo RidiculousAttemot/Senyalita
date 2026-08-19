@@ -885,7 +885,15 @@ Harmless today, misleading when you're debugging:
   `fastMode` branch (50 ms) is unreachable; the effective cadence is 30 ms or 100 ms.
 - [`PipelineOrchestrator.ts:100-105`](src/features/translation-pipeline/PipelineOrchestrator.ts#L100) —
   the coarticulation loop assigns `transition` and discards it, and passes the same
-  gloss as both `from` and `to`. Stage 8 is currently a no-op.
+  gloss as both `from` and `to`. Stage 8 IS reached -- PipelineOrchestrator.ts:26,39 imports and wires
+  `defaultCoarticulationBridge`. Whether it changes anything once reached is a
+  separate question nobody has answered; "unreachable" and "reached but inert"
+  need different fixes, and the note here previously asserted the first.
+
+  Its number list at CoarticulationBridge.ts:166 still includes `ZERO`, which is
+  not a model class. Left in place deliberately: it is live code, and removing it
+  on the strength of an unverified reachability claim is the mistake section 12
+  exists to prevent.
 - [`motionDetection.ts:4`](src/features/recognition/motionDetection.ts#L4) —
   `IDLE_THRESHOLD` declared, never used.
 
