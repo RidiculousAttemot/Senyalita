@@ -200,3 +200,50 @@ html[data-contrast="high"] :focus-visible {
     color: hsl(var(--foreground));
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Reduced motion.
+
+   9 of the 17 components using framer-motion guard themselves with
+   useReducedMotion(); the other 8 include the main app surfaces. Rather than
+   edit each one, this neutralises transition and animation globally, which
+   catches CSS-only movement too -- hover lifts, the nav underline, the scroll
+   progress bar -- none of which a per-component hook would have reached.
+
+   WHERE THE LINE IS DRAWN, AND WHY
+
+   UI animation is decoration: it signals state a user can also read from the
+   layout, so removing it costs nothing but comfort.
+
+   SIGN PLAYBACK IS THE CONTENT. A sign IS its movement -- handshape, path and
+   timing together are the word, and a still frame is not a slower sign, it is
+   no sign at all. Freezing it would not be a reduced-motion accommodation, it
+   would be removing the information the page exists to convey. WCAG 2.3.3
+   applies to "motion animation triggered by interaction", not to the media
+   being presented, and the player's own pause and speed controls are the
+   accommodation that belongs to content.
+
+   So canvas and video are exempt below, along with anything inside the sign
+   stage. Users who need playback stopped have a Pause button; users who need
+   it slower have a speed control.
+   --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* The content itself. See above. */
+  canvas,
+  video,
+  canvas *,
+  video * {
+    animation-duration: revert !important;
+    animation-iteration-count: revert !important;
+    transition-duration: revert !important;
+  }
+}

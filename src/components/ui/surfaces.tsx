@@ -273,12 +273,24 @@ export function OptionRow({
 
 export type BadgeTone = "neutral" | "info" | "success" | "warn" | "danger";
 
+/**
+ * Opaque grounds with dark text, so a badge carries its own contrast.
+ *
+ * These tones were translucent tints with light-300 text -- built for a dark
+ * surface and correct there. Two of the three usages are on LIGHT surfaces
+ * (/learn), where a 20%-alpha tint composites to near-white and the light text
+ * lands on top of it: the gloss badge measured 3.65:1 against a 4.5:1 floor at
+ * 9px. A badge cannot know what is behind it, so it should not depend on it.
+ *
+ * Opaque backgrounds also fix the ratio at authoring time, rather than making
+ * it a function of whatever surface a future caller drops the badge onto.
+ */
 const BADGE: Record<BadgeTone, string> = {
-  neutral: "bg-white/10 text-white/70",
-  info: "bg-senyalita-primary/20 text-senyalita-secondary",
-  success: "bg-emerald-400/15 text-emerald-300",
-  warn: "bg-amber-400/20 text-amber-300",
-  danger: "bg-red-500/15 text-red-300",
+  neutral: "bg-slate-200 text-slate-800",
+  info: "bg-blue-100 text-blue-800",
+  success: "bg-emerald-100 text-emerald-800",
+  warn: "bg-amber-100 text-amber-900",
+  danger: "bg-red-100 text-red-800",
 };
 
 /** The Beta badge's shape, generalised over the states the admin shows. */

@@ -86,7 +86,15 @@ export function FeatureJourneySection() {
                   "transition-all duration-300 hover:-translate-y-1 hover:border-senyalita-primary/25 hover:shadow-xl hover:shadow-senyalita-primary/10",
                 )}
               >
-                <span className="absolute right-5 top-5 font-display text-3xl font-bold text-senyalita-border transition-colors group-hover:text-senyalita-primary/15">
+                {/*
+                  Decorative watermark, not content. It measured 1.23:1 against a
+                  3:1 floor for large text -- which is the design intent: it sits at
+                  border-tone and stays at 15% opacity even on hover. The ordinal it
+                  shows is already carried by the card's position, so hiding it from
+                  assistive tech loses nothing and makes the contrast exemption
+                  explicit rather than accidental.
+                */}
+                <span aria-hidden="true" className="absolute right-5 top-5 font-display text-3xl font-bold text-senyalita-border transition-colors group-hover:text-senyalita-primary/15">
                   {String(i + 1).padStart(2, "0")}
                 </span>
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-senyalita-primary/10 to-senyalita-secondary/10 text-senyalita-primary transition-transform duration-300 group-hover:scale-110">
