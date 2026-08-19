@@ -52,7 +52,8 @@ typed text
   -> published sign?  yes -> play it
                       no  -> fingerspell, one published alphabet
                              animation per character
-  -> playback engine -> landmark renderer (skeleton / human / split / overlay)
+  -> playback engine -> landmark renderer (skeleton; video views retired,
+                                            see SYSTEM_DOCUMENTATION.md 1.1)
 ```
 
 ## Model

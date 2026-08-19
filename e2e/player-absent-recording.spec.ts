@@ -1,79 +1,48 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * The player must never show an empty pane, in any view mode.
+ * The skeleton must draw, and the recording path must stay alive underneath it.
  *
- * 92 of the library's 130 signs have landmarks and no recording, so "no
- * recording" is the normal state, not an edge case. Three of the four view
- * modes got it wrong at once: human rendered a blank canvas with no message,
- * overlay rendered landmarks with no message, and only split told the user
- * anything.
+ * WHAT THIS SPEC USED TO BE. Five tests drove the Human / Split / Overlay
+ * switcher: three checked that a sign with no recording still explained itself
+ * and still painted, two checked that A -- the one sign that still has a
+ * recording -- played its video. That switcher is gone from the public app.
+ * Every source video except A's was deleted from Storage to fit the 91-sign
+ * batch inside the free tier, so 129 of 130 signs answered all three modes with
+ * "Recording unavailable", and offering three broken options was worse than
+ * offering one that works.
  *
- * WHY THIS MEASURES PAINTED PIXELS
- * Two other verification routes passed while the pane was blank. The API
- * returned correct metadata and correct 404s; the bundle contained the right
- * strings. Neither can tell you whether anything reached the canvas. Counting
- * non-transparent pixels is the only check here that distinguishes "rendered"
- * from "mounted", and it is what caught the bug.
+ * So the UI half of this file could not survive: it clicked controls that no
+ * longer exist. Deleting the file outright was the other option and is the
+ * wrong one, because the data path deliberately stayed behind --
+ * /api/animations/[gloss]/video still serves, source_video_path is still
+ * written, and the seeder still uploads. Nothing else would notice that rotting
+ * until someone tried to re-enable the modes and found the route gone.
  *
- * WHY IT WAITS ON CONDITIONS, NOT TIMERS
- * Landmark payloads run 2.2-5.2 MB and 92 more are coming. A fixed settle is
- * flaky by construction: a 12s wait already produced a false "controls not
- * found" that read exactly like "the player never mounts".
- *
- * NOTE ON ENVIRONMENT: `next dev` does NOT reproduce the human-mode failure --
- * reactStrictMode double-invokes effects and initialises a ref that a production
- * build leaves null. Run against a production build (scripts/prod-build-harness.mjs)
- * or the deployed site. PLAYER_E2E_TARGET selects which.
+ * The pixel assertions move to the one view that ships. The video assertions
+ * become route assertions, which is where the contract now lives.
  */
 
-/**
- * Webkit is excluded, and NOT because of anything this spec does.
- *
- * All five of these failed on webkit -- but so does e2e/animation-load.spec.ts,
- * 3 of 3, and that spec only checks API delivery: no canvas, no video, no
- * codecs. So the breakage is upstream of the player and predates this file.
- * UNRESOLVED: nobody has diagnosed why webkit fails on the animation specs.
- *
- * Worth separating from the test question: if webkit genuinely cannot play the
- * recordings, that is a Safari limitation in the product, not a matrix problem,
- * and no amount of test config answers it. It needs one manual check in Safari.
- */
-test.skip(({ browserName }) => browserName === 'webkit', 'pre-existing webkit failures across the animation specs; see comment');
+const TARGET = process.env.E2E_BASE_URL ?? process.env.E2E_BASE ?? "http://localhost:3000";
 
 /**
- * Playwright's per-test cap is 30s by default, and it overrides every timeout
- * inside the test. The condition-based waits below ask for 60-90s and never got
- * it: the largest asset in the library (LONGANISA, 5.5MB) blew the cap while a
- * 4.4MB one fit inside it, so the spec passed or failed by fixture size for
- * reasons nothing in the test body expressed.
- *
- * Sized for the worst case rather than the median, because the worst case is
- * the one that breaks.
- */
-test.setTimeout(180_000);
-
-const TARGET = process.env.PLAYER_E2E_TARGET || "http://localhost:3400";
-
-/**
- * Published with landmarks and NO source recording -- the state 129 of the 130
- * signs are in. LONGANISA is the largest asset in the library (5.5MB), chosen
- * deliberately: the worst case is the one that breaks.
+ * LONGANISA is the largest asset in the library (5.5MB), chosen deliberately:
+ * the worst case is the one that breaks.
  */
 const ABSENT_SIGN = "longanisa";
+
 /**
- * A DELIBERATE TEST FIXTURE, not an oversight.
+ * A DELIBERATE FIXTURE, and still worth its ~11MB.
  *
- * Every source video was deleted from Storage to free 490MB for the 91-sign
- * batch, so A is the only sign with a recording. It was re-uploaded on purpose
- * so this spec keeps testing BOTH directions -- deleting the recorded-sign
- * tests to match a deleted fixture is how coverage quietly halves.
+ * A is the only sign whose recording survived the deletion, and it was
+ * re-uploaded on purpose. Its job has changed rather than ended: it used to
+ * prove the Human view played a video, and now it is the only fixture that can
+ * prove the video route still works at all. Deleting it would reclaim 11MB and
+ * leave the kept-alive data path with nothing testing it.
  *
- * If you are reclaiming storage: leave this one. It is ~11MB.
+ * If you are reclaiming storage: still leave this one.
  */
 const RECORDED_SIGN = "a";
-
-const MODES = ["Human", "Split", "Overlay"] as const;
 
 /** Fraction of non-transparent pixels across every canvas on the page. */
 async function paintedFraction(page: Page): Promise<number> {
@@ -92,17 +61,9 @@ async function paintedFraction(page: Page): Promise<number> {
   });
 }
 
-function modeControl(page: Page, mode: string) {
-  return page
-    .locator("button, [role=tab], [role=radio]")
-    .filter({ hasText: new RegExp(`^\\s*${mode}\\s*$`, "i") })
-    .first();
-}
-
 /**
- * Translates a phrase and waits until the player is genuinely ready: the clip
- * has resolved over the network AND the mode controls exist. Both are
- * observable, so neither needs a timer.
+ * Translates a phrase and waits until the clip has genuinely resolved over the
+ * network. Observable, so it needs no timer.
  */
 async function translate(page: Page, phrase: string) {
   await page.goto(`${TARGET}/translate`, { waitUntil: "domcontentloaded" });
@@ -115,60 +76,69 @@ async function translate(page: Page, phrase: string) {
   await page.locator("textarea, input[type=text]").first().fill(phrase);
   await page.getByRole("button", { name: /^Translate$/i }).click();
   await assetResolved;
-
-  // The controls only exist once the player has mounted around a resolved clip.
-  await expect(modeControl(page, "Skeleton")).toBeVisible({ timeout: 90_000 });
 }
 
-async function selectMode(page: Page, mode: string) {
-  await modeControl(page, mode).click();
-}
+test.describe("player: the skeleton is the view", () => {
+  test("a sign with no recording still paints", async ({ page }) => {
+    await translate(page, ABSENT_SIGN);
 
-test.describe("player: sign with no recording", () => {
-  for (const mode of MODES) {
-    test(`${mode} explains the missing recording and still draws`, async ({ page }) => {
-      await translate(page, ABSENT_SIGN);
-      await selectMode(page, mode);
-
-      // The message is driven by the <video> error, so it arrives after the 404.
-      await expect(page.getByText(/Recording unavailable/i).first()).toBeVisible({ timeout: 60_000 });
-
-      // Overlay draws thin lines over where the video would be, so its painted
-      // fraction is legitimately small -- the assertion is "not blank", not a
-      // coverage target.
-      await expect
-        .poll(() => paintedFraction(page), { timeout: 60_000, message: `${mode} painted nothing` })
-        .toBeGreaterThan(0);
-    });
-  }
-});
-
-test.describe("player: sign with a recording", () => {
-  test("human plays the video and paints no landmarks behind it", async ({ page }) => {
-    await translate(page, RECORDED_SIGN);
-    await selectMode(page, "Human");
-
-    const video = page.locator("video").first();
-    await expect(video).toBeVisible();
-    await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.readyState), { timeout: 60_000 })
-      .toBeGreaterThanOrEqual(3);
-
-    await expect(page.getByText(/Recording unavailable/i)).toHaveCount(0);
-    // The landmark renderer must stay off while a recording is playing.
-    expect(await paintedFraction(page)).toBe(0);
+    // WHY PIXELS. Two other routes passed while the pane was blank: the API
+    // returned correct metadata, and the bundle contained the right strings.
+    // Neither distinguishes "rendered" from "mounted".
+    await expect
+      .poll(() => paintedFraction(page), { timeout: 90_000, message: "the stage painted nothing" })
+      .toBeGreaterThan(0);
   });
 
-  test("switching human -> split -> human keeps working", async ({ page }) => {
+  test("a sign with a recording paints the same way, from landmarks", async ({ page }) => {
+    // The point of keeping this case: having a recording must not change what
+    // the public app draws. It draws the skeleton either way now.
     await translate(page, RECORDED_SIGN);
 
-    await selectMode(page, "Human");
-    await expect(page.locator("video").first()).toBeVisible();
+    await expect
+      .poll(() => paintedFraction(page), { timeout: 90_000, message: "the stage painted nothing" })
+      .toBeGreaterThan(0);
+  });
 
-    await selectMode(page, "Split");
-    await expect.poll(() => paintedFraction(page), { timeout: 60_000 }).toBeGreaterThan(0);
+  test("no view-mode switcher is left stranded", async ({ page }) => {
+    await translate(page, ABSENT_SIGN);
 
-    await selectMode(page, "Human");
-    await expect(page.locator("video").first()).toBeVisible();
-    expect(await paintedFraction(page)).toBe(0);
+    for (const mode of ["Human", "Split", "Overlay"]) {
+      await expect(
+        page.locator("button, [role=tab], [role=radio]")
+          .filter({ hasText: new RegExp(`^\\s*${mode}\\s*$`, "i") }),
+        `${mode} is still offered, but nothing behind it works`,
+      ).toHaveCount(0);
+    }
+  });
+
+  test("the dead 'Recording unavailable' surface is gone", async ({ page }) => {
+    // It was reachable on 129 of 130 signs. With no way to select a video mode
+    // it should now be unreachable, not merely unlikely.
+    await translate(page, ABSENT_SIGN);
+    await expect(page.getByText(/Recording unavailable/i)).toHaveCount(0);
+  });
+});
+
+/**
+ * The data path the UI removal deliberately left in place.
+ *
+ * These are the assertions that would have caught the route being deleted as
+ * "unused" once nothing on screen called it.
+ */
+test.describe("recordings: the route stays alive", () => {
+  test("a sign that has a recording still serves it", async ({ request }) => {
+    const response = await request.get(`${TARGET}/api/animations/${RECORDED_SIGN}/video`);
+    expect(response.status(), "the one surviving recording must still serve").toBe(200);
+    expect(response.headers()["content-type"]).toMatch(/video\//);
+  });
+
+  test("a sign with no recording 404s rather than erroring", async ({ request }) => {
+    const response = await request.get(`${TARGET}/api/animations/${ABSENT_SIGN}/video`, {
+      failOnStatusCode: false,
+    });
+    // 404 is the honest answer for a deleted source, and it is what the player
+    // would key off if the modes were ever restored.
+    expect(response.status()).toBe(404);
   });
 });

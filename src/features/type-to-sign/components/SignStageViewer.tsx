@@ -1,29 +1,42 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, Pause, Play,
   Presentation, Repeat, RotateCcw, Sparkles,
 } from "lucide-react";
 import { SignAnimationPlayer } from "@/features/sign-animation/player/SignAnimationPlayer";
+import { computeClipBounds } from "@/features/sign-animation/renderer/ExactLandmarkRenderer";
 import type {
   PlaybackProgress, SignAnimationPlayerHandle,
 } from "@/features/sign-animation/player/SignAnimationPlayer";
-import type { AnimationClip, ViewMode } from "@/features/sign-animation/types";
+import type { AnimationClip } from "@/features/sign-animation/types";
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
-const VIEW_MODES: { value: ViewMode; label: string; hint: string }[] = [
-  { value: "human", label: "Human", hint: "Original recording" },
-  { value: "skeleton", label: "Skeleton", hint: "Extracted landmarks" },
-  { value: "split", label: "Split", hint: "Recording and landmarks together" },
-  { value: "overlay", label: "Overlay", hint: "Landmarks drawn on the recording" },
-];
-
-const MODE_LABEL: Record<ViewMode, string> = {
-  human: "Human", skeleton: "Skeleton", split: "Split", overlay: "Overlay",
-};
+/**
+ * Skeleton is the only view the public app offers.
+ *
+ * Human, Split and Overlay all draw the source recording, and the source
+ * recordings are gone: they were deleted from Storage to fit the 91-sign batch
+ * inside the free tier, so 129 of the 130 published signs answered all three
+ * modes with "Recording unavailable". Only A still has one. Three of four
+ * options in a switcher that could not work is worse than no switcher.
+ *
+ * It is also the more honest architecture. The landmark representation is what
+ * this system produces and what the model consumes; the video was source
+ * material, not the contribution. Showing the skeleton is showing the output.
+ *
+ * THE PLAYER KEEPS ALL FOUR MODES, and the data path behind them is untouched:
+ * /api/animations/[gloss]/video still serves, source_video_path is still
+ * written, and the seeder still uploads. Re-enabling here is putting the
+ * switcher back and passing viewMode through again -- no renderer work. The
+ * intended home for the comparison is the admin animation-inspector, which is
+ * local-only and can read the recordings from datasets/raw/user_videos without
+ * costing Storage.
+ */
+const STAGE_VIEW_MODE = "skeleton" as const;
 
 const STAGE_BACKGROUND = "#F1F5F9";
 
@@ -65,8 +78,6 @@ export function SignStageViewer({
    * driving the demo is standing at the machine.
    */
   const [presentationMode, setPresentationMode] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("skeleton");
-  const [overlayOpacity, setOverlayOpacity] = useState(0.85);
   const [showTrails, setShowTrails] = useState(false);
 
   useEffect(() => {
@@ -148,6 +159,48 @@ export function SignStageViewer({
     link.click();
   }, [clips, index]);
 
+  /**
+   * The stage takes the shape of the material.
+   *
+   * The renderer already fits each clip to the stage over its whole extent,
+   * uniformly and without cropping. What it cannot do is change the shape of
+   * the box it is fitting into, and that is what left roughly 40% of the canvas
+   * empty: the 92 phrase signs were captured 1920x1080, so with the signer's
+   * arms spanning the frame their subject box is about 2.2:1, and fitting that
+   * into a near-square stage is bound by width. Measured, it used 82% of the
+   * width and 36% of the height. The original 38 letters and digits are 1080x1920
+   * portrait, box about 0.8:1, and filled 82% of the height in the same stage.
+   *
+   * No single fixed height suits both, so the height follows the widest clip in
+   * the sequence. Raising FIT_FRACTION was the obvious alternative and does not
+   * work: modelled across these signs it moves the landscape ones from 36% to
+   * 42% while leaving the portrait ones with no padding at all.
+   */
+  const stageAspect = useMemo(() => {
+    let widest = 0;
+    for (const clip of clips) {
+      const asset = clip.asset;
+      const bounds = computeClipBounds(asset);
+      if (!bounds) continue;
+      const iw = asset.imageWidth || 1;
+      const ih = asset.imageHeight || 1;
+      const boxW = Math.max((bounds.maxX - bounds.minX) * iw, 1);
+      const boxH = Math.max((bounds.maxY - bounds.minY) * ih, 1);
+      widest = Math.max(widest, boxW / boxH);
+    }
+    if (!widest) return null;
+    // Clamped so an odd capture cannot produce a letterbox slot or a tower.
+    return Math.min(Math.max(widest, 0.75), 2.2);
+  }, [clips]);
+
+  /**
+   * Frozen once the stage has painted.
+   *
+   * Clips stream in, so without this a sentence would resize under the viewer
+   * as later signs arrive. Changes before first paint are hidden by the loader.
+   */
+  const [lockedAspect, setLockedAspect] = useState<number | null>(null);
+
   const hasClips = clips.length > 0;
   /**
    * Whether the player has put anything on screen for this sequence.
@@ -223,8 +276,9 @@ export function SignStageViewer({
         className={`group relative overflow-hidden bg-white ${
           isFullscreen
             ? "h-screen w-screen rounded-none border-0"
-            : "h-[420px] rounded-[28px] border border-senyalita-border shadow-[0_24px_60px_-32px_rgba(15,23,42,0.45)] sm:h-[560px] lg:h-[650px] xl:h-[720px]"
+            : "rounded-[28px] border border-senyalita-border shadow-[0_24px_60px_-32px_rgba(15,23,42,0.45)]"
         }`}
+        style={isFullscreen || stageHeight === null ? undefined : { height: stageHeight }}
       >
         <div ref={surfaceRef} className="absolute inset-0">
           {hasClips && (
@@ -238,8 +292,8 @@ export function SignStageViewer({
                 speed={speed}
                 loop={loop}
                 isStreaming={isStreaming}
-                viewMode={viewMode}
-                overlayOpacity={overlayOpacity}
+                viewMode={STAGE_VIEW_MODE}
+
                 showTrails={showTrails}
                 showControls={false}
                 backgroundColor={STAGE_BACKGROUND}
@@ -300,38 +354,11 @@ export function SignStageViewer({
               <dl className="flex shrink-0 gap-4 text-right">
                 <MetaStat label="Duration" value={`${totalDuration.toFixed(1)}s`} />
                 <MetaStat label="FPS" value={`${current?.asset.fps ?? 30}`} />
-                <MetaStat label="Mode" value={MODE_LABEL[viewMode]} />
+                {/* No "Mode" stat: with one view it would read Skeleton on
+                    every sign forever, which is a label that tells you nothing
+                    and a column that costs room the gloss can use. */}
               </dl>
             </div>
-
-            <div className="absolute inset-x-0 bottom-4 flex justify-center px-4">
-              <ViewModeSwitch value={viewMode} onChange={setViewMode} />
-            </div>
-
-            <AnimatePresence>
-              {viewMode === "overlay" && (
-                <motion.label
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
-                  className="absolute bottom-20 left-1/2 flex -translate-x-1/2 items-center gap-2.5 rounded-full border border-white/70 bg-white/80 px-4 py-2 shadow-lg backdrop-blur-md"
-                >
-                  <span className="text-[0.6875rem] font-semibold text-senyalita-muted">Skeleton</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={Math.round(overlayOpacity * 100)}
-                    onChange={(e) => setOverlayOpacity(Number(e.target.value) / 100)}
-                    aria-label="Skeleton opacity"
-                    className="h-1 w-28 cursor-pointer accent-senyalita-primary"
-                  />
-                  <span className="w-9 text-right text-[0.6875rem] font-semibold tabular-nums text-senyalita-dark">
-                    {Math.round(overlayOpacity * 100)}%
-                  </span>
-                </motion.label>
-              )}
-            </AnimatePresence>
           </>
         )}
       </div>
@@ -387,7 +414,7 @@ export function SignStageViewer({
             <IconButton
               label="Motion trail"
               onClick={() => setShowTrails((v) => !v)}
-              disabled={!hasClips || viewMode === "human"}
+              disabled={!hasClips}
               active={showTrails}
             >
               <Sparkles className="h-4 w-4" />
@@ -395,7 +422,7 @@ export function SignStageViewer({
             <IconButton label="Loop sequence" onClick={() => setLoop((v) => !v)} disabled={!hasClips} active={loop}>
               <Repeat className="h-4 w-4" />
             </IconButton>
-            <IconButton label="Download frame" onClick={downloadFrame} disabled={!hasClips || viewMode === "human"}>
+            <IconButton label="Download frame" onClick={downloadFrame} disabled={!hasClips}>
               <Download className="h-4 w-4" />
             </IconButton>
             <IconButton
@@ -426,43 +453,6 @@ export function SignStageViewer({
   );
 }
 
-function ViewModeSwitch({ value, onChange }: { value: ViewMode; onChange: (v: ViewMode) => void }) {
-  return (
-    <div
-      role="radiogroup"
-      aria-label="Viewer mode"
-      className="flex gap-0.5 rounded-full border border-white/70 bg-white/75 p-1 shadow-lg shadow-slate-900/10 backdrop-blur-xl"
-    >
-      {VIEW_MODES.map((mode) => {
-        const selected = value === mode.value;
-        return (
-          <button
-            key={mode.value}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            title={mode.hint}
-            onClick={() => onChange(mode.value)}
-            className={`relative rounded-full px-4 py-1.5 text-xs font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary ${
-              selected ? "text-white" : "text-senyalita-muted hover:text-senyalita-dark"
-            }`}
-          >
-            {selected && (
-              // Shared layoutId slides the pill between options instead of
-              // snapping, which is what makes the control feel native.
-              <motion.span
-                layoutId="view-mode-pill"
-                transition={{ type: "spring", stiffness: 420, damping: 34 }}
-                className="absolute inset-0 rounded-full bg-senyalita-primary shadow-sm"
-              />
-            )}
-            <span className="relative">{mode.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 function MetaStat({ label, value }: { label: string; value: string }) {
   return (

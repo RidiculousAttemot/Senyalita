@@ -84,8 +84,12 @@ typed text  ->  dictionary lookup  ->  published animation?
 4. Clips stream in: words are revealed as a consecutive ready prefix, so
    playback starts early while later words are still loading, and never
    appears out of order.
-5. The playback engine drives the landmark renderer (skeleton, human
-   recording, split, or overlay view).
+5. The playback engine drives the landmark renderer. The public app shows the
+   skeleton only: the Human, Split and Overlay views drew the source recording,
+   and those were deleted from Storage to fit the free tier, so 129 of 130 signs
+   answered them with "Recording unavailable". The landmark view is also what
+   the system actually produces. The video route and `source_video_path` are
+   still maintained -- see SYSTEM_DOCUMENTATION.md 1.1.
 
 There is always an animation — a word without a sign is never a dead end.
 

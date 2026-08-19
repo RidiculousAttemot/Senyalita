@@ -72,14 +72,32 @@ Follow-up, deliberately after the batch: recording `WHEELCHAIR PERSON` and
 batch on the free tier. Landmarks-only projected 970.6 MB against the 1 GB cap,
 leaving less margin than the measurement error itself.
 
-The cost: Human / Split / Overlay return `X-Video-Source: absent` for every sign
-except `A`. The player renders that correctly — "Recording unavailable" alongside
-the skeleton, verified in all four view modes on production — so the library
-degrades rather than breaking.
+The consequence, followed through: **the public app now offers only the skeleton
+view.** Human / Split / Overlay all draw the source recording, and `X-Video-Source:
+absent` came back for every sign except `A` — 129 of 130. The player handled it
+correctly, showing "Recording unavailable" alongside the skeleton, but three of
+four options that cannot work is a worse switcher than one that can, so the
+switcher was removed rather than left degrading.
 
-`A` keeps its recording ON PURPOSE, as the fixture for the video path in
-`e2e/player-absent-recording.spec.ts`. Do not reclaim it; it is ~11 MB, and
-deleting it silently halves that spec's coverage.
+That is also the more honest architecture. The landmark representation is what
+this system produces and what the model consumes; the video was source material,
+never the contribution. Showing the skeleton is showing the output.
+
+**The data path stayed.** `/api/animations/[gloss]/video`, `source_video_path`
+and the seeder's upload all still work, and `e2e/player-absent-recording.spec.ts`
+now asserts the route directly rather than through a UI control. Re-enabling the
+modes is restoring the switcher and passing `viewMode` through again — no
+renderer work. The intended home for the comparison is the admin
+animation-inspector, which is local-only and can read recordings from
+`datasets/raw/user_videos/` without costing Storage.
+
+`A` keeps its recording ON PURPOSE, and its job survived the switcher's removal
+rather than ending with it. It used to prove the Human view played a video; it
+is now the only fixture that can prove `/api/animations/[gloss]/video` still
+serves at all. Since nothing on screen calls that route any more, deleting the
+recording would leave the deliberately-kept data path with nothing testing it —
+which is exactly how a route gets deleted later as "unused". Do not reclaim it;
+it is ~11 MB.
 
 The extraction also left 148 ALTERNATE TAKES on disk (~1.60 GB) that the seeder
 never reads -- it publishes files[0] only. They are kept deliberately: that
@@ -192,7 +210,7 @@ flowchart TB
         TPP["translation-pipeline / PipelineOrchestrator"]
         ANIM["features/sign-animation"]
         ANIM2["player (PlaybackEngine, Sequencer)"]
-        REND["renderer (skeleton / human / avatar)"]
+        REND["renderer (skeleton landmarks)"]
         TTS --> TPP
         TPP --> ANIM
         ANIM --> ANIM2
@@ -343,7 +361,7 @@ typed text
        unpublished-> fingerspell: one published alphabet animation per character
   -> consecutive-ready-prefix streaming     playback starts as words arrive,
                                             never plays out of order
-  -> playback engine -> landmark renderer   (skeleton / human / split / overlay)
+  -> playback engine -> landmark renderer   (skeleton; video modes retired)
 ```
 
 Always an animation: a word without a published sign is fingerspelled, never a
@@ -534,7 +552,7 @@ flowchart LR
     API -->|"404 unpublished"| SPELL["Fingerspell:<br/>one alphabet animation per char"]
     PUB --> PLAY["Playback engine"]
     SPELL --> PLAY
-    PLAY --> REND["Landmark renderer<br/>skeleton / human / split / overlay"]
+    PLAY --> REND["Landmark renderer<br/>skeleton"]
 ```
 
 ### 7.3 Admin publish flow
