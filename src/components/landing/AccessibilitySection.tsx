@@ -162,14 +162,18 @@ export function AccessibilitySection() {
                 KAMUSTA
               </span>
               {/* Green on white is 2.28:1, so the label carries its own dark
-                  ink rather than tinted text. */}
+                  ink rather than tinted text.
+
+                  Reads "FSL gloss", not "96% match". The card demonstrates the
+                  colour tokens; it does not recognise anything, and the figure
+                  it used to show was a literal rather than a measurement. */}
               <span className="inline-flex items-center gap-1 rounded-full bg-senyalita-accent/15 px-2.5 py-1 text-[0.6875rem] font-semibold text-emerald-800">
-                <Check className="h-3 w-3" /> 96% match
+                <Check className="h-3 w-3" /> FSL gloss
               </span>
             </div>
             <p className="mt-2 text-[0.9375rem] leading-relaxed text-senyalita-muted">
-              A recognised sign, on an ordinary surface. This card uses the same
-              tokens as the rest of the app, so the controls above change it the
+              A sign written as a gloss, on an ordinary surface. This card uses
+              the same tokens as the rest of the app, so the controls above change it the
               way they change every other screen.
             </p>
           </div>

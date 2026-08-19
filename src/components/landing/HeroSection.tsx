@@ -4,7 +4,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { ArrowRight, PlayCircle } from "lucide-react";
 import { LandmarkField } from "./LandmarkField";
-import { RecognitionSequence } from "./RecognitionSequence";
+import { SignPlaybackDemo } from "./SignPlaybackDemo";
 
 export function HeroSection() {
   const prefersReducedMotion = useReducedMotion();
@@ -100,7 +100,7 @@ export function HeroSection() {
           transition={{ duration: 0.6, delay: 0.2 }}
           className="flex justify-center lg:justify-end"
         >
-          <RecognitionSequence id="recognition" />
+          <SignPlaybackDemo id="recognition" />
         </motion.div>
       </div>
     </section>

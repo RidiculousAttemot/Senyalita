@@ -10,7 +10,7 @@ import { SpotlightCard } from "./SpotlightCard";
  * The landing page's entry point to /learn.
  *
  * This section replaces "Recognition" in the nav. That entry pointed at
- * #recognition, which is the id on <RecognitionSequence> INSIDE the hero --
+ * #recognition, which is the id on <SignPlaybackDemo> INSIDE the hero --
  * so "Home" and "Recognition" scrolled to the same place and one of the six
  * nav items did nothing.
  *
