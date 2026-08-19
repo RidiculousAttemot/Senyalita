@@ -41,11 +41,36 @@ import { test, expect, type Page } from "@playwright/test";
  */
 test.skip(({ browserName }) => browserName === 'webkit', 'pre-existing webkit failures across the animation specs; see comment');
 
+/**
+ * Playwright's per-test cap is 30s by default, and it overrides every timeout
+ * inside the test. The condition-based waits below ask for 60-90s and never got
+ * it: the largest asset in the library (LONGANISA, 5.5MB) blew the cap while a
+ * 4.4MB one fit inside it, so the spec passed or failed by fixture size for
+ * reasons nothing in the test body expressed.
+ *
+ * Sized for the worst case rather than the median, because the worst case is
+ * the one that breaks.
+ */
+test.setTimeout(180_000);
+
 const TARGET = process.env.PLAYER_E2E_TARGET || "http://localhost:3400";
 
-/** Published with landmarks and no source recording. */
-const ABSENT_SIGN = "good morning";
-/** Published with a recording, to catch the opposite regression. */
+/**
+ * Published with landmarks and NO source recording -- the state 129 of the 130
+ * signs are in. LONGANISA is the largest asset in the library (5.5MB), chosen
+ * deliberately: the worst case is the one that breaks.
+ */
+const ABSENT_SIGN = "longanisa";
+/**
+ * A DELIBERATE TEST FIXTURE, not an oversight.
+ *
+ * Every source video was deleted from Storage to free 490MB for the 91-sign
+ * batch, so A is the only sign with a recording. It was re-uploaded on purpose
+ * so this spec keeps testing BOTH directions -- deleting the recorded-sign
+ * tests to match a deleted fixture is how coverage quietly halves.
+ *
+ * If you are reclaiming storage: leave this one. It is ~11MB.
+ */
 const RECORDED_SIGN = "a";
 
 const MODES = ["Human", "Split", "Overlay"] as const;

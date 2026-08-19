@@ -150,6 +150,7 @@ async function main() {
      * touching the shared production database: a malformed fixture reaches the
      * rejection and the halt with nothing written anywhere.
      */
+    const signStart = Date.now();
     const verdict = validateAnimationAsset(optimised, { gloss });
     if (!verdict.valid) {
       console.error(`
@@ -235,7 +236,9 @@ ${verdict.errors.map((e) => "    " + e.message).join(String.fromCharCode(10))}
         .eq("id", asset.id);
       if (pubErr) throw new Error(`publish asset: ${pubErr.message}`);
 
-      console.log(`  ${summary}  PUBLISHED`);
+      // Timestamped: a dead run and a slow one are indistinguishable in a log
+      // that only prints on completion.
+      console.log(`  ${new Date().toISOString().slice(11, 19)} ${summary}  PUBLISHED (${((Date.now() - signStart) / 1000).toFixed(0)}s)`);
       uploaded++;
     } catch (err) {
       /**
