@@ -450,7 +450,7 @@ There is no separate application server.
 |---|---|---|---|
 | GET | `/api/animations/[gloss]` | public | Resolves a gloss to a sign animation. Redirects (307) to a short-lived signed Storage URL for published assets; `X-Animation-Source` header distinguishes `published` vs `local-development`; 404 = unpublished, 503 = lookup infra failure. |
 | GET | `/api/animations` | public | Index of published glosses. |
-| GET | `/api/videos/[label]/[file]` | public | Serves a source recording from `datasets/raw/user_videos`. **Filesystem-backed — that path is excluded by `.vercelignore`, so this 404s in production.** |
+| GET | `/api/videos/[label]/[file]` | public | Resolves a published sign's recording from `source_video_path` and 307s to a signed Storage URL. The `[file]` segment is vestigial — resolution is by label, so any filename works. Previously filesystem-backed and 404ing in production; fixed in `dfa3f981`. |
 | GET | `/api/assets/dataset` | — | Dataset asset serving (tooling). |
 | POST | `/api/ai/replies` | public | Reply suggestions (AI gateway, rate-limited). **Unwired** — the client half (`lib/ai-replies.ts`) is unreachable, so nothing in the app calls this. |
 | GET | `/api/admin/health` | admin | Health diagnostics. |

@@ -6,23 +6,22 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Serves the original human recording paired with a published landmark asset.
+ * A published sign's source recording.
  *
- * Previously this read the raw file off the local filesystem
- * (datasets/raw/user_videos). `datasets` is excluded from deployments by
- * .vercelignore, so the directory exists in development and nowhere else:
- * every request 404'd in production while the same request worked locally,
- * and the Human/Split/Overlay panes rendered as a silent blank box.
+ * Resolves from source_video_path and 307s to a signed Storage URL.
  *
- * It now mirrors /api/animations/[gloss]: resolve the version's
- * source_video_path, hand back a short-lived signed Storage URL, and 307.
- * The browser fetches the video straight from Storage's CDN — no bytes
- * through the function, no Range plumbing to keep alive.
+ * The [file] segment is VESTIGIAL. Resolution is by label, so any filename in
+ * that position returns the same object -- /A/source and /A/source.mp4 both
+ * work. Nothing has ever used it to select among takes.
  *
- * The status codes keep absent and failed distinct. A 404 means "no
- * published source video" (e.g. a webcam asset never recorded one); a 503
- * means the lookup infrastructure broke and the request should be retried,
- * not treated as a missing recording.
+ * HISTORICAL, because the stale version of this comment outlived the fix and
+ * misled two readers -- one of whom built a redundant route on the strength of
+ * it. This route USED to read datasets/raw/user_videos off the filesystem, which
+ * .vercelignore excludes, so it 404d in production. Fixed in dfa3f981. Do not
+ * reintroduce a filesystem read here.
+ *
+ * As of 2026-08-18 only A has a recording: the rest were deleted to free 490MB
+ * for the 91-sign batch. See SYSTEM_DOCUMENTATION.md 1.1.
  */
 export async function GET(
   _request: Request,
