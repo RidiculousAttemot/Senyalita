@@ -41,11 +41,25 @@ const extractFrames = (videoPath, frameDir) => {
       const files = fs.readdirSync(frameDir).filter(f => f.endsWith(".png")).sort();
       // Landmarks come back normalised; the source dimensions are what let
       // playback restore true pixel-space proportions later.
+      // ffmpeg reports the *coded* size here. A phone recording is stored
+      // landscape with a rotation flag, and ffmpeg auto-rotates when it
+      // decodes the frames above — so the landmarks below are normalised
+      // against the rotated frame while this line still reads the raw one.
+      // Taking it at face value transposed the dimensions for every portrait
+      // capture, which stretched the figure horizontally on playback and made
+      // its fitted box look 2.2:1 instead of 0.7:1.
       const dims = /Video:.*?,\s*(\d{2,5})x(\d{2,5})/.exec(stderr ?? "");
+      let imageWidth = dims ? Number(dims[1]) : null;
+      let imageHeight = dims ? Number(dims[2]) : null;
+      const rotation = /displaymatrix:\s*rotation of\s*(-?[\d.]+)\s*degrees/i.exec(stderr ?? "");
+      if (rotation && imageWidth && imageHeight) {
+        const deg = Math.abs(Math.round(Number(rotation[1]))) % 180;
+        if (deg === 90) [imageWidth, imageHeight] = [imageHeight, imageWidth];
+      }
       resolve({
         files,
-        imageWidth: dims ? Number(dims[1]) : null,
-        imageHeight: dims ? Number(dims[2]) : null,
+        imageWidth,
+        imageHeight,
       });
     });
   });

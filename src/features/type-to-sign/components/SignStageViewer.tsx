@@ -276,9 +276,8 @@ export function SignStageViewer({
         className={`group relative overflow-hidden bg-white ${
           isFullscreen
             ? "h-screen w-screen rounded-none border-0"
-            : "rounded-[28px] border border-senyalita-border shadow-[0_24px_60px_-32px_rgba(15,23,42,0.45)]"
+            : "h-[420px] rounded-[28px] border border-senyalita-border shadow-[0_24px_60px_-32px_rgba(15,23,42,0.45)] sm:h-[560px] lg:h-[650px] xl:h-[720px]"
         }`}
-        style={isFullscreen || stageHeight === null ? undefined : { height: stageHeight }}
       >
         <div ref={surfaceRef} className="absolute inset-0">
           {hasClips && (
