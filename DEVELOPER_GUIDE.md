@@ -19,11 +19,16 @@ independent directions, sharing almost nothing but the landmark representation:
 
 | Direction | Route | Input | Output |
 |---|---|---|---|
-| **A — Sign → Text** | `/translate`, `/conversation`, `/presentation` | Webcam video | Recognized gloss + English/Tagalog text + TTS |
-| **B — Text → Sign** | `/translate`, `/type-to-sign` | Typed text | FSL gloss sequence + animated landmark playback |
+| **A — Sign → Text** | `/translate` | Webcam video | Recognized gloss + display text + TTS |
+| **B — Text → Sign** | `/translate` | Typed text | Gloss sequence + animated landmark playback |
+
+Both directions live on `/translate`, tabbed. There are **four public routes** total:
+`/`, `/translate`, `/learn` (FSL reference), `/evaluation` (accuracy harness).
+`/conversation`, `/presentation`, `/type-to-sign`, and `/history` were removed in the
+final-architecture cleanup and redirect rather than 404.
 
 The defining architectural property: **recognition is 100% client-side.** The model
-weights are a 312 KB static file served from `public/`. No inference server, no GPU
+weights are a 313 KB static file served from `public/`. No inference server, no GPU
 backend, no video ever leaves the device. The Next.js server exists for persistence,
 admin tooling, and animation assets — not for the ML hot path.
 
@@ -40,9 +45,9 @@ Phase 27). Supabase auth guards `/admin/*` only.
 | Hand tracking | `@mediapipe/tasks-vision` — Hand Landmarker (WASM) |
 | Inference | TensorFlow.js (`@tensorflow/tfjs`), Layers API |
 | Training | **Pure JavaScript.** No Python ML framework. |
-| DB / auth | Supabase (Postgres + RLS), 37 migrations |
+| DB / auth | Supabase (Postgres + RLS), 41 migrations |
 | Rendering | HTML5 Canvas 2D (no WebGL, no three.js) |
-| Tests | Vitest (47 test files), Playwright for e2e |
+| Tests | Vitest + Playwright, 69 test files total |
 | Hosting | Vercel |
 
 ### Node version is load-bearing — read this before your first `npm install`
@@ -67,38 +72,50 @@ be deleted once everyone is on the pin.
 
 ```
 src/
-  app/                      Next.js App Router — 39 page routes, 13 API routes
-    (routes)/history        public
+  app/                      Next.js App Router — 11 page routes, 10 API routes
+    page.tsx                landing
     translate/              main surface: both directions, tabbed
-    type-to-sign/           dedicated text→sign surface
-    conversation/           two-way conversation workspace
-    learn/  presentation/  evaluation/
-    admin/(dashboard)/      29 admin tools (auth-gated)
-    api/                    animations, ai/replies, feedback, collection, admin/*
+    learn/                  FSL reference — alphabet, numbers, tutorials
+    evaluation/             accuracy harness (thesis figures)
+    admin/                  7 pages, local-only — see §8.1
+    api/                    animations, admin/*, ai/replies, assets, videos
 
   features/                 the actual system — organized by domain, not by layer
     recognition/            ◄ DIRECTION A core. Buffer, normalize, model, smoothing,
-                              motion detection, priority, the useRecognition hook.
+                              motion detection, hand slots, label partition,
+                              priority, the useRecognition hook.
     sign-to-text/           Direction A UI + camera + MediaPipe wiring
     translation-pipeline/   ◄ DIRECTION B core. 9-stage orchestrator.
-    fsl-translation/        English/Tagalog → FSL gloss engine (grammar, dictionary)
+    fsl-translation/        text → FSL gloss engine (grammar, dictionary)
     text-to-sign/           gloss → animation queue, fingerspelling fallback, pauses
-    sign-animation/         ◄ playback + rendering. Largest subtree (~50 files).
-    type-to-sign/           Direction B UI, progressive loading
-    suggestions/            letter/word suggestion engine
-    analytics/              admin-side offline analysis (drift, clustering, quality)
-    active-learning/        feedback → retraining candidate pipeline
-    ai-assist/              admin authoring helpers
+    sign-animation/         ◄ playback + rendering. Largest subtree.
+    type-to-sign/           progressive loading for Direction B
+    suggestions/            letter/word suggestion engine (DP segmentation)
 
   lib/supabase/             client, queries, generated types
+  lib/admin/availability.ts admin on/off flag — see §8.1
 
-scripts/                    128 .mjs files. Dataset building, training, export,
+scripts/                    124 .mjs files. Dataset building, training, export,
                             auditing. Most are one-off phase artifacts — see §9.
 models/fsl_unified/         trained weights (JSON), metrics, confusion matrices
-public/models/              ◄ what the browser actually downloads
+public/models/              ◄ what the browser downloads: bilstm_tfjs + mediapipe
 datasets/processed/         train/val/test splits (NDJSON)
-supabase/migrations/        0001 … 0037
+supabase/migrations/        0001 … 0041
 ```
+
+**Removed in the final-architecture cleanup** (recoverable via `git show
+pre-cleanup:<path>`): `analytics/`, `active-learning/`, `ai-assist/`,
+`conversation/`, `adaptive-*`, `gesture-mapping/`, `knowledge-expansion/`,
+`profiles/`, and 23 of the 30 admin pages. Do not reintroduce them by copying from
+history without checking why they went.
+
+**Reachable but unused.** Eight modules under `sign-animation/player/` are not
+reachable from any entry point: `PhraseDetector`, `SentenceChunker`,
+`PlaybackSequencer`, `BodyMotionEngine`, `MotionCurveEngine`, `NaturalTimingEngine`,
+`AnimationRecommendationEngine`, and that subtree's `PipelineOrchestrator` (distinct
+from the live `translation-pipeline/PipelineOrchestrator`). `PhraseDetector` and
+`SentenceChunker` were restored and wired in `8ae3e2da`/`eeab4352`, but nothing
+reaches them today. Don't cite them as working features.
 
 ---
 
@@ -108,7 +125,8 @@ This is the part a reviewer will ask about. The full chain, in order:
 
 ```
 webcam frame (640×480, facingMode:user)
-  → MediaPipe Hand Landmarker      → up to 2 hands × 21 landmarks × (x,y,z)
+  → MediaPipe Hand Landmarker      → 21 landmarks × (x,y,z) per tracked hand
+                                     (numHands: 1 Alphabet / 2 Phrase Signs)
   → normalizeLandmarks()           → 126-float frame vector
   → SequenceBuffer.append()        → rolling 120-frame window
   → adaptiveSample()               → 35 frames at FIXED trained indices → [1,35,126]
@@ -130,9 +148,25 @@ MediaPipe config. Three user-selectable sensitivity presets:
 | **Balanced** (default) | 0.6 / 0.6 / 0.6 | — |
 | Strict | 0.8 / 0.8 / 0.75 | Only clean well-lit hands; steadiest |
 
-`numHands: 2`, `runningMode: "VIDEO"`. The `.task` model file is fetched from Google's
-CDN by default ([`SignToTextInterface.tsx:36`](src/features/sign-to-text/SignToTextInterface.tsx#L36)),
-with a local copy at `models/mediapipe/hand_landmarker.task` (7.6 MB).
+`runningMode: "VIDEO"`. **`numHands` is mode-dependent and defaults to 1** —
+[`handCaptureProfile.ts:48`](src/features/sign-to-text/handCaptureProfile.ts#L48).
+Tracking a second hand roughly halves throughput (measured at 480px input:
+2 hands → 631 ms/detection ≈ 1 FPS; 1 hand → 342 ms ≈ 3 FPS), so Alphabet mode
+runs with one and Phrase Signs mode rebuilds the graph with two.
+
+`numHands` is **compiled into the MediaPipe graph** when the detector is
+created, so changing it rebuilds the graph — the `MediaStream` is unaffected and
+the camera keeps running. The feature vector stays 126 (two hands × 21 × 3)
+either way; the absent hand is zero-filled, exactly as it already is whenever
+only one hand is in frame.
+
+The `.task` model and the WASM runtime are
+**self-hosted**, not fetched from a third-party CDN — see
+[`handLandmarkerConfig.ts`](src/features/sign-to-text/handLandmarkerConfig.ts). The
+task file ships at `public/models/mediapipe/hand_landmarker.task`; a copy also lives
+at `models/mediapipe/`. Same reasoning as self-hosting Inter in `0c2ad36b`: a cold
+third-party fetch on the critical path is both a load cost and a build-time network
+dependency, and a demo on venue wifi is exactly when it bites.
 
 ### 4.2 Normalization — [`normalize.ts`](src/features/recognition/normalize.ts)
 
@@ -184,6 +218,45 @@ training applied to short clips.
 `adaptiveSample()` returns the same layout regardless; `usedEarly` only reports that
 the window isn't full yet, so callers can weight a prediction made on partial evidence.
 
+#### Gesture spans are resampled — the alphabet path is not (`550a0563`)
+
+**This is the single most important thing in the recognition pipeline.** The two
+categories of training clip fill the 120-frame window differently:
+
+- **Alphabet clips** are a static image replicated across all 120 slots, so a letter
+  is invariant to how long it is held.
+- **Gesture clips** are real video, time-normalized so the movement spans the whole
+  window.
+
+Tail-zero padding reproduces the *alphabet* layout. Applied to a gesture it is
+wrong: a 42-frame THANK YOU occupied slots 0–41 and left 78 empty, so the model saw
+the movement at roughly **three times its trained speed**. Measured against the
+served model: **THANK YOU 88.3% → 9.0%, predicting DARK.**
+
+So a marked gesture span is now stretched across the trained window, mirroring
+training's interpolation. **With no gesture marked the raw window is used unchanged,
+so the alphabet path is byte-for-byte what it was.**
+
+Two boundary details that cost real accuracy, and that you will be tempted to
+"simplify":
+
+- **Spans are marked by `useRecognition` from `MotionDetector` transitions, on raw
+  landmarks.** Motion cannot be measured in the normalized space — that space is
+  wrist-centred and max-abs scaled, so a hand travelling across the body registers
+  no movement at all.
+- **Onset is rewound by `START_FRAMES`**, because the detector needs that much
+  movement before it will call a gesture and the start is already behind.
+- **Trailing idle is trimmed, but only while the remainder stays above
+  `MIN_GESTURE_FRAMES`** (31, the 5th percentile of training durations). A held
+  letter and a finished gesture are both movement-then-stillness, and motion alone
+  cannot separate them — trimming a letter's hold removes the letter. Measured: a
+  5-frame reach into a 15-frame hold read `t` at 12% once trimmed, against `b` at
+  74% intact. Untrimmed, GOOD MORNING read GIRL at 30% against 86% trimmed.
+
+Guarded by `__tests__/motionSignRecognition.test.ts` against the served model with
+real dataset landmarks: the gesture path, the held-letter regression, and
+reach-into-letter spans.
+
 ### 4.4 Inference — [`model/loader.ts`](src/features/recognition/model/loader.ts)
 
 - Fetches `/models/fsl_unified/bilstm_tfjs/{model.json,weights.bin,labels.json}`,
@@ -195,19 +268,43 @@ the window isn't full yet, so callers can weight a prediction made on partial ev
 - Module-level promise guard means the model loads exactly once per page.
 
 **Deployed model:** Bidirectional LSTM, 48 hidden units per direction (96 combined),
-dropout 0.25, dense-softmax over **131 classes** (26 letters + 105 phrase/number/
-day/month/color/food glosses). Weights: 312 KB.
+dropout 0.25, dense-softmax over **131 classes**. Weights: 313 KB.
+
+The 131 partition into three groups, and the UI depends on this being exact:
+
+| Group | Count | Form |
+|---|---|---|
+| Letters | 26 | single lowercase char, `a`–`z` |
+| Numbers | 10 | word labels `ONE`…`TEN` — **there is no `ZERO`** |
+| Phrases | 95 | multi-character glosses |
+
+[`labelPartition.ts`](src/features/recognition/labelPartition.ts) derives these from
+`labels.json` and `assertPartition()` checks the three cover the label set exactly.
+**Do not hardcode these lists.** A hardcoded digit row once advertised `0`–`9` in the
+UI — a class that cannot be recognized, while omitting `TEN`, which can. The same
+drift put a 20-item battery in `/evaluation` against a 131-class model.
+
+Note the asymmetry: Text-to-Sign can *render* a `0` animation (assets cover `0`–`10`),
+but Sign-to-Text can never *recognize* one.
 
 ### 4.5 Smoothing — [`smoothing.ts`](src/features/recognition/smoothing.ts)
 
 Raw per-inference output flickers. `PredictionSmoother` keeps a 5-entry history and:
 
 - **Majority vote** on label across the window.
-- **Hysteresis (0.10)**: to displace the current stable label, a challenger must beat
-  it by 0.10, not merely tie. Without this the label oscillates between two
-  near-equal classes.
+- **Hysteresis (0.10)**: to displace the current stable label, a challenger's *vote
+  share* must exceed the incumbent's *vote share* by 0.10. Without this the label
+  oscillates between two near-equal classes.
 - Confidence reported is the **window average**, not the instantaneous value.
 - Top-K is re-ranked by *frequency across the window*, not by raw probability.
+
+> **Both sides of the hysteresis comparison must be vote shares.** An earlier version
+> compared a vote ratio (0–1) against `lastStableConfidence`, which held a model
+> probability. Different units: with an incumbent at 0.95 the challenger needed a
+> vote share above 1.05, which cannot exist. The label locked until something reset
+> the smoother, which presented as "sign A, then sign B, and nothing happens for
+> several seconds." Fixed — leading 4-1 in a 5-frame window is a 0.6 margin, well
+> clear of 0.10. If you touch this, keep the units identical on both sides.
 
 ### 4.6 Motion detection — [`motionDetection.ts`](src/features/recognition/motionDetection.ts)
 
@@ -252,6 +349,17 @@ Three behaviours worth knowing:
    This is what makes fingerspelling feel responsive.
 3. **Render throttling** — state updates are gated on `UI_UPDATE_INTERVAL_MS` and on
    a `label:confidence` key, because naive updates at 30 Hz cause React to drop frames.
+4. **Commit clears the sequence.** `commitPrediction` in
+   [`SignToTextInterface.tsx`](src/features/sign-to-text/SignToTextInterface.tsx)
+   calls `clearSequence()` after appending. It did not, and the next sign then
+   competed against a 120-frame buffer still full of the previous one — up to four
+   seconds at 30fps. Together with the hysteresis unit bug above, that made the
+   stall unrecoverable rather than merely slow. Keep the reset.
+5. **Numbers reach the transcript but not the spelling buffer.** The suggestion
+   engine matches a run of characters against a word dictionary, so a digit mid-word
+   can never match and would suppress suggestions until cleared. `appendLabel` would
+   also mangle `"10"` — it slices the first character of anything outside
+   `MULTI_CHARACTER_LABELS`, so TEN became `1`.
 
 > **Effective inference cadence:** `fastMode ? 30ms : 100ms`. The `FAST_INFERENCE_INTERVAL_MS`
 > (50) branch at [`useRecognition.ts:99`](src/features/recognition/useRecognition.ts#L99)
@@ -267,7 +375,8 @@ Completely separate machinery. Entry point: `globalPipeline` in
 ### 5.1 The 9-stage pipeline
 
 Every stage is an interface with a swappable default (`replaceStage()`), and each run
-is timed and recorded into `stageResults` — that's what feeds `/admin/translation-debug`.
+is timed and recorded into `stageResults`. That used to feed `/admin/translation-debug`,
+which no longer exists — the timings are still collected, but nothing renders them.
 
 | # | Stage | Does |
 |---|---|---|
@@ -315,13 +424,38 @@ human motion rather than interpolated keyframes.
 
 **Resolution order** — [`api/animations/[gloss]/route.ts`](src/app/api/animations/[gloss]/route.ts):
 
-1. Supabase `getPublishedAnimationAsset(gloss)` — the published/moderated version
+1. Supabase published asset → **307 redirect to a short-lived signed Storage URL**
 2. Local filesystem `datasets/processed/user_holistic_assets/<gloss>/*_asset.json`
+   — only when `ANIMATION_LOCAL_FALLBACK` is on; **off in production**
 3. `404`
 
-Cached `public, max-age=300`. Step 2 means **local dev can serve assets that
-production does not have** — if a gloss animates locally but 404s on Vercel, it was
-never published to Supabase.
+The route **no longer proxies the bytes.** It resolves a path, signs it, and
+redirects; the payload goes straight from Storage's CDN to the browser. Before this,
+each request pulled ~3 MB through the function and spent ~50 ms parsing plus ~40 ms
+re-serializing it on a single event loop. Measured end-to-end for one cold letter:
+121.7 s → 33.3 s, with function bandwidth going from 3,011,400 B to 0.
+
+Three details that will bite you:
+
+- **307, not 308.** A permanent redirect would be cached by the browser against a URL
+  that expires in ten minutes and then replayed forever after it died. The redirect
+  itself caches for 60 s — long enough to absorb a burst on one gloss, short enough
+  never to hand out a near-expired signature.
+- **`X-Animation-Source` rides the redirect, not the final response.** Anything
+  asserting it must use `redirect: "manual"`. That header is the only thing
+  distinguishing a published asset from the dev fallback, and its absence hid a
+  six-week bug.
+- **Step 2 means local dev can serve assets production does not have.** If a gloss
+  animates locally but 404s on the deployed site, it was never published to Supabase.
+  Run with the fallback disabled (`npm run dev:prod-assets`) when you want dev to
+  behave like production.
+
+**Publishing ceiling.** Landmark JSON goes in the request body and the platform caps
+requests at 4.5 MB — roughly four seconds of video. THANK YOU at 189 frames is
+7.55 MB and cannot be published from the deployed app at all. Face-mesh landmarks
+measured at ~90% of payload (6.01 MB → 0.61 MB without them), so that is the lever;
+note that non-manual markers carry grammar in signed languages, so downsampling beats
+dropping.
 
 ### 5.3 Playback and rendering
 
@@ -362,8 +496,12 @@ feature names, and most of those are not machine learning.
 |---|---|---|---|
 | 1 | **MediaPipe Hand Landmarker** | Google's pretrained CNN. Third-party, not trained here. | Browser (WASM) |
 | 2 | **BiLSTM classifier** | **The thesis contribution.** Trained from scratch, this repo. 131 classes. | Browser (TF.js) |
-| 3 | **Suggested replies** | LLM — `gpt-4o-mini` over an OpenAI-compatible API | Server, **optional** |
-| 4 | Everything in `analytics/`, `active-learning/`, `ai-assist/`, intent detection, reply ranking | Deterministic heuristics + classical stats. K-Means++ is the only clustering. **No neural nets.** | Server / offline |
+| 3 | **Suggested replies** | LLM — `gpt-4o-mini` over an OpenAI-compatible API. **Unwired:** `/api/ai/replies` exists and `lib/ai-replies.ts` is the client half, but nothing in the app calls it. | Server, **optional** |
+| 4 | Intent detection, reply ranking | Deterministic heuristics + classical stats. **No neural nets.** | Server / offline |
+
+`analytics/`, `active-learning/` and `ai-assist/` were removed in the cleanup. If a
+doc or a phase entry refers to drift detection, gesture clustering or dataset quality
+inspection, that code is in history, not in the tree.
 
 ### The BiLSTM (#2) — this is the model
 
@@ -406,10 +544,11 @@ local server).
 ### What is *not* AI
 
 `detectIntent()` is keyword lists and regexes over 6 intents
-([`intentDetector.ts`](src/features/fsl-translation/intent/intentDetector.ts)).
-`GestureClusteringEngine` is K-Means++. `DriftDetector` is 6 threshold comparisons.
-`DatasetQualityInspector` is 6 image heuristics (blur, lighting, framing…). Good,
-useful code — just don't describe it as learned.
+([`intentDetector.ts`](src/features/fsl-translation/intent/intentDetector.ts)). The
+word suggestion engine is dynamic-programming segmentation plus banded ranking
+([`matching.ts`](src/features/suggestions/matching.ts)) — a real algorithm, but not a
+learned one. Everything with "Engine" in its name under `sign-animation/player/` is a
+heuristic. Good, useful code — just don't describe any of it as learned.
 
 ---
 
@@ -426,7 +565,7 @@ queue instead of blocking the UI; `sync.ts` flushes it opportunistically. All of
 guarded by an `isLocalStorageAvailable()` probe, so private-mode browsers degrade
 rather than throw.
 
-Notable tables (37 migrations under `supabase/migrations/`):
+Notable tables (41 migrations under `supabase/migrations/`):
 `translation_sessions`, `translation_logs`, `gesture_definitions`, `conversation_sessions`,
 `conversation_messages`, `telemetry_events`, `review_queue`, `model_versions`,
 `animation_assets`, `gesture_knowledge_base`, `gesture_confusion_pairs`.
@@ -451,7 +590,7 @@ nvm use && npm install && npm run dev
 |---|---|
 | `npm run dev` | dev server on :3000 |
 | `npm run build` | production build (needs Node 22 — see §2) |
-| `npm test` | Vitest, 47 test files |
+| `npm test` | Vitest unit suite |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | next lint |
 | `npm run knip` | unused-export detection |
@@ -518,7 +657,7 @@ ship exposed.
 
 ## 9. The offline training pipeline
 
-Four blessed npm scripts, in order. **Everything else in `scripts/` (128 files) is a
+Four blessed npm scripts, in order. **Everything else in `scripts/` (124 files) is a
 one-off phase artifact.** Many are versioned duplicates (`-v2`, `-v3`, `-v4`, `-v45`)
 left in place after later phases superseded them. Check the script header and the
 matching `AGENTS.md` phase entry before running anything unlisted.
@@ -603,7 +742,78 @@ Playwright e2e in `e2e/`. Camera tests need fake-media browser flags.
 ## 12. Documentation drift (read this before trusting any other doc)
 
 The project ran ~48 phases across many sessions. Several docs assert things the code
-no longer does. Verified against the code on 2026-07-27:
+no longer does. Verified against the code on **2026-08-10**:
+
+### The recurring failure — a check narrower than the claim drawn from it
+
+This has now happened five times, each time producing a confidently wrong statement,
+and each time invisible to typecheck, lint, tests, and build. Recognise the shape:
+
+| What was checked | What was claimed | The gap |
+|---|---|---|
+| The local branch | "no credential in any tracked file" | A live `service_role` key sat on `origin/main` for six weeks |
+| Placeholders `[...]`, `<...>` | "this password is exposed" | `${process.env.DB_PASSWORD}` is a template literal |
+| Import graph, extensionless specifiers | "8 files are unreachable" | `import("../src/.../index.ts")` resolved to nothing |
+| A populated `node_modules` | "the build passes" | Three MediaPipe packages were absent from `package.json` |
+| A green Vercel build | "the site is deployed" | A rollback had pinned the domain to a build from weeks earlier |
+
+Two structural guards exist because of this and should not be removed:
+`ignoredSource.test.ts` asserts nothing under `src/` is git-ignored (an unanchored
+`models/` rule once hid two admin pages from the repository entirely, so they were
+never deployed while passing every local check), and the pre-push secret scan runs
+against the **outgoing commit range**, which by definition cannot be narrower than
+what is published.
+
+### The second failure — a check that was correct, in the wrong frame
+
+The family above is *the check was narrower than the claim*. This one is different
+and harder to catch, because nothing about the check looks wrong: the measurement
+is rigorous, the reasoning follows, and the frame around it goes unexamined.
+
+Five instances, all from a single investigation in August 2026 — chasing 16
+navigation timeouts in a 278-video extraction run. The underlying fault was one
+misread line (`waitUntil: "networkidle0"`, where the page fetches hundreds of
+frames and the network never goes idle inside the 60s budget). Four separate
+reasoning failures accumulated around finding it.
+
+| The check | Why it was sound | Why it misled |
+|---|---|---|
+| Failures per 50-video window, across the whole run | A real correlation: 0 failures in videos 1–50, 8 in 201–250 | **Position was a proxy for video length.** Long videos cluster later alphabetically (JANUARY, MARCH, MAY, SEPTEMBER). The ramp was real and meant nothing about accumulation |
+| "The run took 85 minutes" | Measured, reproducible | **The number was good because of a failure.** 16 videos aborted at 60s before doing any work. Fixing them made the run slower and more correct |
+| Reading a log that showed steady progress | The log was accurate up to the last line it wrote | **A dead process and a slow one look identical** in a log that only prints on completion. 46 minutes of "progress" from a run that had crashed with EADDRINUSE |
+| A patch script printing "patched" | It ran without error | **It reported success for having run, not for having changed anything.** A no-op replacement matched nothing, twice. Only caught because the result happened to be syntactically broken |
+| `{ timeout: 90_000 }` on every wait in a spec | Explicit, deliberate, and documented in the file's header as "waits on conditions, not timers" | **A framework default silently overrode it.** Playwright caps each test at 30s; the inner timeouts were dead letters. The spec passed or failed by fixture size, for a reason nothing in the test body expressed |
+
+What these share: **the analysis could only see the hypothesis already formed.**
+Testing "does the failure rate climb with N" and getting yes never asks what else
+changes with N. The window breakdown was more rigorous than the conclusion it
+supported — which is precisely why it was persuasive.
+
+Practical guards, all cheap:
+
+  - Before concluding from a correlation, name the other variables that move with
+    the axis you measured. Position, time and index are proxies far more often
+    than they are causes.
+  - Treat any patch or codegen tool as reporting nothing unless it **asserts a
+    match count**. "Ran successfully" is not "changed something".
+  - Give long-running jobs a **timestamped heartbeat**. Liveness must be readable
+    from the artefact, not reconstructed by investigation.
+  - When an explicit value seems ignored, look for an **enclosing default** before
+    doubting the value. Frameworks cap, wrap and override.
+  - A performance figure that improves after a fix is expected; one that *worsens*
+    is worth understanding before it is optimised away.
+
+Corollary worth internalising: **`.vercelignore` takes precedence over `.gitignore`.**
+Anything reading from `process.cwd()` at request time may not exist in production.
+That is why `/api/videos` USED TO return blank — it read `datasets/raw/user_videos`, which
+is excluded from the upload.
+
+**Corrected 2026-08-18:** `/api/videos` is no longer filesystem-backed. It resolves
+from `source_video_path` and 307s to a signed Storage URL, so it works in
+production. The stale claim outlived the fix here, in SYSTEM_DOCUMENTATION.md, and
+in the route's own header comment — and two readers took the comment as current,
+one of them building a redundant route on the strength of it. A fixed route with
+an unfixed comment is worse than an unfixed route.
 
 ### Stale documents — two now fixed
 
@@ -631,8 +841,8 @@ Phase 23 and the "Current Status" section describe a hybrid static+temporal reco
 - No `src/features/recognition/hybrid/` directory exists.
 - `useRecognition.ts` calls only `infer(sample)` — the temporal BiLSTM — and hardcodes
   `recognitionSource: "temporal"` ([line 145](src/features/recognition/useRecognition.ts#L145)).
-- `public/models/` contains exactly one model (`bilstm_tfjs`, 312 KB). There is no
-  static/LLC model to route to.
+- `public/models/` contains exactly one *classifier* (`bilstm_tfjs`, 313 KB) plus the
+  self-hosted MediaPipe hand landmarker. There is no static/LLC model to route to.
 
 The `.claude/skills/fsl-pipeline` skill repeats this claim and is wrong for the same
 reason. Accuracy figures quoted as "hybrid" (91.5% alphabet / 92.3% phrase) do not
@@ -659,8 +869,9 @@ happens to carry identical indices, so the comment holds either way.)
   `__tests__/temporalAlignment.test.ts`. The test exists and does what the comment
   claims — only the filename in the comment is wrong.
 - `AGENTS.md` Phase 43b advertises a "full CRUD dictionary manager at
-  `/admin/translation`". No such route exists (`/admin/translation-debug` and
-  `/admin/translation-evaluation` do). Edit `gestureDictionary.ts` in source.
+  `/admin/translation`". No such route exists, and neither do
+  `/admin/translation-debug` or `/admin/translation-evaluation` any more — both were
+  removed in the cleanup. Edit `gestureDictionary.ts` in source.
 
 ### Dead code in the hot path
 
@@ -680,9 +891,11 @@ Harmless today, misleading when you're debugging:
 
 ### Counts in `AGENTS.md` are behind
 
-"8 test files with 163 passing tests" — actual: 47 test files, ~790 passing (per the
-Phase 47 entry). "133+ model classes" — actual: 131. Phase 46 also records that
-`npm run build` fails under Node 24; that's the version pin in §2, not a code bug.
+"8 test files with 163 passing tests" — actual: 69 test files (unit + e2e).
+"133+ model classes" — actual: 131. Phase 46 also records that `npm run build` fails
+under Node 24; that's the version pin in §2, not a code bug. Test *counts* moved a
+lot during the cleanup as suites were removed and repointed, so treat any absolute
+number in an older phase entry as historical — run the suite instead.
 
 ---
 
@@ -697,7 +910,12 @@ Phase 47 entry). "133+ model classes" — actual: 131. Phase 46 also records tha
 | Add a word→gloss mapping | `fsl-translation/dictionary/gestureDictionary.ts` (source edit) |
 | Fix animation playback | `sign-animation/player/PlaybackEngine.ts` |
 | Change the avatar's look | `sign-animation/renderer/` |
-| Add an animation for a gloss | `/admin/animation-studio` → publish to Supabase |
-| Debug a translation | `/admin/translation-debug` (per-stage timings + output) |
-| Check model health | `/admin/model-health`, `/admin/recognition-analysis` |
+| Add an animation for a gloss | `/admin/animation-studio` → publish to Supabase (local only) |
+| Inspect a published animation | `/admin/animation-inspector` (local only) |
+| Measure model accuracy | `/evaluation` — public route, drives the real pipeline |
 | Retrain | §9 — and read the warnings first |
+
+The seven surviving admin pages are `login`, the dashboard root, `animation-studio`,
+`animation-dataset`, `animation-library`, `animation-inspector`, and `system`.
+`translation-debug`, `model-health`, `recognition-analysis`, `models`, `training`,
+`analytics`, `audits` and the rest were removed — 23 of 30.
