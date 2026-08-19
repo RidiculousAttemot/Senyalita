@@ -223,9 +223,15 @@ html[data-contrast="high"] :focus-visible {
    being presented, and the player's own pause and speed controls are the
    accommodation that belongs to content.
 
-   So canvas and video are exempt below, along with anything inside the sign
-   stage. Users who need playback stopped have a Pause button; users who need
-   it slower have a speed control.
+   So canvas and video are exempt below. Users who need playback stopped have a
+   Pause button; users who need it slower have a speed control.
+
+   Being precise about what that exemption does: playback is driven by
+   requestAnimationFrame in PlaybackEngine, and the canvas carries no CSS
+   animation or transition today, so this block could not have frozen a sign
+   either way. The exemption is defensive rather than load-bearing -- it stops a
+   future CSS transition on the stage from silently turning reduced-motion into
+   "no signs render".
    --------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   *,
