@@ -673,9 +673,26 @@ export function SignToTextInterface() {
               </span>
             ))}
 
+            {/*
+              Camera state for assistive tech, separate from the pill that shows it.
+
+              The pill was itself aria-live="polite" while rendering the FPS counter
+              and the cam/det/CPU diagnostics -- all of which update inside the
+              per-frame detection loop. A screen reader therefore re-announced a
+              stream of changing numbers for as long as the camera ran, which is
+              worse than announcing nothing: it makes the page unusable rather than
+              merely quiet.
+
+              This region carries only the state label, so the announcement is
+              "Camera off" -> "Starting" -> "Live", once each. The pill keeps its
+              numbers for sighted users and stays readable when navigated to; it
+              just no longer interrupts.
+            */}
+            <span className="sr-only" role="status" aria-live="polite">
+              {cameraStatusLabel[status]}
+            </span>
             <div className="absolute left-4 top-4 flex flex-wrap items-center gap-2">
               <span
-                aria-live="polite"
                 className="flex items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-[0.6875rem] font-semibold text-white ring-1 ring-inset ring-white/15 backdrop-blur-md"
               >
                 <span
