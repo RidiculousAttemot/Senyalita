@@ -132,6 +132,36 @@ describe("landing showcase panel", () => {
     expect(screen.getByText(/no recording for these signs yet/i)).toBeTruthy();
   });
 
+  it("keeps the expensive modules out of the landing page's first load", async () => {
+    /**
+     * A source-level guard, because the cost is decided by the import keyword
+     * and nothing else. The whole load policy rests on the player, the loader,
+     * the pipeline and the trim helper being reachable only through dynamic
+     * import; a single static one silently moves them into the bundle every
+     * visitor pays for, and no rendered assertion would notice.
+     *
+     * This already happened once: activeSpan went in as a static import and
+     * had to be moved back out.
+     */
+    const fs = await import("node:fs");
+    const heavy = [
+      "@/features/sign-animation/player/SignAnimationPlayer",
+      "@/features/sign-animation/hooks/useAnimationClip",
+      "@/features/sign-animation/activeSpan",
+      "@/features/sign-animation/publishedGlosses",
+      "@/features/translation-pipeline",
+    ];
+    for (const file of ["InteractiveShowcaseSection.tsx", "SignPlaybackDemo.tsx"]) {
+      const source = fs.readFileSync(`src/components/landing/${file}`, "utf8");
+      for (const mod of heavy) {
+        // `import x from "mod"` at the top of a line is static; `import("mod")`
+        // and `import type` are not.
+        const statically = new RegExp(`^import\\s+(?!type\\b)[^\\n]*["']${mod.replace(/[/@]/g, "\\$&")}["']`, "m");
+        expect(statically.test(source), `${file} statically imports ${mod}`).toBe(false);
+      }
+    }
+  });
+
   it("claims no accuracy figure and no fabricated pipeline stages", async () => {
     const { container } = await show();
     const text = container.textContent ?? "";
