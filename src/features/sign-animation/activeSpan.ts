@@ -46,6 +46,30 @@ const TRAIL_FRAMES = 4;
 /** A span shorter than this is not believable; the clip is returned whole. */
 const MIN_SPAN_FRAMES = 12;
 
+/**
+ * Never cut away more than a third of a clip.
+ *
+ * THIS IS THE GUARD THAT MAKES THE HEURISTIC SAFE TO LEAVE RUNNING. Tuned on
+ * six word signs, the detector looked reliable -- it retained 72-100% on all of
+ * them. Run over all 130 published assets it turned out to destroy the
+ * alphabet:
+ *
+ *   R  214f -> 15f (7.0%)      S  177f -> 15f (8.5%)
+ *   W  225f -> 17f (7.6%)      N  178f -> 16f (9.0%)
+ *
+ * A letter is a static handshape. The signer holds it, so pose velocity reads
+ * the entire sign as idle and the only movement in the clip is the arm coming
+ * down at the end -- so the span lands on the exit and throws away the letter.
+ * Trimming a sign into nothing is far worse than showing a little dead air.
+ *
+ * 0.65 sits in an empty band in the measured distribution: the lowest genuine
+ * trim is GOOD MORNING at 72.2%, and the highest suspect one is the numeral 4
+ * at 59.4%. Median across the library is 94.2%. Anything below the floor is
+ * returned whole and untouched, which is always a correct clip -- just a longer
+ * one.
+ */
+const MIN_RETAINED_FRACTION = 0.65;
+
 export interface ActiveSpan {
   start: number;
   end: number;
@@ -92,11 +116,15 @@ export function activeSpan(frames: AnimationFrame[]): ActiveSpan {
 
   if (last - first + 1 < MIN_SPAN_FRAMES) return whole;
 
-  return {
-    start: Math.max(0, first - LEAD_FRAMES),
-    end: Math.min(frames.length - 1, last + TRAIL_FRAMES),
-    trimmed: true,
-  };
+  const start = Math.max(0, first - LEAD_FRAMES);
+  const end = Math.min(frames.length - 1, last + TRAIL_FRAMES);
+
+  // Measured after the margins, because those are what the caller actually
+  // keeps. See MIN_RETAINED_FRACTION: this is the check that stops a held
+  // handshape from being trimmed down to the moment the signer lowers it.
+  if ((end - start + 1) / frames.length < MIN_RETAINED_FRACTION) return whole;
+
+  return { start, end, trimmed: true };
 }
 
 /**
