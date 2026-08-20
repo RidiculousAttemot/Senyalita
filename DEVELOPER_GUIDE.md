@@ -526,7 +526,15 @@ Training hyperparameters (from `models/fsl_unified/*/config.json`):
 | Seed | 2026 |
 | Extras | class weighting, curriculum learning |
 
-Reported: **94.86% test accuracy, 91.85% macro F1** (Phase 45).
+Reported, for the DEPLOYED model: **bilstm_v4 — 93.99% test accuracy, 94.10%
+macro F1** (`models/fsl_unified/bilstm_v4/metrics.json`).
+
+The figures here were 94.86% / 91.85%, which are **bilstm_v2**'s. v2 has higher
+accuracy and materially lower macro F1, so quoting it was not merely stale — it
+overstated accuracy and understated balance at the same time. The served
+`labels.json` hashes identically to v4's and differently from v2's, so v4 is what
+is deployed. Always state the model version beside an accuracy figure; a number
+without its model is exactly how this survived across five documents.
 
 ### The LLM (#3) — [`api/ai/replies/route.ts`](src/app/api/ai/replies/route.ts)
 
@@ -846,7 +854,7 @@ Phase 23 and the "Current Status" section describe a hybrid static+temporal reco
 
 The `.claude/skills/fsl-pipeline` skill repeats this claim and is wrong for the same
 reason. Accuracy figures quoted as "hybrid" (91.5% alphabet / 92.3% phrase) do not
-describe the shipping system; **94.86% test accuracy on the BiLSTM does.**
+describe the shipping system; **93.99% test accuracy on bilstm_v4 does.**
 
 ### Script name vs. output path
 
