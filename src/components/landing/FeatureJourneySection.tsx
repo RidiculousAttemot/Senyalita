@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { ScanLine, Languages, Layers3, BookOpen, Database, Settings, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SpotlightCard } from "./SpotlightCard";
+import { MODEL_LABELS } from "@/lib/admin/modelLabels";
 
 interface Feature {
   icon: LucideIcon;
@@ -46,7 +47,8 @@ const features: Feature[] = [
     // model". There is no public contribution path; recordings are ingested
     // by an admin, so this invited visitors to do something they cannot.
     title: "Research Dataset",
-    description: "Trained on 131 sign classes extracted from recorded FSL video, with the pipeline documented end to end.",
+    // Derived: retraining changes this, and a literal would not notice.
+    description: `Trained on ${MODEL_LABELS.length} sign classes extracted from recorded FSL video, with the pipeline documented end to end.`,
   },
   {
     icon: Settings,

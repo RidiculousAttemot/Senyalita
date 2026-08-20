@@ -5,6 +5,8 @@ import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, Hand, PlayCircle, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SpotlightCard } from "./SpotlightCard";
+import { MODEL_LABELS } from "@/lib/admin/modelLabels";
+import { partitionLabels } from "@/features/recognition/labelPartition";
 
 /**
  * The landing page's entry point to /learn.
@@ -15,35 +17,54 @@ import { SpotlightCard } from "./SpotlightCard";
  * nav items did nothing.
  *
  * The figures below are the real ones and are worth keeping honest, because
- * the distinction is the whole point of /learn: 37 signs have a recorded
- * animation you can play, while the camera recognises 131 classes. Those are
+ * the distinction is the whole point of /learn: only some signs have a recorded
+ * animation you can play, while the camera recognises every model class. Both
+ * counts are derived below rather than written down. Those are
  * different sets, and a visitor who assumes every recognisable sign has a
  * video to study would be misled.
  */
 
-const highlights = [
-  {
-    icon: PlayCircle,
-    title: "37 signs you can play",
-    description:
-      "Every letter A–Z and the numbers 0–10 have a recorded animation, played back frame by frame from real signing.",
-  },
-  {
-    icon: Hand,
-    title: "131 classes recognised",
-    description:
-      "26 letters, 10 numbers and 95 phrase signs the camera can identify — a larger set than the recorded library.",
-  },
-  {
-    icon: Search,
-    title: "Search the whole vocabulary",
-    description:
-      "Filter by letter, number or phrase to see exactly what the system knows, and what it does not yet.",
-  },
-];
+/** Split from the model's own labels, never restated. See StatsSection. */
+const PARTITION = partitionLabels(MODEL_LABELS);
 
-export function LearnSection() {
+/**
+ * Both counts are derived, and they are deliberately different sets.
+ *
+ * The recorded count comes from the database, because publishing changes it;
+ * the recognised count comes from the model's labels, because retraining
+ * changes it. Writing either one down is what went wrong before: "37 signs you
+ * can play" was true until the 91-sign batch, and then it was on the landing
+ * page being wrong by a factor of three and a half.
+ */
+function highlightsFor(publishedSignCount: number | null) {
+  return [
+    {
+      icon: PlayCircle,
+      title: publishedSignCount === null
+        ? "Signs you can play"
+        : `${publishedSignCount} signs you can play`,
+      description:
+        "Each one has a recorded animation, played back frame by frame from the landmarks of real signing.",
+    },
+    {
+      icon: Hand,
+      title: `${MODEL_LABELS.length} classes recognised`,
+      description:
+        `${PARTITION.letters.length} letters, ${PARTITION.numbers.length} numbers and `
+        + `${PARTITION.phrases.length} phrase signs the camera can identify — a different set from the recorded library.`,
+    },
+    {
+      icon: Search,
+      title: "Search the whole vocabulary",
+      description:
+        "Filter by letter, number or phrase to see exactly what the system knows, and what it does not yet.",
+    },
+  ];
+}
+
+export function LearnSection({ publishedSignCount }: { publishedSignCount: number | null }) {
   const prefersReducedMotion = useReducedMotion();
+  const highlights = highlightsFor(publishedSignCount);
 
   return (
     <section id="learn" className="scroll-mt-20 bg-senyalita-surface px-6 py-24 md:py-28">
