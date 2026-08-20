@@ -6,7 +6,6 @@ import { motion, useReducedMotion } from "framer-motion";
 import { Play } from "lucide-react";
 import type { PlaybackProgress } from "@/features/sign-animation/player/SignAnimationPlayer";
 import type { AnimationClip } from "@/features/sign-animation/types";
-import { trimToActiveSpan } from "@/features/sign-animation/activeSpan";
 import { cn } from "@/lib/utils";
 import { HandSkeleton } from "./HandSkeleton";
 
@@ -120,6 +119,11 @@ export function SignSurface({
     // is: a static import would put the loader and its cache in the landing
     // page's first load, for a fetch that may never happen.
     const { globalLoader } = await import("@/features/sign-animation/hooks/useAnimationClip");
+    // Started alongside the asset rather than awaited before it. Both are
+    // dynamic to keep them out of first load, but the asset is megabytes and
+    // must not queue behind a 2kB module -- awaiting them together delayed the
+    // request by a round trip, which the hero's own test noticed.
+    const trimming = import("@/features/sign-animation/activeSpan");
     const asset = await globalLoader.load(target);
     // The visitor kept typing while this was in flight; this sign is no longer
     // the one on screen.
@@ -130,11 +134,12 @@ export function SignSurface({
       setLoad({ status: "unavailable" });
       return;
     }
+    // Trimmed so the panel opens on the sign rather than on the rest pose it
+    // was recorded with. See activeSpan: KNOW stands still for its first 15
+    // frames, and a looping panel replays that every cycle.
+    const { trimToActiveSpan } = await trimming;
     setLoad({
       status: "ready",
-      // Trimmed so the panel opens on the sign rather than on the rest pose it
-      // was recorded with. See activeSpan: KNOW stands still for its first 15
-      // frames, and a looping panel replays that every cycle.
       clip: { id: `landing-${target}`, gesture: target, asset: trimToActiveSpan(asset) },
     });
   }, []);
