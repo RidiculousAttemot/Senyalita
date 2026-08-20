@@ -605,11 +605,11 @@ const SignAnimationPlayer = memo(forwardRef<SignAnimationPlayerHandle, SignAnima
       width: renderWidth, height: renderHeight, theme, showLabels, showNonManual, highContrast,
       backgroundColor: backgroundColor ?? (highContrast ? "#000000" : "#FBF4EA"),
     });
-  }, [renderWidth, renderHeight, theme, showLabels, showNonManual, highContrast, backgroundColor, viewMode]);
+  }, [renderWidth, renderHeight, theme, showLabels, showNonManual, highContrast, backgroundColor, viewMode, videoFailed]);
 
   useEffect(() => {
     engineRef.current?.setExactMode(usesLandmarkRenderer(viewMode, videoFailed));
-  }, [viewMode]);
+  }, [viewMode, videoFailed]);
 
   useEffect(() => {
     exactRendererRef.current?.setShowTrails(showTrails);
