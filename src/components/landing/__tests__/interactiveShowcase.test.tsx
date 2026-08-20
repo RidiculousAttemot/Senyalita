@@ -69,16 +69,20 @@ describe("landing showcase panel", () => {
     expect(load).not.toHaveBeenCalled();
   });
 
-  it("shows the gloss the engine actually returns for the demo phrase", async () => {
+  // Generous on purpose. This is the only case that waits on the translation
+  // pipeline's dynamic import rather than on an already-resolved value, and
+  // under the full suite that import competes with 79 other files -- it failed
+  // once at a 10s budget while passing every time in isolation. The assertion
+  // is about what the engine returns, not about how fast it loads, so the
+  // timeout should not be the thing under test.
+  it("shows the gloss the engine actually returns for the demo phrase", { timeout: 60_000 }, async () => {
     const { container } = await show();
 
     // The literal this panel used to carry was ["KAMUSTA", "KA"]. The engine
     // resolves "Kamusta ka?" to a single HOW ARE YOU, and neither KAMUSTA nor
     // KA is a published sign -- so the old panel advertised a result the system
     // would never produce, directly under "this runs the real engine".
-    // Generous, because this is the first case that waits on the pipeline's
-    // dynamic import rather than on a value it has already produced.
-    await waitFor(() => expect(container.textContent).toContain("HOW ARE YOU"), { timeout: 10_000 });
+    await waitFor(() => expect(container.textContent).toContain("HOW ARE YOU"), { timeout: 45_000 });
     expect(container.textContent).not.toMatch(/\bKAMUSTA\b/);
     expect(container.textContent).not.toMatch(/\bKA\b/);
   });

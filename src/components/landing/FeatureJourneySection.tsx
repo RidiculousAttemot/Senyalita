@@ -25,7 +25,12 @@ const features: Feature[] = [
   {
     icon: Layers3,
     title: "Landmark Animation",
-    description: "Visualize signs through smooth MediaPipe skeletal animation, not stiff pre-recorded clips.",
+    // "not stiff pre-recorded clips" was backwards, and the two landing panels
+    // now say so out loud: both play recorded landmark data and caption it as
+    // such. The real distinction is skeleton versus video -- the landmarks are
+    // recorded from a signer, then drawn, which is why playback is a few
+    // hundred KB of coordinates instead of a video stream.
+    description: "Visualize signs as MediaPipe skeletal animation, drawn from landmarks recorded from a signer rather than replayed as video.",
   },
   {
     icon: BookOpen,
