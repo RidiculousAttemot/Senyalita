@@ -2,49 +2,74 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, CornerDownLeft, Loader2, Pause, Play, Sparkles } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { HandSkeleton } from "./HandSkeleton";
+import { ArrowRight, CornerDownLeft, Loader2, Sparkles } from "lucide-react";
+import { SignSurface } from "./SignPlaybackDemo";
+
+type GlossItem = { gloss: string; original: string; strategy: string };
 
 type PipelineFn = (text: string) => {
-  glossSequence: Array<{ gloss: string; original: string; strategy: string }>;
+  glossSequence: GlossItem[];
   language: { language: "en" | "tl" | "mixed" };
   totalProcessingTimeMs: number;
 };
 
+/**
+ * The phrase shown before the visitor types anything.
+ *
+ * Its gloss is NOT written down here. It used to be -- `DEMO_GLOSS =
+ * ["KAMUSTA", "KA"]` -- and it was wrong: the engine resolves "Kamusta ka?" to
+ * a single HOW ARE YOU, which is a published sign, while neither KAMUSTA nor KA
+ * exists as an asset. So the panel advertised a two-sign result that the system
+ * would never produce, directly under the line "this runs Senyalita's real
+ * translation engine". Everything on screen now comes back from the engine.
+ */
 const DEMO_PHRASE = "Kamusta ka?";
-const DEMO_GLOSS = ["KAMUSTA", "KA"];
 const EXAMPLES = ["Kamusta ka?", "Salamat po", "Mahal kita", "Good morning"];
-
-const STEPS = ["Reading text", "Detecting language", "Mapping to FSL", "Signing"] as const;
-const STEP_MS = 2100;
 
 const LANGUAGE_LABEL: Record<string, string> = { en: "English", tl: "Filipino", mixed: "Mixed" };
 
+/**
+ * THE LOAD POLICY, AND WHY THIS PANEL DOES NOT PREFETCH.
+ *
+ * This panel is a free-text box in front of a library of 2.3-4.4MB assets. The
+ * naive wiring -- fetch the animation for whatever the box currently resolves
+ * to -- would pull megabytes per debounced keystroke and be far worse than the
+ * static hand it replaces.
+ *
+ * Split by cost, because the two halves are not comparable:
+ *
+ *   Resolving text to gloss is free. It is synchronous, local, and needs no
+ *   network at all, so it runs on every pause in typing and the gloss appears
+ *   immediately. That is the half the section's claim is actually about.
+ *
+ *   Fetching the animation is expensive, so it happens only when a visitor
+ *   asks for one specific sign by pressing play. Not on typing, not on a
+ *   preset chip, not on scroll. One in flight at a time, keyed by gloss, and
+ *   repeats are served from the loader's cache.
+ *
+ * NOTHING IS PREFETCHED, including the four presets. The hero panel already
+ * spends 2.34MB automatically when it scrolls into view; a second automatic
+ * asset here would double that for a visitor who only scrolled past. The two
+ * cheap things -- the engine chunk and the 547-byte published-gloss list -- are
+ * pulled when the section comes into view, so the panel can name the sign and
+ * say truthfully whether a recording exists before anyone spends a megabyte.
+ *
+ * The measured result: the landing page's transferred bytes are unchanged.
+ */
 export function InteractiveShowcaseSection() {
   const prefersReducedMotion = useReducedMotion();
 
-  // --- Ambient demo loop (runs until the visitor takes over) ---
-  const [step, setStep] = useState(0);
-  const [playing, setPlaying] = useState(true);
-
-  // --- Live mode (visitor typed something) ---
   const [input, setInput] = useState("");
-  const [liveGloss, setLiveGloss] = useState<string[] | null>(null);
-  const [liveMeta, setLiveMeta] = useState<{ language: string; ms: number } | null>(null);
+  const [sequence, setSequence] = useState<GlossItem[] | null>(null);
+  const [meta, setMeta] = useState<{ language: string; ms: number } | null>(null);
   const [engineState, setEngineState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
+  /** Null until the registry answers; distinguishes "no" from "not yet known". */
+  const [playable, setPlayable] = useState<Set<string> | null>(null);
 
   const pipelineRef = useRef<PipelineFn | null>(null);
-  const isLive = liveGloss !== null;
+  const sectionRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (!playing || isLive || prefersReducedMotion) return;
-    const t = setInterval(() => setStep((s) => (s + 1) % STEPS.length), STEP_MS);
-    return () => clearInterval(t);
-  }, [playing, isLive, prefersReducedMotion]);
-
-  /** The real translation engine is pulled in only once a visitor actually
-   * engages, so it never weighs down the landing page's first load. */
+  /** The real translation engine, pulled in only once it is about to be used. */
   const ensureEngine = useCallback(async (): Promise<PipelineFn | null> => {
     if (pipelineRef.current) return pipelineRef.current;
     setEngineState("loading");
@@ -62,17 +87,12 @@ export function InteractiveShowcaseSection() {
 
   const runTranslation = useCallback(async (text: string) => {
     const trimmed = text.trim();
-    if (!trimmed) {
-      setLiveGloss(null);
-      setLiveMeta(null);
-      return;
-    }
     const pipeline = await ensureEngine();
     if (!pipeline) return;
     try {
-      const result = pipeline(trimmed);
-      setLiveGloss(result.glossSequence.map((g) => g.gloss));
-      setLiveMeta({
+      const result = pipeline(trimmed || DEMO_PHRASE);
+      setSequence(result.glossSequence);
+      setMeta({
         language: LANGUAGE_LABEL[result.language.language] ?? "Detected",
         ms: result.totalProcessingTimeMs,
       });
@@ -81,24 +101,62 @@ export function InteractiveShowcaseSection() {
     }
   }, [ensureEngine]);
 
-  // Translate as the visitor types, once they pause briefly.
+  /**
+   * Both cheap things arrive together, when the section is on screen.
+   *
+   * Neither is an animation asset: the engine is a JS chunk and the registry is
+   * 547 bytes. Doing it here rather than on mount keeps them off the landing
+   * page's first load, which is the number this panel is judged on.
+   */
   useEffect(() => {
-    if (!input.trim()) {
-      setLiveGloss(null);
-      setLiveMeta(null);
+    const el = sectionRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      // No observer (older browser, or a test environment): resolve the demo
+      // phrase rather than leaving the panel permanently blank.
+      void runTranslation("");
       return;
     }
-    const timer = setTimeout(() => runTranslation(input), 350);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        observer.disconnect();
+        void runTranslation("");
+        void import("@/features/sign-animation/publishedGlosses")
+          .then((m) => m.publishedGlosses.load())
+          .then(setPlayable)
+          // Silent: the registry already logs, and a failure here must only
+          // mean the panel cannot promise a recording exists.
+          .catch(() => setPlayable(new Set()));
+      },
+      { rootMargin: "0px 0px -10% 0px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [runTranslation]);
+
+  // Re-resolve as the visitor types, once they pause. Free -- no network.
+  useEffect(() => {
+    if (!input.trim()) return;
+    const timer = setTimeout(() => void runTranslation(input), 350);
     return () => clearTimeout(timer);
   }, [input, runTranslation]);
 
-  const shownPhrase = isLive ? input.trim() : DEMO_PHRASE;
-  const shownGloss = liveGloss ?? DEMO_GLOSS;
-  const showSkeleton = isLive || step >= 2 || Boolean(prefersReducedMotion);
-  const showGloss = isLive || step >= 1 || Boolean(prefersReducedMotion);
+  const isLive = input.trim().length > 0;
+  const shownGloss = sequence?.map((g) => g.gloss) ?? [];
+
+  /**
+   * The sign the panel offers to play: the first resolved gloss that actually
+   * has a recording. "Mahal kita" resolves to LOVE and KITA, of which LOVE is
+   * not published and KITA is fingerspelled -- offering LOVE would be a play
+   * button that can only fail.
+   */
+  const firstPlayable = playable
+    ? shownGloss.find((g) => playable.has(g)) ?? null
+    : null;
+  const recordedCount = playable ? shownGloss.filter((g) => playable.has(g)).length : 0;
 
   return (
-    <section id="showcase" className="scroll-mt-20 bg-senyalita-warm px-6 py-24 md:py-28">
+    <section id="showcase" ref={sectionRef} className="scroll-mt-20 bg-senyalita-warm px-6 py-24 md:py-28">
       <div className="mx-auto max-w-5xl">
         <div className="mx-auto max-w-2xl text-center">
           <span className="text-xs font-semibold uppercase tracking-wider text-senyalita-primary">Try it yourself</span>
@@ -107,7 +165,8 @@ export function InteractiveShowcaseSection() {
           </h2>
           <p className="mt-4 text-base leading-relaxed text-senyalita-muted">
             This runs Senyalita&apos;s real translation engine, right here on the page —
-            the same one behind <em>Translate</em>. No sign-up, nothing to install.
+            the same one behind <em>Translate</em>, playing the same recorded signs.
+            No sign-up, nothing to install.
           </p>
         </div>
 
@@ -135,21 +194,19 @@ export function InteractiveShowcaseSection() {
                       : <CornerDownLeft className="h-4 w-4" />}
                   </span>
                 </div>
-                {!isLive && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {EXAMPLES.map((ex) => (
-                      <button
-                        key={ex}
-                        type="button"
-                        onClick={() => setInput(ex)}
-                        onMouseEnter={() => ensureEngine()}
-                        className="rounded-full border border-senyalita-border bg-white px-2.5 py-1 text-[0.6875rem] font-medium text-senyalita-muted transition-colors hover:border-senyalita-primary/40 hover:text-senyalita-primary"
-                      >
-                        {ex}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {EXAMPLES.map((ex) => (
+                    <button
+                      key={ex}
+                      type="button"
+                      onClick={() => setInput(ex)}
+                      onMouseEnter={() => ensureEngine()}
+                      className="rounded-full border border-senyalita-border bg-white px-2.5 py-1 text-[0.6875rem] font-medium text-senyalita-muted transition-colors hover:border-senyalita-primary/40 hover:text-senyalita-primary"
+                    >
+                      {ex}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="flex items-center gap-2 text-senyalita-border">
@@ -157,32 +214,31 @@ export function InteractiveShowcaseSection() {
                 <span className="text-xs font-semibold uppercase tracking-wider text-senyalita-muted">
                   FSL gloss
                 </span>
-                {isLive && liveMeta && (
+                {meta && (
                   <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-senyalita-accent/10 px-2 py-0.5 text-[0.625rem] font-semibold text-senyalita-accent">
                     <Sparkles className="h-3 w-3" />
-                    {liveMeta.language} · {liveMeta.ms.toFixed(0)}ms
+                    {meta.language} · {meta.ms.toFixed(0)}ms
                   </span>
                 )}
               </div>
 
               <div className="flex min-h-[2.5rem] flex-wrap gap-2">
                 <AnimatePresence mode="popLayout">
-                  {showGloss &&
-                    shownGloss.map((g, i) => (
-                      <motion.span
-                        key={`${g}-${i}`}
-                        layout
-                        initial={{ opacity: 0, scale: 0.85 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.85 }}
-                        transition={{ duration: 0.22, delay: prefersReducedMotion ? 0 : i * 0.05 }}
-                        className="rounded-full bg-senyalita-primary/10 px-3.5 py-1.5 text-xs font-bold tracking-wide text-senyalita-primary"
-                      >
-                        {g}
-                      </motion.span>
-                    ))}
+                  {shownGloss.map((g, i) => (
+                    <motion.span
+                      key={`${g}-${i}`}
+                      layout
+                      initial={{ opacity: 0, scale: 0.85 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.85 }}
+                      transition={{ duration: 0.22, delay: prefersReducedMotion ? 0 : i * 0.05 }}
+                      className="rounded-full bg-senyalita-primary/10 px-3.5 py-1.5 text-xs font-bold tracking-wide text-senyalita-primary"
+                    >
+                      {g}
+                    </motion.span>
+                  ))}
                 </AnimatePresence>
-                {showGloss && shownGloss.length === 0 && (
+                {sequence !== null && shownGloss.length === 0 && (
                   <span className="text-xs text-senyalita-muted">No signs matched — try simpler words.</span>
                 )}
               </div>
@@ -190,85 +246,58 @@ export function InteractiveShowcaseSection() {
               <p className="text-sm leading-relaxed text-senyalita-muted">
                 {engineState === "failed"
                   ? "The live engine could not start here — the full experience is available in the app."
-                  : isLive
-                    ? "Senyalita mapped your words to FSL gloss. Open the app to watch the full signed animation."
-                    : "Senyalita's engine maps everyday Filipino and English to FSL gloss, then hands it to the animation renderer."}
+                  : /* Says what the panel can and cannot show. It plays one sign;
+                       the app plays the whole sequence, with fingerspelling for
+                       the words that have no recording. */
+                    shownGloss.length > 1
+                    ? `Senyalita mapped this to ${shownGloss.length} signs${playable ? `, ${recordedCount} of them recorded` : ""}. The panel plays the first recorded one — open the app for the full sequence.`
+                    : "Senyalita maps everyday Filipino and English to FSL gloss, then plays the recorded sign for it."}
               </p>
             </div>
 
             <div className="flex flex-col items-center justify-center gap-5 bg-gradient-to-br from-senyalita-primary/5 to-senyalita-accent/5 p-8 md:p-10">
-              <div className="relative aspect-square w-full max-w-[260px]">
-                <HandSkeleton
-                  landmarksVisible={showSkeleton}
-                  linesVisible={showSkeleton}
-                  tone="accent"
-                  className="h-full w-full"
+              {/*
+                The same component the hero uses, so this panel and that one are
+                the same renderer over the same recorded landmarks. It was a
+                HandSkeleton here: 21 hardcoded coordinates, identical for every
+                input, sitting under a stage label that read "Signing".
+
+                trigger="manual" is the load policy above -- nothing is fetched
+                until the play control is pressed. It also settles the
+                reduced-motion question for free: there is no autoplay path to
+                suppress, so that visitor gets the same button as everyone else.
+              */}
+              <div className="w-full max-w-[260px]">
+                <SignSurface
+                  gloss={firstPlayable}
+                  trigger="manual"
+                  showCaption={false}
+                  className="rounded-2xl shadow-none"
+                  emptyNote={
+                    shownGloss.length === 0
+                      ? "Type a phrase to see its sign"
+                      : playable
+                        ? "No recording for these signs yet"
+                        : "Checking for a recording…"
+                  }
                 />
-                {isLive && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="absolute inset-x-0 bottom-0 text-center"
-                  >
-                    <span className="rounded-full bg-white/90 px-3 py-1 text-[0.6875rem] font-semibold text-senyalita-dark shadow-sm backdrop-blur">
-                      {shownGloss.length} sign{shownGloss.length === 1 ? "" : "s"} ready
-                    </span>
-                  </motion.div>
-                )}
               </div>
 
-              {isLive ? (
+              {isLive && (
                 <a
                   href="/translate"
                   className="group flex items-center gap-2 rounded-full bg-senyalita-primary px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-senyalita-primary/25 transition-all hover:shadow-lg hover:brightness-105"
                 >
-                  Watch it signed
+                  Open the full translator
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </a>
-              ) : (
-                <>
-                  <div className="flex w-full max-w-[260px] items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setPlaying((p) => !p)}
-                      aria-label={playing ? "Pause demo" : "Play demo"}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-senyalita-dark text-white transition-transform hover:scale-105"
-                    >
-                      {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                    </button>
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-senyalita-border">
-                      <motion.div
-                        key={step}
-                        initial={{ width: "0%" }}
-                        animate={{ width: playing && !prefersReducedMotion ? "100%" : `${(step / (STEPS.length - 1)) * 100}%` }}
-                        transition={{ duration: playing && !prefersReducedMotion ? STEP_MS / 1000 : 0.2, ease: "linear" }}
-                        className="h-full bg-senyalita-accent"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-center gap-1.5">
-                    {STEPS.map((label, i) => (
-                      <button
-                        key={label}
-                        type="button"
-                        onClick={() => { setStep(i); setPlaying(false); }}
-                        aria-current={i === step ? "step" : undefined}
-                        className={cn(
-                          "rounded-full px-2.5 py-1 text-[0.6875rem] font-medium transition-colors",
-                          i === step ? "bg-senyalita-dark text-white" : "text-senyalita-muted hover:bg-white",
-                        )}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <p className="text-center text-xs text-senyalita-muted">
-                    Or type above to run it on your own words.
-                  </p>
-                </>
               )}
+
+              <p className="text-center text-xs text-senyalita-muted">
+                {isLive
+                  ? "Recorded landmark data, played by the same engine as the app."
+                  : "Or type above to run it on your own words."}
+              </p>
             </div>
           </div>
         </div>
