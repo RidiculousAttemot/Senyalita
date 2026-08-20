@@ -21,7 +21,12 @@ import { test, expect, type Page } from "@playwright/test";
  * exists once values begin updating.
  */
 
-const TARGET = process.env.PLAYER_E2E_TARGET || "http://localhost:3400";
+// Defaults to 3000 like every other spec in this suite. It used to default to
+// 3400 -- the port of the local production-build harness it was written
+// against -- so running it without that harness up failed with
+// ERR_CONNECTION_REFUSED, which reads like a broken page rather than a missing
+// server. Set E2E_BASE_URL to point it elsewhere.
+const TARGET = process.env.PLAYER_E2E_TARGET ?? process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
 test.use({
   launchOptions: { args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] },
