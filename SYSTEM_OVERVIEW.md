@@ -2,7 +2,7 @@
 
 > Status: reflects the system after the final-architecture cleanup. For the
 > user-facing flows see [SYSTEM_FLOW.md](SYSTEM_FLOW.md); for folder layout see
-> [FOLDER_STRUCTURE.md](FOLDER_STRUCTURE.md).
+> [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) §3.
 
 ## Purpose
 

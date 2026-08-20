@@ -146,6 +146,48 @@ Node version: `>=22.12.0 <24.0.0` (`.nvmrc` / `engines`).
 `tailwind-merge`, `class-variance-authority`, `ffmpeg-static`, `puppeteer`
 (asset pipelines).
 
+
+### 2.1 Environment
+
+Folded in from MODULES_OVERVIEW.md, which was deleted. Versions below were read
+off package.json and .nvmrc rather than carried over on trust; the migration
+count was wrong there (41) and is 42.
+
+**Development machine**
+
+| | |
+|---|---|
+| OS | Windows (64-bit); symlink workaround needed for the dataset pipeline |
+| CPU | Standard desktop/laptop. Acceptable floor ~8 GB RAM, dual-core |
+| GPU | **None required.** Training is CPU-bound (pure JS, `Float32Array`, no CUDA); inference runs client-side on browser WebGL |
+| Camera | Webcam, `640×480`, `facingMode: "user"` |
+| Browser | Chrome 125, Firefox 127 |
+
+**End-user requirements**
+
+Desktop/laptop: 8 GB RAM minimum, dual-core or better, HD webcam (640×480,
+front-facing), speakers or headphones for speech output. An internet connection
+is needed for animation assets; recognition itself works offline once the page
+has loaded.
+
+Mobile runs entirely in the browser — tested on Samsung Galaxy S23, iPhone 15
+Pro, Google Pixel 7 and OnePlus 11 at 18–24 FPS, using the front camera on
+Chrome for Android or Safari on iOS. Requires WebGL for the TF.js backend.
+
+**Training environment**
+
+14,217 samples, 131 classes, 7 signers, stratified NDJSON train/val/test splits.
+CPU-bound and fully reproducible (fixed seed 2026, `mulberry32` PRNG). The model
+is a BiLSTM — 48 units per direction (96 combined), dropout 0.25, dense-softmax
+over 131 classes — exported at 313 KB to
+`public/models/fsl_unified/bilstm_tfjs/`.
+
+**Accuracy figures are deliberately not repeated here.** MODULES_OVERVIEW gave
+94.86% / 91.85% macro F1, which are `bilstm_v2`'s. The deployed model is
+`bilstm_v4` (93.99% / 94.10%). Five other files still carry the v2 numbers and
+correcting them is a separate change; this section refuses to become the sixth.
+
+
 ---
 
 ## 3. System Architecture
@@ -832,29 +874,22 @@ Commands: `npm test`, `npm run typecheck`, `npm run lint`,
 
 ---
 
-## 14. Directory Map (reference)
+## 14. Directory Map — see DEVELOPER_GUIDE.md §3
 
-```
-src/
-  app/                  pages + API routes (App Router)
-  components/           landing, layout, admin, ui primitives
-  features/
-    recognition/        model, buffer, smoothing, motion, modes, priority, UI
-    sign-to-text/       SignToTextInterface, hand tracking, camera settings
-    sign-animation/     extraction, player, renderer, processing, validation
-    translation-pipeline/  text -> gloss -> animation orchestration
-    fsl-translation/    dictionary, gloss, grammar, intent
-    suggestions/        suggestion engine + usage store
-    type-to-sign/       TypeToSignInterface, progressive translation
-  lib/                  supabase clients, utils, admin queries
-  server/               services, http errors, rate limiting
-supabase/migrations/    versioned Postgres schema (0001..0040)
-public/models/          deployed TFJS BiLSTM model + labels
-public/models/mediapipe/  self-hosted hand landmarker .task
-public/mediapipe/       self-hosted WASM runtime
-scripts/                data, training, export, evaluation tooling
-```
+The repo layout lived in four places: DEVELOPER_GUIDE.md §3, FOLDER_STRUCTURE.md,
+MODULES_OVERVIEW.md and this section. All four disagreed with the tree, and three
+of them repeated the same `active-learning/` error — which is how you can tell
+they were copied from one another rather than read off the filesystem. Every one
+of them omitted `accessibility/`.
 
----
+This section was the least complete of the four: it named seven feature
+directories and the tree has thirteen, omitting `accessibility/`, `ai-assist/`,
+`animation/`, `gesture-mapping/`, `learn/` and `profiles/`. Its one virtue was
+making no false claims.
 
-*End of document. Generated from the current repository source of truth.*
+**DEVELOPER_GUIDE.md §3 is the single home for structure**, verified against the
+tree rather than against the other documents. §3.1 there carries the casing
+conventions. The development and end-user environment facts are in §2.1 above.
+
+Keeping a fourth copy in sync was never going to happen, and a stale directory
+map is worse than none — someone acts on it.

@@ -1,7 +1,7 @@
 # System Flow and User Roles
 
 > Status: reflects the system after the final-architecture cleanup. For folder
-> layout see [FOLDER_STRUCTURE.md](FOLDER_STRUCTURE.md); for implementation
+> layout see [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) §3; for implementation
 > detail see [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md).
 
 The system has **two core workflows**, both on `/translate`, plus two supporting

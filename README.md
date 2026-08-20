@@ -143,7 +143,7 @@ deliberate trade for a build that completes.
 | [SYSTEM_OVERVIEW.md](SYSTEM_OVERVIEW.md) | What the system is, scope, model, data architecture |
 | [SYSTEM_FLOW.md](SYSTEM_FLOW.md) | User roles and the two workflows, step by step |
 | [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) | Algorithms, constants, and the recognition hot path |
-| [FOLDER_STRUCTURE.md](FOLDER_STRUCTURE.md) | Directory layout |
+| [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) §3 | Directory layout — the single home for structure |
 | [AGENTS.md](AGENTS.md) | Phase-by-phase project history |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Vercel topology — **which branch must not be deleted**, rollback pinning, build-time env inlining |
 | [ROTATION.md](ROTATION.md) | Credential rotation checklist and the secret-exposure post-mortem |

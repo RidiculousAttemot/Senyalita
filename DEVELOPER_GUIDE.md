@@ -70,54 +70,92 @@ be deleted once everyone is on the pin.
 
 ## 3. Repo map
 
+THE SINGLE HOME FOR STRUCTURE. FOLDER_STRUCTURE.md and MODULES_OVERVIEW.md were
+deleted into this section, and SYSTEM_DOCUMENTATION.md §14 now points here.
+
+Four documents described the layout and all four were wrong, in different ways.
+Three repeated the same `active-learning/` error, which is how you can tell they
+were copied from one another rather than read off the tree. Every one of them
+omitted `accessibility/`. This section was the worst of the four: it claimed
+`ai-assist/`, `gesture-mapping/` and `profiles/` had been deleted when all three
+exist and are imported, and it listed a `text-to-sign/` feature that does not
+exist. Verified against the tree on 2026-08-21, not against the other documents.
+
 ```
 src/
-  app/                      Next.js App Router — 11 page routes, 10 API routes
+  app/                      Next.js App Router
     page.tsx                landing
     translate/              main surface: both directions, tabbed
     learn/                  FSL reference — alphabet, numbers, tutorials
     evaluation/             accuracy harness (thesis figures)
-    admin/                  7 pages, local-only — see §8.1
+    admin/                  local-only — see §8.1
     api/                    animations, admin/*, ai/replies, assets, videos
 
-  features/                 the actual system — organized by domain, not by layer
+  features/                 13 directories, organised by domain, not by layer
     recognition/            ◄ DIRECTION A core. Buffer, normalize, model, smoothing,
                               motion detection, hand slots, label partition,
                               priority, the useRecognition hook.
     sign-to-text/           Direction A UI + camera + MediaPipe wiring
     translation-pipeline/   ◄ DIRECTION B core. 9-stage orchestrator.
     fsl-translation/        text → FSL gloss engine (grammar, dictionary)
-    text-to-sign/           gloss → animation queue, fingerspelling fallback, pauses
     sign-animation/         ◄ playback + rendering. Largest subtree.
-    type-to-sign/           progressive loading for Direction B
+    type-to-sign/           Direction B composer and stage viewer, used by
+                              app/translate. NOT a route of its own.
     suggestions/            letter/word suggestion engine (DP segmentation)
+    accessibility/          contrast + text-size provider and menu, mounted in
+                              the root layout so every route inherits it
+    gesture-mapping/        gloss dictionary; used by lib/learn/vocabulary
+    ai-assist/              quality analysis and publish verdicts; reached only
+                              from the admin AnimationStudio, which is local-only
+    profiles/               capture profile, used by SignToTextInterface
+    learn/                  the /learn sign player
+    animation/              ORPHANED. index.ts + types.ts, imported by nothing.
 
   lib/supabase/             client, queries, generated types
   lib/admin/availability.ts admin on/off flag — see §8.1
 
-scripts/                    124 .mjs files. Dataset building, training, export,
-                            auditing. Most are one-off phase artifacts — see §9.
+scripts/                    dataset building, training, export, auditing. Most are
+                            one-off phase artifacts — see §9.
 models/fsl_unified/         trained weights (JSON), metrics, confusion matrices
 public/models/              ◄ what the browser downloads: bilstm_tfjs + mediapipe
 datasets/processed/         train/val/test splits (NDJSON)
-supabase/migrations/        0001 … 0041
+supabase/migrations/        0001 … 0042
 ```
 
-**Removed in the final-architecture cleanup** (recoverable via `git show
-pre-cleanup:<path>`): `analytics/`, `active-learning/`, `ai-assist/`,
-`conversation/`, `adaptive-*`, `gesture-mapping/`, `knowledge-expansion/`,
-`profiles/`, and 23 of the 30 admin pages. Do not reintroduce them by copying from
-history without checking why they went.
+**Genuinely removed** (recoverable via `git show pre-cleanup:<path>`):
+`analytics/`, `active-learning/`, `conversation/`, `adaptive-*`,
+`knowledge-expansion/`, and most of the admin pages. Do not reintroduce them by
+copying from history without checking why they went. `ai-assist/`,
+`gesture-mapping/` and `profiles/` were previously listed here in error — they
+survive and are imported.
 
-**Reachable but unused.** Eight modules under `sign-animation/player/` are not
-reachable from any entry point: `PhraseDetector`, `SentenceChunker`,
-`PlaybackSequencer`, `BodyMotionEngine`, `MotionCurveEngine`, `NaturalTimingEngine`,
-`AnimationRecommendationEngine`, and that subtree's `PipelineOrchestrator` (distinct
-from the live `translation-pipeline/PipelineOrchestrator`). `PhraseDetector` and
-`SentenceChunker` were restored and wired in `8ae3e2da`/`eeab4352`, but nothing
-reaches them today. Don't cite them as working features.
+**Reachable but unused.** Verified by import count, excluding barrels and tests:
+`BodyMotionEngine`, `MotionCurveEngine` and `AnimationRecommendationEngine` under
+`sign-animation/player/` have no importers at all. `PhraseDetector`,
+`SentenceChunker`, `PlaybackSequencer` and `NaturalTimingEngine` have exactly one
+each, so they are wired but worth checking before being cited as working
+features. Note `sign-animation/player/PipelineOrchestrator` is distinct from the
+live `translation-pipeline/PipelineOrchestrator`.
+
+### 3.1 Casing conventions
+
+Folded in from MODULES_OVERVIEW.md. Every example below was resolved against the
+tree, not carried over on trust.
+
+| Item | Style | Examples |
+|---|---|---|
+| Variables, functions | camelCase | `motionDetection`, `coverageKey`, `formatAdminPercent` |
+| Exported constants | UPPER_SNAKE_CASE | `MAX_GESTURE_CHARS`, `ADMIN_SESSION_COOKIE`, `GLOSS_SYNONYM_NORMALIZATION`, `RATE_LIMIT` |
+| React components | PascalCase `.tsx` | `DebugOverlay.tsx`, `SignComposer.tsx`, `SuggestionPanel.tsx` |
+| Engine/class files | PascalCase `.ts` | `PlaybackEngine.ts`, `PipelineOrchestrator.ts`, `FslTranslator.ts`, `LanguageDetector.ts` |
+| Hooks | `use` + PascalCase | `useRecognition.ts`, `useFslTranslation.ts`, `useProgressiveSignTranslation.ts` |
+| Types/interfaces | PascalCase | `GrammarRule`, `AnimationPlanItem`, `ProgressiveTranslationState` |
+| Test files | `name.test.ts(x)` | `buffer.test.ts`, `glossDictionary.test.ts` |
+| Next.js routes/dirs | kebab-case | `src/app/api`, `type-to-sign/`, `src/middleware.ts` |
+| Data/JSON | kebab or camel | `motionSigns.json`, `fslGrammar.ts` |
 
 ---
+
 
 ## 4. Direction A — Sign → Text (the recognition algorithm)
 
