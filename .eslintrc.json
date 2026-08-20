@@ -1,3 +1,19 @@
 {
-  "extends": "next/core-web-vitals"
+  "extends": "next/core-web-vitals",
+  "overrides": [
+    // eslint-config-next scopes the TypeScript parser to **/*.ts?(x), which
+    // matches neither .mts nor .cts. src/lib/animationValidationRules.d.mts is
+    // TypeScript, so espree parsed it as plain JS and died on the first type
+    // annotation ("Missing initializer in const declaration").
+    //
+    // Renaming it to .d.ts is not the fix: it declares
+    // animationValidationRules.mjs, and TypeScript only pairs .mjs with .d.mts.
+    // So the parser is what widens. Plain .mjs -- the seeder scripts -- stays on
+    // the default parser; only the TypeScript extensions move.
+    {
+      "files": ["**/*.mts", "**/*.cts"],
+      "parser": "@typescript-eslint/parser",
+      "parserOptions": { "sourceType": "module" }
+    }
+  ]
 }

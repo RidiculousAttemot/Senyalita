@@ -398,6 +398,52 @@ payload (6.01 MB → 0.61 MB without them), so mesh reduction is the lever. Note
 that non-manual markers carry grammar in signed languages, so downsampling the
 mesh is preferable to dropping it outright.
 
+**Frame size must be read from the rotated frame, not the coded one.** Phone
+video is normally stored coded landscape (1920x1080) with a 90-degree display
+matrix, and ffmpeg auto-rotates when it decodes — so every frame MediaPipe
+actually sees is 1080x1920. `scripts/extract-holistic-videos.mjs` was taking the
+coded resolution straight off ffmpeg's `Video:` line and recording it as
+`imageWidth`/`imageHeight`, so every phone-shot asset stored a transposed frame
+size. Fixed in `99b864cc`: the extractor now also reads
+`displaymatrix: rotation of N degrees` and swaps the pair when `|N| mod 180`
+is 90.
+
+Nothing errored. The JSON was well-formed, validation passed, and playback
+"worked" — it simply drew a signer squashed into roughly a quarter of the stage
+height, because the renderer scales normalised landmarks by the stored frame
+aspect. The cheap diagnostic is the **torso ratio**, shoulder width divided by
+shoulder-to-hip distance: correctly-extracted assets sit near 0.69, while the
+affected ones read about 2.06, which is anatomically impossible. After the fix
+the repaired signs measure 0.67-0.82.
+
+**Dimensions live in exactly one place.** `animation_asset_versions` has no
+width/height columns, and its `extraction_metadata` jsonb is written from
+`asset.metadata` (`source`, `version`, `seededBy`, `precision`, `sourceFile`,
+`sequenceLength`, `featureDimension`) — verified across all 130 published rows
+as carrying no dimension key at all. `imageWidth`/`imageHeight` are top-level
+fields of the landmark JSON in Storage, so that object is the only thing a
+repair has to touch.
+
+**The 92 already-published assets were migrated, not re-extracted**, by
+`scripts/fix-transposed-asset-dimensions.mjs`. It re-probes each asset's own
+source video via `extraction_metadata.sourceFile` with the same rotation-aware
+reader and rewrites the dimensions only where the probe disagrees with what is
+stored — a blanket transpose would have corrupted any asset that is genuinely
+landscape. Of 130 published assets: **92 rewritten, 37 already correct, 1
+skipped** (THANK YOU, which has no recorded source file and was already
+correct); the probe found no genuinely landscape asset. The edit is textual and
+replaces only the two numbers, with the surrounding bytes asserted identical
+before and after, so no float in a 3 MB coordinate array is re-serialised. The
+changed glosses are recorded in
+`scripts/fix-transposed-asset-dimensions.applied.json`, and re-running
+`--apply --only <gloss>` swaps one back.
+
+Measured on production afterwards, at a 1280x900 viewport: DON'T UNDERSTAND
+went from 25% to 63-68% of stage height, EGG 28% to 59-70%, GOOD MORNING 27% to
+59-68%, FATHER 37-43% to 59-67%, with A — extracted correctly all along —
+unchanged at 77-80%. Overlay mode stays registered with the recording, since it
+fits to contain rather than to the clip bounds.
+
 ---
 
 ## 5. Database Structure (Supabase / PostgreSQL)
