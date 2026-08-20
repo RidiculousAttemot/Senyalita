@@ -72,16 +72,26 @@ test.describe("translation breakdown", () => {
   });
 
   test("a fingerspelled phrase names the source words, not the gloss", async ({ page }) => {
+    // FIXTURE CHANGED, ASSERTION DID NOT. This used to type "Kamusta ka?",
+    // which fingerspelled because HOW ARE YOU had no animation. The 91-sign
+    // batch published it, so that phrase now plays a real sign and there is no
+    // "Spelled letter by letter" row to find -- the test was asserting the
+    // absence of a feature that had since been built.
+    //
+    // "very much" keeps the case alive: VERY and MANY are model classes with
+    // no published animation, so it still falls back to spelling while having
+    // a gloss that could wrongly be shown instead.
     await page.goto(`${BASE}/translate`);
 
-    await submit(page, "Kamusta ka?");
+    await submit(page, "very much");
 
     await expect(page.locator("#translation-heading")).toBeVisible({ timeout: 180_000 });
 
-    // "Spelled letter by letter: kamusta ka", never "HOW ARE YOU".
+    // The source words, never the gloss "VERY MANY".
     const spelled = page.locator("text=Spelled letter by letter");
     await expect(spelled).toBeVisible();
-    await expect(spelled.locator("..")).toContainText("kamusta ka");
-    await expect(spelled.locator("..")).not.toContainText("HOW ARE YOU");
+    await expect(spelled.locator("..")).toContainText("very");
+    await expect(spelled.locator("..")).toContainText("much");
+    await expect(spelled.locator("..")).not.toContainText("VERY MANY");
   });
 });
