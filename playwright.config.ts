@@ -124,14 +124,20 @@ export default defineConfig({
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
-      /* The fake-camera flags are Chromium-only. */
-      testIgnore: /camera-recognition\.spec\.ts/,
+      /*
+       * Both camera specs are Chromium-only, for two different reasons:
+       * camera-recognition needs the fake-capture launch flags, and
+       * camera-announcements declares permissions: ["camera"], which only
+       * Chromium implements in Playwright. Neither is a product limitation --
+       * the pages themselves work in all three browsers.
+       */
+      testIgnore: /camera-(recognition|announcements)\.spec\.ts/,
     },
 
     {
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
-      testIgnore: /camera-recognition\.spec\.ts/,
+      testIgnore: /camera-(recognition|announcements)\.spec\.ts/,
     },
 
     /* Test against mobile viewports. */
