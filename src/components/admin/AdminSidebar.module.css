@@ -1,31 +1,122 @@
-.sidebar { position: sticky; top: 0; display: flex; width: 248px; height: 100dvh; flex-direction: column; border-right: 1px solid #e8e4dd; background: #fffdf9; color: #15233a; transition: width 180ms ease, transform 180ms ease; z-index: 50; }
-.sidebarCollapsed { width: 72px; }
-.branding { position: relative; min-height: 76px; padding: 16px; border-bottom: 1px solid #eeeae3; }
-.brandLink { display: flex; align-items: center; gap: 10px; color: #15233a; font-size: 1rem; font-weight: 750; text-decoration: none; }
-.brandIcon { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 8px; background: #2563EB; color: #fff; }
+/*
+ * The sidebar is the left arm of the console chrome, not a second surface.
+ *
+ * It was the one file the palette migration missed. admin.css moved to the
+ * senyalita-derived slate/blue tokens and grew a deliberate dark chrome for the
+ * topbar; this file stayed on the retired cream scheme -- #fffdf9 canvas,
+ * #e8e4dd borders, #f7f2ed hover, #a94f32 terracotta accent. Nothing was
+ * technically broken, which is why it survived: it simply rendered a light
+ * cream column against a dark slate header, so the two read as unrelated
+ * surfaces that happened to touch.
+ *
+ * The structure is now committed to rather than left ambiguous: the sidebar
+ * runs the full height, the topbar sits beside it, and both are --admin-chrome.
+ * Chrome means the whole navigation frame; the content well is the light
+ * canvas inside it. Every value below is one of the --admin-* custom
+ * properties declared on .admin-console, which inherit into this module.
+ */
+.sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  /* Never let the flex row squeeze the rail below the width its labels need. */
+  flex: 0 0 248px;
+  width: 248px;
+  height: 100dvh;
+  flex-direction: column;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--admin-chrome);
+  color: var(--admin-chrome-ink);
+  transition: width 180ms ease, flex-basis 180ms ease, transform 180ms ease;
+  z-index: 50;
+}
+.sidebarCollapsed { flex-basis: 72px; width: 72px; }
+
+/*
+ * 64px, borrowed from .admin-console-topbar rather than chosen: the branding
+ * block and the topbar are the two halves of one band, so their bottom borders
+ * have to land on the same line. They were 76px and 64px before, which is what
+ * made the header look pasted on top of the navigation instead of beside it.
+ */
+.branding {
+  position: relative;
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.brandLink { display: flex; align-items: center; gap: 10px; color: var(--admin-chrome-ink); font-size: 1rem; font-weight: 750; text-decoration: none; }
+.brandIcon { display: grid; flex-shrink: 0; width: 32px; height: 32px; place-items: center; border-radius: 8px; background: var(--admin-accent); color: #fff; }
 .brandText { overflow: hidden; white-space: nowrap; }
-.brandSubtext { display: block; margin: 7px 0 0 42px; color: #847d75; font-size: 0.67rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-.collapseButton, .mobileClose { display: grid; width: 40px; height: 40px; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #706963; cursor: pointer; }
-.collapseButton { position: absolute; right: 10px; top: 18px; }
-.collapseButton:hover, .mobileClose:hover { background: #f7f2ed; color: #a94f32; }
+/*
+ * "AI Operations" duplicated the topbar's own "AI management console" two
+ * inches away, and was the reason the branding block needed to be taller than
+ * the header it sits next to. The topbar keeps it.
+ */
+.collapseButton, .mobileClose { display: grid; width: 40px; height: 40px; place-items: center; border: 0; border-radius: 8px; background: transparent; color: rgba(248, 250, 252, 0.65); cursor: pointer; }
+.collapseButton { position: absolute; right: 10px; top: 12px; }
+.collapseButton:hover, .mobileClose:hover { background: rgba(255, 255, 255, 0.08); color: var(--admin-chrome-ink); }
 .mobileClose { display: none; }
-.navGroups { flex: 1; overflow-y: auto; padding: 12px 10px; }
+
+/*
+ * overflow-x is pinned rather than left to compute.
+ *
+ * overflow-y: auto alone makes the other axis compute to auto as well (a
+ * non-visible value on one axis forces the other from visible to auto). While
+ * the collapsed rail still rendered its labels, each nav row stayed wider than
+ * 72px -- .itemLabel's own `overflow: hidden` clips the TEXT but the span keeps
+ * its intrinsic width as a flex item -- so this box scrolled sideways and drew
+ * a horizontal scrollbar across the bottom of the nav. That is the stray
+ * arrow/thumb/arrow strip under the menu: a scrollbar, not a control.
+ *
+ * Measured either side of the fix: scrollWidth > clientWidth was true before
+ * and is false now. Pinned rather than merely fixed, so a future long label
+ * cannot bring it back.
+ */
+.navGroups { flex: 1; overflow-x: hidden; overflow-y: auto; padding: 12px 10px; }
 .navGroup + .navGroup { margin-top: 16px; }
-.groupLabel { margin: 0 0 6px; padding: 0 10px; color: #9a928a; font-size: 0.66rem; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
+.groupLabel { margin: 0 0 6px; padding: 0 10px; color: rgba(248, 250, 252, 0.45); font-size: 0.66rem; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
 .groupItems { display: grid; gap: 2px; }
-.navItem { display: flex; width: 100%; min-height: 40px; align-items: center; gap: 10px; border: 0; border-radius: 8px; background: transparent; color: #5e656f; cursor: pointer; font: inherit; font-size: 0.84rem; font-weight: 600; padding: 9px 10px; text-align: left; text-decoration: none; transition: background-color 140ms ease, color 140ms ease; }
-.navItem:hover { background: #f7f2ed; color: #223249; }
-.navItem:focus-visible, .collapseButton:focus-visible, .mobileClose:focus-visible, .logoutButton:focus-visible { outline: 2px solid #2563EB; outline-offset: 2px; }
-.navItemActive { background: #EFF6FF; color: #1D4ED8; }
-.itemLabel { overflow: hidden; white-space: nowrap; }
-.navItemDisabled { color: #aaa39b; cursor: not-allowed; }
-.comingSoonBadge { margin-left: auto; border: 1px solid #ece5dd; border-radius: 999px; color: #978d84; font-size: 0.61rem; font-weight: 750; letter-spacing: 0.04em; padding: 2px 6px; text-transform: uppercase; }
-.sidebarCollapsed .branding { padding: 16px 20px; }
-.sidebarCollapsed .brandLink, .sidebarCollapsed .navItem, .sidebarCollapsed .logoutButton { justify-content: center; }
-.sidebarCollapsed .collapseButton { position: static; margin: 8px auto -8px; }
+.navItem { display: flex; width: 100%; min-height: 40px; align-items: center; gap: 10px; border: 0; border-radius: 8px; background: transparent; color: rgba(248, 250, 252, 0.72); cursor: pointer; font: inherit; font-size: 0.84rem; font-weight: 600; padding: 9px 10px; text-align: left; text-decoration: none; transition: background-color 140ms ease, color 140ms ease; }
+.navItem:hover { background: rgba(255, 255, 255, 0.08); color: var(--admin-chrome-ink); }
+.navItem:focus-visible, .collapseButton:focus-visible, .mobileClose:focus-visible, .logoutButton:focus-visible { outline: 2px solid #93C5FD; outline-offset: 2px; }
+.navItemActive { background: var(--admin-accent); color: #fff; }
+.navItemActive:hover { background: #1D4ED8; color: #fff; }
+.itemLabel { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.navItemDisabled { color: rgba(248, 250, 252, 0.34); cursor: not-allowed; }
+.comingSoonBadge { margin-left: auto; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 999px; color: rgba(248, 250, 252, 0.5); font-size: 0.61rem; font-weight: 750; letter-spacing: 0.04em; padding: 2px 6px; text-transform: uppercase; }
+
+/*
+ * Collapsed is icon-only: centred glyphs, no label, tooltips carry the name.
+ *
+ * The toggle stays, centred in the branding block, because it is the only way
+ * back — hiding it strands whoever collapsed the rail. The wordmark gives up
+ * its place for it: at 72px the two do not fit side by side, and the wordmark
+ * only links to /admin, which the Overview item below it already does.
+ */
+.sidebarCollapsed .branding { justify-content: center; padding: 0; }
+.sidebarCollapsed .brandLink { display: none; }
+.sidebarCollapsed .collapseButton { position: static; }
+.sidebarCollapsed .navItem, .sidebarCollapsed .logoutButton { justify-content: center; }
 .sidebarCollapsed .navGroups { padding: 12px 8px; }
-.sidebarCollapsed .navGroup + .navGroup { margin-top: 10px; }
-.sidebarFooter { padding: 10px; border-top: 1px solid #eeeae3; }
-.logoutButton { display: flex; min-height: 40px; align-items: center; gap: 10px; border-radius: 8px; color: #6e625c; font-size: 0.84rem; font-weight: 650; padding: 9px 10px; text-decoration: none; }
-.logoutButton:hover { background: #EFF6FF; color: #1D4ED8; }
-@media (max-width: 900px) { .sidebar { box-shadow: 14px 0 32px rgba(40, 34, 29, 0.12); position: fixed; transform: translateX(-105%); } .mobileOpen { transform: translateX(0); } .collapseButton { display: none; } .mobileClose { display: grid; position: absolute; right: 10px; top: 14px; } }
+/*
+ * The group heading is the only thing telling Studio from Dataset from
+ * Library, so when it is hidden the items need a rule between them instead --
+ * otherwise the collapsed rail is six unexplained glyphs in one column.
+ */
+.sidebarCollapsed .navGroup + .navGroup { margin-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 10px; }
+
+.sidebarFooter { padding: 10px; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+.logoutButton { display: flex; min-height: 40px; align-items: center; gap: 10px; border-radius: 8px; color: rgba(248, 250, 252, 0.72); font-size: 0.84rem; font-weight: 650; padding: 9px 10px; text-decoration: none; }
+.logoutButton:hover { background: rgba(255, 255, 255, 0.08); color: var(--admin-chrome-ink); }
+
+@media (max-width: 900px) {
+  .sidebar { box-shadow: 14px 0 32px rgba(15, 23, 42, 0.4); position: fixed; transform: translateX(-105%); }
+  /* Off-canvas below 900px, so the drawer always opens at full width and the
+     collapsed rail cannot strand a user with icons and no tooltips on touch. */
+  .sidebar, .sidebarCollapsed { flex-basis: 248px; width: 248px; }
+  .mobileOpen { transform: translateX(0); }
+  .collapseButton { display: none; }
+  .mobileClose { display: grid; position: absolute; right: 10px; top: 12px; }
+}

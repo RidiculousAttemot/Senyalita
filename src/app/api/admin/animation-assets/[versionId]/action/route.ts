@@ -64,9 +64,15 @@ export async function POST(request: NextRequest, { params }: { params: { version
        * Rewritten here rather than in the studio: this is the boundary where
        * the asset becomes permanent, and a client cannot be trusted to have
        * cleaned up after itself.
+       *
+       * Update: the field is now STRIPPED rather than rewritten. Rewriting it
+       * fixed the blob: URL but kept the underlying mistake -- a URL frozen into
+       * stored data at publish time, which every storage change since has had to
+       * chase. Nothing reads it (re-confirmed 2026-08-17: zero live readers), so
+       * the correct value is no value. The recording is resolved from the gloss
+       * at read time by /api/animations/[gloss]/video, which cannot go stale.
        */
-      const referenceVideo = `/api/videos/${encodeURIComponent(body.asset.label)}/source`;
-      const storedAsset = { ...body.asset, video: referenceVideo };
+      const { video: _discardedVideoUrl, ...storedAsset } = body.asset;
 
       const landmarkPath = `${version.asset_id}/${version.id}/landmarks.json`;
       const serialized = JSON.stringify(storedAsset);

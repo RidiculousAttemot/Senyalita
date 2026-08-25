@@ -65,6 +65,12 @@ export function InteractiveShowcaseSection() {
   const [engineState, setEngineState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   /** Null until the registry answers; distinguishes "no" from "not yet known". */
   const [playable, setPlayable] = useState<Set<string> | null>(null);
+  /**
+   * The registry could not be reached. Kept apart from an empty set, because
+   * "there is no recording for this" and "I could not find out" are different
+   * statements and only one of them is true here.
+   */
+  const [registryFailed, setRegistryFailed] = useState(false);
 
   const pipelineRef = useRef<PipelineFn | null>(null);
   const sectionRef = useRef<HTMLDivElement | null>(null);
@@ -126,7 +132,7 @@ export function InteractiveShowcaseSection() {
           .then(setPlayable)
           // Silent: the registry already logs, and a failure here must only
           // mean the panel cannot promise a recording exists.
-          .catch(() => setPlayable(new Set()));
+          .catch(() => setRegistryFailed(true));
       },
       { rootMargin: "0px 0px -10% 0px" },
     );
@@ -152,7 +158,12 @@ export function InteractiveShowcaseSection() {
    */
   const firstPlayable = playable
     ? shownGloss.find((g) => playable.has(g)) ?? null
-    : null;
+    : registryFailed
+      // Cannot check, so offer it rather than declaring it missing. Pressing
+      // play either works or lands on "Sign unavailable", which is the honest
+      // answer and a path that already exists.
+      ? shownGloss[0] ?? null
+      : null;
   const recordedCount = playable ? shownGloss.filter((g) => playable.has(g)).length : 0;
 
   return (

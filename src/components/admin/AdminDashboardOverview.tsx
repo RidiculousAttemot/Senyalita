@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { Activity, ArrowUpRight, BrainCircuit, Camera, Clock3, Database, Film, Gauge, Sparkles, Wand2, WandSparkles } from "lucide-react";
+import { Activity, ArrowUpRight, BrainCircuit, Clock3, Database, Film, Gauge, Sparkles, Wand2, WandSparkles } from "lucide-react";
 import { fetchAdminAnalytics } from "@/lib/supabase/queries/analytics";
 import { listTelemetryEvents } from "@/lib/supabase/queries/telemetry";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -11,6 +11,8 @@ import AdminDataTable, { type AdminDataTableRow } from "./AdminDataTable";
 import { DashboardServiceGrid } from "./DashboardServiceGrid";
 import { computeAnimationCoverage } from "@/lib/admin/animationCoverage";
 import { MODEL_LABELS } from "@/lib/admin/modelLabels";
+import { DEPLOYED_MODEL } from "@/lib/admin/deployedModel";
+import { buildTrendChart, TREND_CHART_HEIGHT, TREND_CHART_WIDTH } from "@/lib/admin/trendChart";
 
 type TrendDirection = "up" | "down" | "steady";
 
@@ -49,40 +51,43 @@ const getStatus = (eventType: string): string => {
   return "Recorded";
 };
 
-const sparklinePath = (values: number[]): string => {
-  if (!values.length) return "";
-  const width = 280;
-  const height = 88;
-  const minimum = Math.min(...values, 0);
-  const maximum = Math.max(...values, 1);
-  const range = Math.max(maximum - minimum, 1);
-
-  return values.map((value, index) => {
-    const x = (index / Math.max(values.length - 1, 1)) * width;
-    const y = height - ((value - minimum) / range) * 70 - 9;
-    return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
-};
-
-function TrendCard({ title, note, values, accent }: { title: string; note: string; values: number[]; accent: string }) {
-  const path = sparklinePath(values);
+function TrendCard({ eyebrow, title, note, values, accent, unit }: {
+  eyebrow: string;
+  title: string;
+  note: string;
+  values: number[];
+  accent: string;
+  unit: string;
+}) {
+  const chart = buildTrendChart(values);
+  const viewBox = `0 0 ${TREND_CHART_WIDTH} ${TREND_CHART_HEIGHT}`;
 
   return (
     <article className="admin-panel admin-trend-card">
       <div className="admin-panel-heading">
         <div>
-          <p className="admin-overline">Operational trend</p>
+          <p className="admin-overline">{eyebrow}</p>
           <h2>{title}</h2>
         </div>
         <span className="admin-period-tag">14 days</span>
       </div>
-      {path ? (
-        <svg className="admin-trend-chart" viewBox="0 0 280 88" role="img" aria-label={`${title} trend over fourteen days`}>
-          <path d="M0 79 H280" stroke="#e8e4dd" strokeWidth="1" />
-          <path d={path} fill="none" stroke={accent} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      {chart.kind === "empty" ? (
+        <div className="admin-chart-empty">No data yet</div>
+      ) : (
+        <svg className="admin-trend-chart" viewBox={viewBox} role="img" aria-label={`${title} over the last 14 days`}>
+          <path d={`M0 79 H${TREND_CHART_WIDTH}`} stroke="#E2E8F0" strokeWidth="1" />
+          {chart.kind === "point" ? (
+            <circle cx={chart.point.x} cy={chart.point.y.toFixed(1)} r="4.5" fill={accent} />
+          ) : (
+            <path d={chart.path} fill="none" stroke={accent} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          )}
         </svg>
-      ) : <div className="admin-chart-empty">No data connected</div>}
-      <p className="admin-panel-note">{note}</p>
+      )}
+      <p className="admin-panel-note">
+        {chart.kind === "point"
+          ? `${note}. Only one ${unit} of activity so far, so there is no trend to draw yet.`
+          : note}
+      </p>
     </article>
   );
 }
@@ -107,7 +112,10 @@ export default async function AdminDashboardOverview() {
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
 
-  const [analytics, telemetryResult, gestureResult, confidenceResult, sessionResult, recentLogResult, activeModelResult, storageResult, animationAssetsResult, animationVersionsResult] = await Promise.all([
+  // model_versions is deliberately not queried. See lib/admin/deployedModel.ts:
+  // the table does not exist here and nothing in the app writes it, so asking
+  // produced three permanent "Unavailable" surfaces and no information.
+  const [analytics, telemetryResult, gestureResult, confidenceResult, sessionResult, recentLogResult, storageResult, animationAssetsResult, animationVersionsResult] = await Promise.all([
     fetchAdminAnalytics(30),
     listTelemetryEvents(undefined, 100, 14)
       .then((events) => ({ events, available: true, missingTable: false }))
@@ -120,7 +128,6 @@ export default async function AdminDashboardOverview() {
     supabase.from("translation_logs").select("confidence, created_at, inference_time_ms").gte("created_at", fourteenDaysAgo).order("created_at", { ascending: true }),
     supabase.from("translation_sessions").select("id", { count: "exact", head: true }).gte("started_at", startOfToday.toISOString()),
     supabase.from("translation_logs").select("id, gesture_label, confidence, inference_time_ms, created_at").order("created_at", { ascending: false }).limit(20),
-    supabase.from("model_versions").select("version, architecture, accuracy, num_classes").eq("is_active", true).maybeSingle(),
     supabase.storage.from("gesture-videos").list("", { limit: 1 }),
     supabase.from("animation_assets").select("id, gloss, published_version_id"),
     supabase.from("animation_asset_versions").select("status").in("status", ["pending", "processing", "ready", "approved", "published", "archived"]),
@@ -135,10 +142,7 @@ export default async function AdminDashboardOverview() {
   const sessionsAvailable = !sessionResult.error;
   const gesturesAvailable = !gestureResult.error;
   const recentLogsAvailable = !recentLogResult.error;
-  const modelAvailable = !activeModelResult.error;
   const storageAvailable = !storageResult.error;
-  const activeModel = activeModelResult.data;
-  const activeModelName = activeModel ? `${activeModel.architecture} ${activeModel.version}` : null;
   const confidenceValues = recognitionData.samples.map((sample) => sample.confidence);
   const currentConfidence = confidenceValues.length
     ? confidenceValues.reduce((total, value) => total + value, 0) / confidenceValues.length
@@ -227,21 +231,42 @@ export default async function AdminDashboardOverview() {
       </header>
 
       <section className="admin-metric-grid" aria-label="System performance metrics">
-        <MetricCard icon={Gauge} label="Model accuracy" value={getMetricDisplay({ value: activeModel?.accuracy, available: modelAvailable, format: (value) => formatAdminPercent(value) })} note={modelAvailable ? (activeModel ? "Active model registry entry" : "No active model is configured") : "Model registry could not be read"} direction={activeModel?.accuracy === null || activeModel?.accuracy === undefined ? undefined : "steady"} />
-        <MetricCard icon={Activity} label="Recognition confidence" value={getMetricDisplay({ value: currentConfidence, available: confidenceAvailable, format: (value) => formatAdminPercent(value) })} note={confidenceAvailable ? recognitionSourceNote : "Recognition data could not be read"} direction={currentConfidence === null ? undefined : currentConfidence < 0.7 ? "down" : "up"} />
-        <MetricCard icon={Database} label="Library gestures" value={getMetricDisplay({ value: gestureResult.count, available: gesturesAvailable })} note={gesturesAvailable ? "Gesture definitions in the library" : "Gesture library could not be read"} />
+        <MetricCard icon={BrainCircuit} label="Deployed model" value={DEPLOYED_MODEL.architecture} note={`${DEPLOYED_MODEL.classes} recognisable classes · ${DEPLOYED_MODEL.format}`} direction="steady" />
+        <MetricCard icon={Activity} label="Recognition confidence" value={getMetricDisplay({ value: currentConfidence, available: confidenceAvailable, format: (value) => formatAdminPercent(value) })} note={confidenceAvailable ? `Mean of ${confidenceValues.length.toLocaleString()} recognitions. ${recognitionSourceNote}` : "Recognition data could not be read"} direction={currentConfidence === null ? undefined : currentConfidence < 0.7 ? "down" : "up"} />
+        {/*
+          This card read "Library gestures 36" next to "Animation assets 38"
+          and "37 of 131", and the three looked like one quantity measured
+          badly. They are three unrelated sets, so the note names the other two
+          rather than leaving the reader to guess which is which.
+        */}
+        <MetricCard
+          icon={Database}
+          label="Reference gesture catalogue"
+          value={getMetricDisplay({ value: gestureResult.count, available: gesturesAvailable })}
+          note={gesturesAvailable
+            ? `Rows in the gestures table — a curated reference list. Not the ${animationAssetsAvailable ? `${animationTotal} animated glosses` : "animated glosses"}, and not the ${MODEL_LABELS.length} classes the model recognises`
+            : "Gesture library could not be read"}
+        />
         <MetricCard icon={Clock3} label="Camera sessions today" value={getMetricDisplay({ value: sessionResult.count, available: sessionsAvailable })} note={sessionsAvailable ? "Sessions started since midnight" : "Session data could not be read"} />
         <MetricCard icon={Sparkles} label="Recognition events" value={recognitionEventCount.toLocaleString()} note={recognitionData.source === "telemetry" ? "Browser telemetry from the last 14 days" : "Activity across the last 30 days"} />
-        <MetricCard icon={WandSparkles} label="High-confidence recognition" value={getMetricDisplay({ value: highConfidenceRate, available: confidenceAvailable, format: (value) => formatAdminPercent(value) })} note="Recognitions at or above the configured confidence threshold" direction={highConfidenceRate === null ? undefined : highConfidenceRate < 0.8 ? "down" : "up"} />
-        <MetricCard icon={BrainCircuit} label="Active model" value={activeModelName ?? (modelAvailable ? "No active model" : "Unavailable")} note={modelAvailable ? "Configured in the model registry" : "Model registry could not be read"} direction={activeModel ? "steady" : undefined} />
+        <MetricCard icon={WandSparkles} label="High-confidence recognition" value={getMetricDisplay({ value: highConfidenceRate, available: confidenceAvailable, format: (value) => formatAdminPercent(value) })} note="Share of recognitions at or above the 60% confidence threshold" direction={highConfidenceRate === null ? undefined : highConfidenceRate < 0.8 ? "down" : "up"} />
         <MetricCard icon={Gauge} label="Inference latency" value={getMetricDisplay({ value: inferenceLatency, available: confidenceAvailable, format: (value) => `${value.toFixed(1)} ms` })} note={recognitionData.source === "telemetry" ? "Browser inference time from the last 14 days" : "Average browser inference time over the last 30 days"} />
       </section>
 
+      {/*
+        These four sat next to "36" and "37" elsewhere on the page and read as
+        four attempts at one quantity. They are four different quantities, and
+        each label now names its own noun and denominator:
+          animation_assets rows            -- one per gloss
+          versions at status='published'   -- one per live version
+          versions mid-pipeline            -- pending + processing
+          versions at status='approved'    -- a QUEUE, drained by publishing
+      */}
       <section className="admin-metric-grid" aria-label="Animation pipeline metrics">
-        <MetricCard icon={Film} label="Animation assets" value={getMetricDisplay({ value: animationTotal, available: animationAssetsAvailable })} note={animationAssetsAvailable ? "Total animation assets in library" : "Animation asset data unavailable"} />
-        <MetricCard icon={Wand2} label="Published animations" value={getMetricDisplay({ value: animationPublished, available: animationVersionsAvailable })} note={animationVersionsAvailable ? "Published and available for Type-to-Sign" : "Version data unavailable"} />
-        <MetricCard icon={Sparkles} label="Pending review" value={getMetricDisplay({ value: animationPending, available: animationVersionsAvailable })} note={animationVersionsAvailable ? "Awaiting extraction or admin review" : "Version data unavailable"} />
-        <MetricCard icon={Database} label="Approved assets" value={getMetricDisplay({ value: animationApproved, available: animationVersionsAvailable })} note={animationVersionsAvailable ? "Approved, ready to publish" : "Version data unavailable"} />
+        <MetricCard icon={Film} label="Glosses with an animation" value={getMetricDisplay({ value: animationTotal, available: animationAssetsAvailable })} note={animationAssetsAvailable ? "Rows in animation_assets — one per gloss, counting every version" : "Animation asset data unavailable"} />
+        <MetricCard icon={Wand2} label="Live published versions" value={getMetricDisplay({ value: animationPublished, available: animationVersionsAvailable })} note={animationVersionsAvailable ? `Serving Type-to-Sign now. ${animationTotal === animationPublished ? "Every gloss has exactly one" : "One per published gloss"}` : "Version data unavailable"} />
+        <MetricCard icon={Sparkles} label="In the pipeline" value={getMetricDisplay({ value: animationPending, available: animationVersionsAvailable })} note={animationVersionsAvailable ? "Versions still extracting or awaiting review" : "Version data unavailable"} />
+        <MetricCard icon={Database} label="Approved, awaiting publish" value={getMetricDisplay({ value: animationApproved, available: animationVersionsAvailable })} note={animationVersionsAvailable ? "A queue, not a total. Publishing moves a version out of approved, so zero means nothing is waiting — it does not mean publishing skipped review" : "Version data unavailable"} />
       </section>
 
       {coverage && (
@@ -256,10 +281,27 @@ export default async function AdminDashboardOverview() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, padding: "0 20px 8px" }}>
             <article className="admin-metric-card">
               <p className="admin-metric-label">Published coverage</p>
-              <strong className="admin-metric-value" style={{ color: coverage.percent > 70 ? "#4ade80" : coverage.percent > 40 ? "#fde68a" : "#f87171" }}>
+              <strong className="admin-metric-value" style={{ color: coverage.percent > 70 ? "#047857" : coverage.percent > 40 ? "#B45309" : "#B91C1C" }}>
                 {coverage.percent}%
               </strong>
-              <p className="admin-metric-note">{coverage.published} of {coverage.total} signs the model knows</p>
+              {/*
+                The intersection, and it is smaller than both sides on purpose.
+                publishedGlosses is the same set behind "Live published
+                versions"; this counts only the members of it that the model can
+                also recognise, so it reads one lower for every published gloss
+                with no model class. Naming that gap here is what stops the two
+                numbers looking like a mistake.
+              */}
+              <p className="admin-metric-note">
+                {coverage.published} of {coverage.total} classes the model can recognise
+                {coverage.unrecognised.length > 0 && (
+                  <>
+                    {" "}— from {publishedGlosses.length} published glosses, {coverage.unrecognised.length} of which
+                    {coverage.unrecognised.length === 1 ? " has" : " have"} no model class
+                    {" "}({coverage.unrecognised.join(", ")})
+                  </>
+                )}
+              </p>
             </article>
             <article className="admin-metric-card">
               <p className="admin-metric-label">Not yet animated</p>
@@ -314,9 +356,27 @@ export default async function AdminDashboardOverview() {
         <DashboardServiceGrid services={services} />
       </section>
 
+      {/* Distinct eyebrows: both cards read "Operational trend", which said
+          nothing about either and looked copy-pasted because it was. What
+          separates them is the x-axis -- one point per day against one point
+          per recognition -- so that is what they now say. */}
       <section className="admin-chart-grid" aria-label="Recognition performance charts">
-        <TrendCard title="Recognition usage" note="Daily recognition and translation activity" values={dailyCounts} accent="#2563EB" />
-        <TrendCard title="Confidence profile" note={recognitionSourceNote} values={confidenceValues.slice(-14)} accent="#236f83" />
+        <TrendCard
+          eyebrow="Volume per day"
+          title="Recognition usage"
+          note="Recognitions and translations recorded each day"
+          values={dailyCounts}
+          accent="#2563EB"
+          unit="day"
+        />
+        <TrendCard
+          eyebrow="Quality per recognition"
+          title="Confidence profile"
+          note={recognitionSourceNote}
+          values={confidenceValues.slice(-14)}
+          accent="#0F766E"
+          unit="recognition"
+        />
       </section>
 
       <section className="admin-dashboard-secondary-grid">
@@ -334,9 +394,15 @@ export default async function AdminDashboardOverview() {
         </article>
         <article className="admin-panel admin-model-summary">
           <p className="admin-overline">Production model</p>
-          <h2>{activeModelName ?? (modelAvailable ? "No active model" : "Model registry unavailable")}</h2>
-          <p>{activeModel ? "The model currently marked active for the browser recognition workflow." : "No model row is marked active in the registry."}</p>
-          <div className="admin-model-summary-stats"><span><strong>{getMetricDisplay({ value: activeModel?.accuracy, available: modelAvailable, format: (value) => formatAdminPercent(value) })}</strong> validated accuracy</span><span><strong>{getMetricDisplay({ value: activeModel?.num_classes, available: modelAvailable })}</strong> configured classes</span></div>
+          <h2>{DEPLOYED_MODEL.architecture}</h2>
+          <p>The recognition model this build serves, read from the shipped artifacts. It changes only when the weights are replaced, so it cannot drift from what the browser actually loads.</p>
+          <div className="admin-model-summary-stats">
+            <span><strong>{DEPLOYED_MODEL.classes.toLocaleString()}</strong> recognisable classes</span>
+            <span><strong>{DEPLOYED_MODEL.format}</strong> artifact format</span>
+            {DEPLOYED_MODEL.convertedAt && (
+              <span><strong>{new Date(DEPLOYED_MODEL.convertedAt).toLocaleDateString()}</strong> exported</span>
+            )}
+          </div>
           <Link href="/admin/system" className="admin-inline-link">System health <ArrowUpRight size={15} /></Link>
         </article>
       </section>

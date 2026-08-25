@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { ScanLine, Languages, Layers3, BookOpen, Database, Settings, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SpotlightCard } from "./SpotlightCard";
+import { MODEL_LABELS } from "@/lib/admin/modelLabels";
 
 interface Feature {
   icon: LucideIcon;
@@ -25,7 +26,12 @@ const features: Feature[] = [
   {
     icon: Layers3,
     title: "Landmark Animation",
-    description: "Visualize signs through smooth MediaPipe skeletal animation, not stiff pre-recorded clips.",
+    // "not stiff pre-recorded clips" was backwards, and the two landing panels
+    // now say so out loud: both play recorded landmark data and caption it as
+    // such. The real distinction is skeleton versus video -- the landmarks are
+    // recorded from a signer, then drawn, which is why playback is a few
+    // hundred KB of coordinates instead of a video stream.
+    description: "Visualize signs as MediaPipe skeletal animation, drawn from landmarks recorded from a signer rather than replayed as video.",
   },
   {
     icon: BookOpen,
@@ -41,7 +47,8 @@ const features: Feature[] = [
     // model". There is no public contribution path; recordings are ingested
     // by an admin, so this invited visitors to do something they cannot.
     title: "Research Dataset",
-    description: "Trained on 131 sign classes extracted from recorded FSL video, with the pipeline documented end to end.",
+    // Derived: retraining changes this, and a literal would not notice.
+    description: `Trained on ${MODEL_LABELS.length} sign classes extracted from recorded FSL video, with the pipeline documented end to end.`,
   },
   {
     icon: Settings,

@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, useInView, useReducedMotion } from "framer-motion";
 import { Radio } from "lucide-react";
+import { MODEL_LABELS } from "@/lib/admin/modelLabels";
+import { partitionLabels } from "@/features/recognition/labelPartition";
 
 interface StatDef {
   target: number;
@@ -12,25 +14,43 @@ interface StatDef {
   label: string;
 }
 
+/**
+ * The model's own label set, split the way the UI talks about it.
+ *
+ * Derived rather than written down. This section said "26 letters + 10 numbers
+ * + 95 phrases" in one place and "26 alphabet + 105 phrases" in another -- the
+ * same 131 under two framings, one of which folds the numbers into the phrases,
+ * in a single file. partitionLabels already computes the split and
+ * assertPartition already fails when the three groups stop covering the label
+ * set, so there is no reason for a second, hand-maintained answer.
+ *
+ * Build-time: MODEL_LABELS is imported from the served labels.json, so this
+ * costs nothing at runtime and changes in the same commit as the weights.
+ */
+const PARTITION = partitionLabels(MODEL_LABELS);
+
 // Under a heading that says "Measured, not just claimed", every number here
 // has to survive being checked.
 //
-// 131 is the model's label count (26 letters + 10 numbers + 95 phrases).
+// MODEL_LABELS.length is the model's label count, and the partition beside it
+// is derived from the same list.
 // 543 is pose 33 + face 468 + two hands at 21 each.
-// 37 is the published animation count -- deliberately shown next to 131,
-// because they are different sets and the gap is the honest part.
+//
+// The published animation count is NOT here: it lives in the database and
+// changes whenever anything is published, so it arrives as a prop from the
+// server component. It was hardcoded as 37, and the 91-sign batch made that
+// wrong the day it ran.
 //
 // "60 FPS Animation Playback" used to sit here. Every published asset is
 // stored at 30 fps, so the figure was simply wrong.
 const stats: StatDef[] = [
-  { target: 131, label: "Sign Classes Recognized" },
+  { target: MODEL_LABELS.length, label: "Sign Classes Recognized" },
   // 93.99, not 94.86. The old figure was bilstm_v2's test accuracy, and v2
   // has not been the served model for some time -- the deployed export is
   // bilstm_v4, whose metrics.json reports 0.9398515818252832 over a 7,681
   // sample test split (macro F1 94.10%).
   { target: 93.99, decimals: 2, suffix: "%", label: "Test Recognition Accuracy" },
   { target: 543, label: "Landmark Points per Frame" },
-  { target: 37, label: "Recorded Signs You Can Play" },
   { target: 30, suffix: " FPS", label: "Animation Playback" },
   // 12ms, and relabelled from "Avg. Recognition Latency".
   //
@@ -87,9 +107,31 @@ function AnimatedStat({ stat }: { stat: StatDef }) {
   );
 }
 
-export function StatsSection() {
+export function StatsSection({ publishedSignCount }: { publishedSignCount: number | null }) {
   const prefersReducedMotion = useReducedMotion();
   const rise = prefersReducedMotion ? false : { opacity: 0, y: 20 };
+
+  /**
+   * The published count joins the list only when it is actually known.
+   *
+   * Deliberately shown next to the model's class count, because they are
+   * different sets and the gap is the honest part: the camera recognises every
+   * class, while only these have a recorded animation to play back.
+   *
+   * Omitted rather than guessed when the database could not be reached. A
+   * stale literal is exactly how this became wrong last time -- 37 was true
+   * once -- so the failure mode is one fewer card, never a number nobody
+   * measured.
+   */
+  const shown = useMemo(() => (
+    publishedSignCount === null
+      ? stats
+      : [
+          stats[0],
+          { target: publishedSignCount, label: "Recorded Signs You Can Play" },
+          ...stats.slice(1),
+        ]
+  ), [publishedSignCount]);
 
   return (
     <section className="bg-senyalita-warm px-6 py-24 md:py-28">
@@ -102,7 +144,7 @@ export function StatsSection() {
         </div>
 
         <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {stats.map((stat, i) => (
+          {shown.map((stat, i) => (
             <motion.div
               key={stat.label}
               initial={rise}
@@ -132,7 +174,12 @@ export function StatsSection() {
         </div>
 
         <p className="mt-6 text-center text-xs text-senyalita-muted">
-          Model benchmarks from the current production BiLSTM model (131 classes, 26 alphabet + 105 phrases).
+          {/* The model version sits beside the figures on purpose. An accuracy
+              number without its model is how 94.86% — bilstm_v2's — outlived
+              v2 across five documents. */}
+          Model benchmarks from the deployed BiLSTM (bilstm_v4):{" "}
+          {MODEL_LABELS.length} classes — {PARTITION.letters.length} letters,{" "}
+          {PARTITION.numbers.length} numbers and {PARTITION.phrases.length} phrase signs.
         </p>
       </div>
     </section>

@@ -105,7 +105,11 @@ async function main() {
 
       asset.imageWidth = dims.width;
       asset.imageHeight = dims.height;
-      asset.video = `/api/videos/${encodeURIComponent(label)}/${encodeURIComponent(sourceFile)}`;
+      // `asset.video` is deliberately not written. It held a URL baked into
+      // stored data, which no reader consults any more -- the player resolves
+      // recordings from the gloss via /api/animations/[gloss]/video. Writing it
+      // would reintroduce a path that goes stale the next time storage moves.
+      delete asset.video;
 
       // Compact: these files run to tens of MB and are machine-read only.
       if (!DRY) fs.writeFileSync(assetPath, JSON.stringify(asset));

@@ -1,19 +1,28 @@
 # System Flow and User Roles
 
 > Status: reflects the system after the final-architecture cleanup. For folder
-> layout see [FOLDER_STRUCTURE.md](FOLDER_STRUCTURE.md); for implementation
+> layout see [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) §3; for implementation
 > detail see [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md).
 
-The system supports **exactly two user-facing workflows**. Anything outside
-them (conversation mode, learning module, session history, evaluation and
-presentation pages) was removed; see the end of this document for recovery.
+The system has **two core workflows**, both on `/translate`, plus two supporting
+public pages.
+
+| Route | Purpose |
+|---|---|
+| `/` | Landing |
+| `/translate` | **Sign-to-Text** and **Text-to-Sign**, tabbed |
+| `/learn` | FSL reference — alphabet, numbers, tutorial links |
+| `/evaluation` | Accuracy harness that produces the thesis figures |
+
+`/conversation`, `/presentation`, `/type-to-sign` and `/history` were removed and
+redirect rather than 404.
 
 ## User roles
 
 | Role | Login | Can do |
 |---|---|---|
-| **Public visitor** | none | Sign-to-Text, Text-to-Sign |
-| **Admin** | Supabase Auth | the above, plus animation upload, dataset management, publishing, diagnostics |
+| **Public visitor** | none | all four routes above |
+| **Admin** | Supabase Auth, **local only** | the above, plus animation upload, dataset management, publishing |
 
 No registration, no user profiles, no personal data. Visitors are identified
 only by an anonymous `session_token`. Admin is read from
@@ -24,7 +33,9 @@ only by an anonymous `session_token`. Admin is read from
 1. Visitor opens `/`.
 2. Landing page links to **`/translate`** — no login, no gate.
 3. `/translate` hosts both workflows in a tab switcher.
-4. Admins reach `/admin/login` and authenticate with Supabase.
+4. Admins reach `/admin/login` **on localhost only**. In production every
+   `/admin/*` and `/api/admin/*` path returns 404 — not a login redirect, which
+   would advertise that a panel exists.
 
 ---
 
@@ -33,7 +44,7 @@ only by an anonymous `session_token`. Admin is read from
 Route: `/translate`, "Sign → Text" tab.
 
 ```
-camera  ->  MediaPipe hand landmarks  ->  BiLSTM model  ->  ONE letter
+camera  ->  MediaPipe hand landmarks  ->  BiLSTM model  ->  ONE class
                                                               |
                                           appended to the letter buffer
                                                               |
@@ -42,21 +53,40 @@ camera  ->  MediaPipe hand landmarks  ->  BiLSTM model  ->  ONE letter
                               user accepts a suggestion, keeps signing, or clears
 ```
 
+**Two modes, explicitly selected — no automatic switching:**
+
+| Mode | Recognises | Status |
+|---|---|---|
+| **Alphabet** | 26 letters + 10 numbers (`ONE`–`TEN`) | Production |
+| **Phrase Signs** | 95 phrase glosses | **Beta**, labelled as such in the UI |
+
+The mode *is* the filter: it restricts which of the model's 131 classes can be
+predicted. The model itself always retains all 131 so `/evaluation` can measure
+them.
+
 1. User starts the camera (`getUserMedia`, 640×480, front camera).
-2. MediaPipe Hand Landmarker (WASM) yields up to 2 hands × 21 landmarks.
+2. MediaPipe Hand Landmarker (WASM) yields 21 landmarks per tracked hand. The
+   number of tracked hands follows the mode — one for Alphabet, two for Phrase
+   Signs, since a second hand roughly halves detection throughput.
 3. Landmarks are wrist-centred and max-abs scaled to a 126-feature vector,
    appended to the recognition buffer at a fixed ~30 Hz to match the rate the
    training clips were extracted at.
-4. The BiLSTM model (`public/models/fsl_unified/bilstm_tfjs/`) predicts a
-   single character. Recognition runs **entirely on-device** — video never
-   leaves the browser.
-5. The user commits the prediction; the character joins the buffer
-   (`H` → `HE` → `HEL` → `HELL` → `HELLO`).
-6. After each character the suggestion engine offers candidate words from the
-   gloss dictionary. Accepting one replaces the spelled run.
+4. A motion detector marks gesture spans on the **raw** landmarks, and a marked
+   span is resampled to the model's trained temporal scale. With no span
+   marked the raw window is used unchanged, so the alphabet path is unaffected.
+5. The BiLSTM model (`public/models/fsl_unified/bilstm_tfjs/`) predicts one
+   class. Recognition runs **entirely on-device** — video never leaves the
+   browser.
+6. The user commits the prediction; the character joins the buffer
+   (`H` → `HE` → `HEL` → `HELL` → `HELLO`). Committing clears the recognition
+   sequence, so the next sign does not compete with the previous one.
+7. After each character the suggestion engine offers candidate words from the
+   gloss dictionary. Accepting one replaces the spelled run. **Numbers reach the
+   transcript but not the spelling buffer** — a digit mid-word can never match a
+   dictionary entry and would suppress suggestions.
 
-Not supported: phrase or sentence recognition, gloss prediction, continuous
-sign recognition, machine translation.
+Not supported: sentence recognition, gloss prediction, continuous sign
+recognition, machine translation.
 
 ---
 
@@ -115,10 +145,17 @@ rejection, because the renderer degrades gracefully.
 
 ## Removed workflows
 
-Conversation mode, the learning module, session history, evaluation and
-presentation pages were removed as out of scope. They remain in git history:
+Conversation mode, session history, the presentation page, and the standalone
+`/type-to-sign` surface were removed as out of scope. They remain in git
+history:
 
 ```
 git show pre-cleanup:src/app/conversation/page.tsx
 git checkout pre-cleanup -- src/features/analytics/
 ```
+
+**`/learn` and `/evaluation` were restored** after the cleanup and are live
+public routes — `/evaluation` because it is the instrument that produces the
+thesis accuracy figures, `/learn` as an FSL reference built on the same player
+and published assets as Text-to-Sign. Earlier revisions of this document listed
+both as removed; that is no longer true.

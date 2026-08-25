@@ -56,6 +56,9 @@ export const middleware = async (request: NextRequest) => {
       url.search = "";
       return NextResponse.redirect(url);
     }
+
+  
+
   }
 
   if (!user && isProtectedPath(pathname)) {

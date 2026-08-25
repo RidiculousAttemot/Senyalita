@@ -69,16 +69,20 @@ describe("landing showcase panel", () => {
     expect(load).not.toHaveBeenCalled();
   });
 
-  it("shows the gloss the engine actually returns for the demo phrase", async () => {
+  // Generous on purpose. This is the only case that waits on the translation
+  // pipeline's dynamic import rather than on an already-resolved value, and
+  // under the full suite that import competes with 79 other files -- it failed
+  // once at a 10s budget while passing every time in isolation. The assertion
+  // is about what the engine returns, not about how fast it loads, so the
+  // timeout should not be the thing under test.
+  it("shows the gloss the engine actually returns for the demo phrase", { timeout: 60_000 }, async () => {
     const { container } = await show();
 
     // The literal this panel used to carry was ["KAMUSTA", "KA"]. The engine
     // resolves "Kamusta ka?" to a single HOW ARE YOU, and neither KAMUSTA nor
     // KA is a published sign -- so the old panel advertised a result the system
     // would never produce, directly under "this runs the real engine".
-    // Generous, because this is the first case that waits on the pipeline's
-    // dynamic import rather than on a value it has already produced.
-    await waitFor(() => expect(container.textContent).toContain("HOW ARE YOU"), { timeout: 10_000 });
+    await waitFor(() => expect(container.textContent).toContain("HOW ARE YOU"), { timeout: 45_000 });
     expect(container.textContent).not.toMatch(/\bKAMUSTA\b/);
     expect(container.textContent).not.toMatch(/\bKA\b/);
   });
@@ -126,6 +130,36 @@ describe("landing showcase panel", () => {
     await waitFor(() => expect(screen.getByText("LOVE")).toBeTruthy());
     expect(screen.queryByRole("button", { name: /^play /i })).toBeNull();
     expect(screen.getByText(/no recording for these signs yet/i)).toBeTruthy();
+  });
+
+  it("keeps the expensive modules out of the landing page's first load", async () => {
+    /**
+     * A source-level guard, because the cost is decided by the import keyword
+     * and nothing else. The whole load policy rests on the player, the loader,
+     * the pipeline and the trim helper being reachable only through dynamic
+     * import; a single static one silently moves them into the bundle every
+     * visitor pays for, and no rendered assertion would notice.
+     *
+     * This already happened once: activeSpan went in as a static import and
+     * had to be moved back out.
+     */
+    const fs = await import("node:fs");
+    const heavy = [
+      "@/features/sign-animation/player/SignAnimationPlayer",
+      "@/features/sign-animation/hooks/useAnimationClip",
+      "@/features/sign-animation/activeSpan",
+      "@/features/sign-animation/publishedGlosses",
+      "@/features/translation-pipeline",
+    ];
+    for (const file of ["InteractiveShowcaseSection.tsx", "SignPlaybackDemo.tsx"]) {
+      const source = fs.readFileSync(`src/components/landing/${file}`, "utf8");
+      for (const mod of heavy) {
+        // `import x from "mod"` at the top of a line is static; `import("mod")`
+        // and `import type` are not.
+        const statically = new RegExp(`^import\\s+(?!type\\b)[^\\n]*["']${mod.replace(/[/@]/g, "\\$&")}["']`, "m");
+        expect(statically.test(source), `${file} statically imports ${mod}`).toBe(false);
+      }
+    }
   });
 
   it("claims no accuracy figure and no fabricated pipeline stages", async () => {
