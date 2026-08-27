@@ -20,7 +20,6 @@ const navLinks = [
   { name: "Translate", href: "#showcase", id: "showcase" },
   { name: "Learn", href: "#learn", id: "learn" },
   { name: "Research", href: "#research", id: "research" },
-  { name: "About", href: "#accessibility", id: "accessibility" },
 ];
 
 function GithubGlyph({ className }: { className?: string }) {

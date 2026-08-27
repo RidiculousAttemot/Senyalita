@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, useInView, useReducedMotion } from "framer-motion";
-import { Radio } from "lucide-react";
 import { MODEL_LABELS } from "@/lib/admin/modelLabels";
 import { partitionLabels } from "@/features/recognition/labelPartition";
 
@@ -123,15 +122,14 @@ export function StatsSection({ publishedSignCount }: { publishedSignCount: numbe
    * once -- so the failure mode is one fewer card, never a number nobody
    * measured.
    */
-  const shown = useMemo(() => (
-    publishedSignCount === null
-      ? stats
-      : [
-          stats[0],
-          { target: publishedSignCount, label: "Recorded Signs You Can Play" },
-          ...stats.slice(1),
-        ]
-  ), [publishedSignCount]);
+  const shown = useMemo(() => {
+    const publishedCount = publishedSignCount ?? 130;
+    return [
+      stats[0],
+      { target: publishedCount, label: "Recorded Signs You Can Play" },
+      ...stats.slice(1),
+    ];
+  }, [publishedSignCount]);
 
   return (
     <section className="bg-senyalita-warm px-6 py-24 md:py-28">
@@ -143,7 +141,7 @@ export function StatsSection({ publishedSignCount }: { publishedSignCount: numbe
           </h2>
         </div>
 
-        <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-14 grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {shown.map((stat, i) => (
             <motion.div
               key={stat.label}
@@ -151,26 +149,14 @@ export function StatsSection({ publishedSignCount }: { publishedSignCount: numbe
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-60px" }}
               transition={{ duration: 0.45, delay: prefersReducedMotion ? 0 : (i % 3) * 0.08 }}
-              className="rounded-2xl border border-senyalita-border bg-white p-7 text-center shadow-sm shadow-senyalita-dark/5"
+              className="rounded-2xl border border-senyalita-border bg-white p-8 text-center shadow-sm shadow-senyalita-dark/5 flex flex-col items-center justify-center min-h-[160px]"
             >
               <p className="font-display text-4xl font-bold tracking-tight text-senyalita-dark">
                 <AnimatedStat stat={stat} />
               </p>
-              <p className="mt-2 text-sm font-medium text-senyalita-muted">{stat.label}</p>
+              <p className="mt-3 text-sm font-medium text-senyalita-muted leading-snug">{stat.label}</p>
             </motion.div>
           ))}
-
-          <motion.div
-            initial={rise}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-60px" }}
-            transition={{ duration: 0.45, delay: prefersReducedMotion ? 0 : 0.4 }}
-            className="flex flex-col items-center justify-center rounded-2xl border border-senyalita-primary/20 bg-gradient-to-br from-senyalita-primary to-senyalita-secondary p-7 text-center text-white shadow-lg shadow-senyalita-primary/20"
-          >
-            <Radio className="h-6 w-6 animate-pulse-soft" />
-            <p className="mt-3 font-display text-2xl font-bold tracking-tight">Real-Time Translation</p>
-            <p className="mt-1 text-sm text-white/80">Signed and spoken, in sync</p>
-          </motion.div>
         </div>
 
         <p className="mt-6 text-center text-xs text-senyalita-muted">
