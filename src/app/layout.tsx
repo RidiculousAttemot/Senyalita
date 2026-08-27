@@ -51,7 +51,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={cn("scroll-smooth", inter.variable)}>
+    <html lang="en" className={cn("scroll-smooth", inter.variable)} suppressHydrationWarning>
       <head>
         {/*
           Applies the saved contrast and text size before first paint.
