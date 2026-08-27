@@ -87,8 +87,8 @@ export function SignComposer({
                 quality >= 80
                   ? "bg-senyalita-accent/10 text-senyalita-accent"
                   : quality >= 50
-                    ? "bg-amber-100 text-amber-700"
-                    : "bg-rose-100 text-rose-600"
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-rose-100 text-rose-600"
               }`}
             >
               {quality}% covered
