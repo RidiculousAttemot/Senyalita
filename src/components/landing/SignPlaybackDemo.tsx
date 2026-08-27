@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { motion, useReducedMotion } from "framer-motion";
 import { Play } from "lucide-react";
@@ -195,7 +195,7 @@ export function SignSurface({
     return () => observer.disconnect();
   }, []);
 
-  const clips = load.status === "ready" ? [load.clip] : [];
+  const clips = useMemo(() => (load.status === "ready" ? [load.clip] : []), [load]);
   const totalFrames = load.status === "ready" ? load.clip.asset.totalFrames : 0;
   const frame = progress && load.status === "ready"
     ? Math.min(totalFrames, Math.round(progress.clipTime * (progress.fps || 30)) + 1)
