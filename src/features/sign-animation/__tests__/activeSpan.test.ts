@@ -40,14 +40,14 @@ const asset = (frames: AnimationFrame[]): GestureAnimationAsset => ({
 
 describe("activeSpan", () => {
   it("finds the moving stretch and drops the rest at both ends", () => {
-    const span = activeSpan(clip(20, 40, 20));
+    const span = activeSpan(clip(12, 60, 12));
     expect(span.trimmed).toBe(true);
     // Lead and trail margins are kept deliberately, so this is a window around
     // the movement rather than an exact boundary.
-    expect(span.start).toBeGreaterThan(10);
-    expect(span.start).toBeLessThan(20);
-    expect(span.end).toBeGreaterThan(55);
-    expect(span.end).toBeLessThan(70);
+    expect(span.start).toBeGreaterThan(3);
+    expect(span.start).toBeLessThan(14);
+    expect(span.end).toBeGreaterThan(66);
+    expect(span.end).toBeLessThan(80);
   });
 
   it("returns the whole clip when nothing moves", () => {
@@ -68,26 +68,59 @@ describe("activeSpan", () => {
     expect(span.start).toBe(0);
     expect(span.end).toBe(79);
   });
+
+  it("refuses to trim a held handshape down to the moment it is lowered", () => {
+    /**
+     * The alphabet, and the reason there is a floor at all.
+     *
+     * A letter is a static handshape: the signer holds it, so pose velocity
+     * reads the whole sign as idle and the only movement is the arm coming
+     * down at the end. Surveyed across all 130 published assets, the detector
+     * kept 15 of R's 214 frames -- it threw the letter away and kept the exit.
+     *
+     * Six word signs were not enough to see this; every one of them moved.
+     */
+    const frames = clip(180, 25, 0);
+    const span = activeSpan(frames);
+    expect(span.trimmed, "a held sign must be left alone, not cut to its exit").toBe(false);
+    expect(span.start).toBe(0);
+    expect(span.end).toBe(frames.length - 1);
+  });
+
+  it("never retains less than the floor, whatever the velocity profile", () => {
+    // The property, rather than one shape of clip: whenever it does trim, what
+    // survives is most of the clip. A future asset with an unusual profile
+    // cannot be trimmed into nothing without this failing.
+    for (const [lead, moving, trail] of [
+      [180, 25, 0], [200, 20, 0], [98, 60, 6], [40, 60, 40], [12, 100, 12], [0, 90, 0],
+    ] as Array<[number, number, number]>) {
+      const frames = clip(lead, moving, trail);
+      const span = activeSpan(frames);
+      const retained = (span.end - span.start + 1) / frames.length;
+      expect(retained, `clip(${lead},${moving},${trail}) retained ${(retained * 100).toFixed(1)}%`)
+        .toBeGreaterThanOrEqual(0.65);
+    }
+  });
 });
 
 describe("trimToActiveSpan", () => {
   it("moves totalFrames and duration together", () => {
     // PlaybackEngine indexes by proportion of duration, so if these disagree
     // the sign plays at the wrong rate rather than failing visibly.
-    const trimmed = trimToActiveSpan(asset(clip(20, 40, 20)));
+    const trimmed = trimToActiveSpan(asset(clip(12, 60, 12)));
     expect(trimmed.totalFrames).toBe(trimmed.frames.length);
     expect(trimmed.duration).toBeCloseTo((trimmed.frames.length / 30) * 1000, 5);
-    expect(trimmed.totalFrames).toBeLessThan(80);
+    expect(trimmed.totalFrames).toBeLessThan(84);
   });
 
   it("rebases timestamps to zero", () => {
-    expect(trimToActiveSpan(asset(clip(20, 40, 20))).frames[0].timestamp).toBe(0);
+    expect(trimToActiveSpan(asset(clip(12, 60, 12))).frames[0].timestamp).toBe(0);
   });
 
   it("advances sourceOffsetSeconds by the frames it removed", () => {
     // Overlay and Human modes seek the recording to this offset. Trimming the
     // front without moving it would desync the skeleton from the video.
-    const original = asset(clip(20, 40, 20));
+    const original = asset(clip(12, 60, 12));
     const trimmed = trimToActiveSpan(original);
     const dropped = trimmed.trim!.startFrame;
     expect(trimmed.sourceOffsetSeconds).toBeCloseTo(dropped / 30, 6);
@@ -96,7 +129,7 @@ describe("trimToActiveSpan", () => {
   it("does not mutate the asset it was given", () => {
     // The loader caches by gloss and hands the same object to every caller;
     // trimming in place would trim the translator's copy too.
-    const original = asset(clip(20, 40, 20));
+    const original = asset(clip(12, 60, 12));
     const before = original.frames.length;
     trimToActiveSpan(original);
     expect(original.frames.length).toBe(before);

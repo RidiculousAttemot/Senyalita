@@ -89,8 +89,17 @@ test.describe("projector affordances", () => {
     // used to keep its 720px cap in fullscreen, so a relative check was
     // satisfied by incidental width changes while a third of the screen went
     // unused.
+    // PROPORTIONAL TO THE REPORTED VIEWPORT, not to the requested one.
+    //
+    // This asserted against 1000 * 0.85 because setViewportSize was asked for
+    // 1000. What a browser actually reports in fullscreen is its own business:
+    // webkit came back with 768, so the canvas filled its viewport completely
+    // and still failed an assertion that had hardcoded someone else's height.
+    // The property under test is "the canvas fills the screen", which is a
+    // ratio, so measure it as one.
+    const viewportHeight = await page.evaluate(() => window.innerHeight);
     await expect
       .poll(async () => canvas.evaluate((el: HTMLCanvasElement) => el.height), { timeout: 10_000 })
-      .toBeGreaterThan(1000 * 0.85);
+      .toBeGreaterThan(viewportHeight * 0.85);
   });
 });

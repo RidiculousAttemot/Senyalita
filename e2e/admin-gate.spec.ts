@@ -60,6 +60,15 @@ const ADMIN_PAGES = collectRoutes(path.join(APP_DIR, "admin"), "page.tsx");
 const ADMIN_APIS = collectRoutes(path.join(APP_DIR, "api", "admin"), "route.ts");
 const ALL = [...ADMIN_PAGES, ...ADMIN_APIS];
 
+/**
+ * Serial, because this file fans out one test per admin route and then runs
+ * that fan-out under three browser projects at once. All of them hit a single
+ * local dev server, which answered with ECONNRESET -- a transport failure, not
+ * a gate failure. The assertions are correct and stay as they are; it is the
+ * request burst that needed limiting.
+ */
+test.describe.configure({ mode: "serial" });
+
 test.describe("admin surface is enumerable", () => {
   test("finds both the pages and the privileged API routes", () => {
     // Guards the guard. If the walk silently returned nothing, every

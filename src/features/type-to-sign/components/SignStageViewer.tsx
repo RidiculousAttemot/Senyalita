@@ -15,36 +15,13 @@ import type { AnimationClip } from "@/features/sign-animation/types";
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
-/**
- * Skeleton is the only view the public app offers.
- *
- * Human, Split and Overlay all draw the source recording, and the source
- * recordings are gone: they were deleted from Storage to fit the 91-sign batch
- * inside the free tier, so 129 of the 130 published signs answered all three
- * modes with "Recording unavailable". Only A still has one. Three of four
- * options in a switcher that could not work is worse than no switcher.
- *
- * It is also the more honest architecture. The landmark representation is what
- * this system produces and what the model consumes; the video was source
- * material, not the contribution. Showing the skeleton is showing the output.
- *
- * THE PLAYER KEEPS ALL FOUR MODES, and the data path behind them is untouched:
- * /api/animations/[gloss]/video still serves, source_video_path is still
- * written, and the seeder still uploads. Re-enabling here is putting the
- * switcher back and passing viewMode through again -- no renderer work. The
- * intended home for the comparison is the admin animation-inspector, which is
- * local-only and can read the recordings from datasets/raw/user_videos without
- * costing Storage.
- */
 const STAGE_VIEW_MODE = "skeleton" as const;
-
 const STAGE_BACKGROUND = "#F1F5F9";
 
 interface SignStageViewerProps {
   clips: AnimationClip[];
   sequenceKey: number;
   loading: boolean;
-  /** Words resolved / words in the sentence, for a determinate loader. */
   loadedCount?: number;
   totalCount?: number;
   isStreaming?: boolean;
@@ -67,16 +44,6 @@ export function SignStageViewer({
   const [speed, setSpeed] = useState(1);
   const [loop, setLoop] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-
-  /**
-   * Room-legible type for demoing to an audience.
-   *
-   * The stage's readouts sit at 9–13px, which is right for one person at a
-   * laptop and unreadable from three metres. The gloss currently being signed
-   * and the "Sign i of n" counter are the two things an audience needs to
-   * follow, so those are what scale; the controls stay put, because the person
-   * driving the demo is standing at the machine.
-   */
   const [presentationMode, setPresentationMode] = useState(false);
   const [showTrails, setShowTrails] = useState(false);
 
@@ -149,7 +116,6 @@ export function SignStageViewer({
     else stageRef.current?.requestFullscreen?.();
   }, []);
 
-  /** Saves the current stage frame, so a sign can go straight into a slide. */
   const downloadFrame = useCallback(() => {
     const canvas = stageRef.current?.querySelector("canvas");
     if (!canvas) return;
@@ -159,23 +125,6 @@ export function SignStageViewer({
     link.click();
   }, [clips, index]);
 
-  /**
-   * The stage takes the shape of the material.
-   *
-   * The renderer already fits each clip to the stage over its whole extent,
-   * uniformly and without cropping. What it cannot do is change the shape of
-   * the box it is fitting into, and that is what left roughly 40% of the canvas
-   * empty: the 92 phrase signs were captured 1920x1080, so with the signer's
-   * arms spanning the frame their subject box is about 2.2:1, and fitting that
-   * into a near-square stage is bound by width. Measured, it used 82% of the
-   * width and 36% of the height. The original 38 letters and digits are 1080x1920
-   * portrait, box about 0.8:1, and filled 82% of the height in the same stage.
-   *
-   * No single fixed height suits both, so the height follows the widest clip in
-   * the sequence. Raising FIT_FRACTION was the obvious alternative and does not
-   * work: modelled across these signs it moves the landscape ones from 36% to
-   * 42% while leaving the portrait ones with no padding at all.
-   */
   const stageAspect = useMemo(() => {
     let widest = 0;
     for (const clip of clips) {
@@ -189,44 +138,17 @@ export function SignStageViewer({
       widest = Math.max(widest, boxW / boxH);
     }
     if (!widest) return null;
-    // Clamped so an odd capture cannot produce a letterbox slot or a tower.
     return Math.min(Math.max(widest, 0.75), 2.2);
   }, [clips]);
 
-  /**
-   * Frozen once the stage has painted.
-   *
-   * Clips stream in, so without this a sentence would resize under the viewer
-   * as later signs arrive. Changes before first paint are hidden by the loader.
-   */
   const [lockedAspect, setLockedAspect] = useState<number | null>(null);
 
   const hasClips = clips.length > 0;
-  /**
-   * Whether the player has put anything on screen for this sequence.
-   *
-   * The loader used to clear on `clips.length > 0` — the moment the first
-   * landmark JSON resolved. Everything after that was invisible to it: the
-   * player mounting, thirteen engine and renderer objects being constructed,
-   * the first animation frame, and in the modes that show the recording a
-   * multi-megabyte video fetching and decoding. All of it rendered as an empty
-   * stage with no loader over it.
-   *
-   * Stored as the sequence that painted rather than a boolean with a reset
-   * effect. React runs a child's effects before its parent's, so a remounted
-   * player announced its first frame and *then* the parent's reset ran and
-   * clobbered it — the loader stayed up forever with the sign playing
-   * underneath. Comparing keys makes a new sequence unpainted by construction,
-   * with no ordering to get wrong.
-   */
   const [paintedKey, setPaintedKey] = useState<number | null>(null);
   const sequenceKeyRef = useRef(sequenceKey);
   sequenceKeyRef.current = sequenceKey;
   const handleFirstFrame = useCallback(() => setPaintedKey(sequenceKeyRef.current), []);
   const painted = paintedKey === sequenceKey;
-  // Streaming keeps `loading` true while later clips arrive, so this cannot
-  // simply be `loading || !painted` — that would re-cover a stage that is
-  // already playing.
   const showLoader = (loading && !hasClips) || (hasClips && !painted);
   const current = hasClips ? clips[Math.min(index, clips.length - 1)] : null;
   const clipProgress = progress && progress.clipDuration > 0
@@ -258,17 +180,7 @@ export function SignStageViewer({
   }, [clips]);
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* Fixed height at every breakpoint: switching view mode must never
-          reflow the page around it. Content scales inside instead. */}
-      {/*
-        The stage carries a fixed height at every breakpoint, and that height
-        went on applying in fullscreen — so requesting fullscreen blacked out
-        the rest of the screen and left the canvas at its windowed 720px. On a
-        1080p projector that wasted about a third of the vertical space.
-        Fullscreen now fills the viewport; the ResizeObserver on the surface
-        below picks the new size up and the canvas follows.
-      */}
+    <div className="flex flex-col gap-4">
       <div
         ref={stageRef}
         data-testid="sign-stage"
@@ -292,7 +204,6 @@ export function SignStageViewer({
                 loop={loop}
                 isStreaming={isStreaming}
                 viewMode={STAGE_VIEW_MODE}
-
                 showTrails={showTrails}
                 showControls={false}
                 backgroundColor={STAGE_BACKGROUND}
@@ -327,8 +238,6 @@ export function SignStageViewer({
                         presentationMode ? "text-[clamp(2rem,4vw,4rem)] leading-none" : "text-xl"
                       }`}
                     >
-                      {/* The label, not the gloss. current.gesture stays the
-                          gloss and is still the lookup key on the line below. */}
                       {current?.displayLabel ?? current?.gesture}
                     </span>
                     {current && fingerspelledGlosses.has(current.gesture) && (
@@ -353,9 +262,6 @@ export function SignStageViewer({
               <dl className="flex shrink-0 gap-4 text-right">
                 <MetaStat label="Duration" value={`${totalDuration.toFixed(1)}s`} />
                 <MetaStat label="FPS" value={`${current?.asset.fps ?? 30}`} />
-                {/* No "Mode" stat: with one view it would read Skeleton on
-                    every sign forever, which is a label that tells you nothing
-                    and a column that costs room the gloss can use. */}
               </dl>
             </div>
           </>
@@ -452,7 +358,6 @@ export function SignStageViewer({
   );
 }
 
-
 function MetaStat({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -518,8 +423,8 @@ function MotionTimeline({
                 active
                   ? "border-senyalita-primary/40 bg-senyalita-primary/10"
                   : done
-                    ? "border-senyalita-accent/30 bg-senyalita-accent/10"
-                    : "border-senyalita-border bg-white hover:border-senyalita-primary/30"
+                  ? "border-senyalita-accent/30 bg-senyalita-accent/10"
+                  : "border-senyalita-border bg-white hover:border-senyalita-primary/30"
               }`}
             >
               <span
@@ -551,15 +456,6 @@ const LOADING_STAGES = [
   "Almost ready…",
 ];
 
-/**
- * @param loaded how many words have resolved
- * @param total  how many the sentence has
- *
- * Determinate whenever there is more than one word, because the indefinite bar
- * is indistinguishable from a stuck one. A single word stays indeterminate:
- * the count the hook reports is per word, and a fingerspelled word is one
- * word however many letters it spells.
- */
 function LoadingStage({ loaded, total }: { loaded: number; total: number }) {
   const [stage, setStage] = useState(0);
   useEffect(() => {
@@ -573,15 +469,7 @@ function LoadingStage({ loaded, total }: { loaded: number; total: number }) {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      // Leaves at once. It is dismissed the moment the stage has a frame on
-      // it, so any fade here is spent sitting on top of the sign the viewer is
-      // waiting to watch — the loader and the first sign were visible together
-      // for the length of the transition.
       exit={{ opacity: 0, transition: { duration: 0 } }}
-      // Identifies the overlay structurally. Tests used to detect it by
-      // matching its wording, which silently stopped working: three of the
-      // four messages it cycles through matched nothing, so for most of every
-      // cycle the loader was on screen and reported absent.
       data-testid="stage-loader"
       className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-white/80 backdrop-blur-sm"
     >
@@ -620,7 +508,6 @@ function LoadingStage({ loaded, total }: { loaded: number; total: number }) {
   );
 }
 
-/** Stand-in figure so the stage is never blank while assets are fetched. */
 function SkeletonPlaceholder() {
   return (
     <svg width="104" height="130" viewBox="0 0 96 120" aria-hidden="true" className="animate-breathe-slow">

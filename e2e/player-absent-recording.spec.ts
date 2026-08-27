@@ -23,6 +23,18 @@ import { test, expect, type Page } from "@playwright/test";
  * become route assertions, which is where the contract now lives.
  */
 
+/**
+ * Playwright caps each test at 30s by default and that cap overrides every
+ * timeout inside the test, so the 90s and 120s waits below were dead letters.
+ * /translate hydrates behind ~38 asset requests and LONGANISA is 5.5MB, which
+ * webkit does not finish inside 30s -- the failure surfaced as
+ * "toBeEnabled: Received: disabled", naming the button rather than the budget.
+ *
+ * Every sibling spec that drives /translate already sets 240_000. This file was
+ * the one that set nothing.
+ */
+test.describe.configure({ timeout: 240_000 });
+
 const TARGET = process.env.E2E_BASE_URL ?? process.env.E2E_BASE ?? "http://localhost:3000";
 
 /**
@@ -73,8 +85,23 @@ async function translate(page: Page, phrase: string) {
     { timeout: 90_000 },
   );
 
-  await page.locator("textarea, input[type=text]").first().fill(phrase);
-  await page.getByRole("button", { name: /^Translate$/i }).click();
+  const input = page.locator("textarea, input[type=text]").first();
+  await expect(input).toBeVisible({ timeout: 150_000 });
+  await input.fill(phrase);
+
+  // WAIT ON THE ENABLED STATE, NOT ON ELAPSED TIME.
+  //
+  // The button is disabled until React registers the fill. Clicking before
+  // that retries against a disabled control until the test times out, and
+  // reports "locator.click: Test timeout" -- which names the click, not the
+  // hydration that never happened. /translate hydrates behind ~38 asset
+  // requests, so this lands on webkit first and on any slow machine next.
+  //
+  // translate.spec, translate-loading.spec and translation-result.spec all
+  // already do this; this helper was the one that did not.
+  const button = page.getByRole("button", { name: /^Translate$/i });
+  await expect(button).toBeEnabled({ timeout: 120_000 });
+  await button.click();
   await assetResolved;
 }
 
