@@ -1,6 +1,6 @@
 ---
 name: phase-log
-description: Record completed work in AGENTS.md following this repo's established "Phase N — Title" convention. Use after finishing a non-trivial chunk of work on SignLangVisual (a feature, a dataset/model change, a migration, an audit) so the project history stays consistent with the existing 45+ phase entries.
+description: Record completed work in AGENTS.md following this repo's established "Phase N — Title" convention. Use after finishing a non-trivial chunk of work on Senyalita (a feature, a dataset/model change, a migration, an audit) so the project history stays consistent with the existing 45+ phase entries.
 ---
 
 # Recording work as a phase (AGENTS.md convention)

@@ -226,7 +226,7 @@ const validateSplit = async (splitName) => {
 const generateReport = (validationResults) => {
   let report = `# FSL Combined Dataset Validation Report\n\n`;
   report += `**Generated:** ${new Date().toISOString()}\n`;
-  report += `**Dataset:** Kaggle FSL + Custom SignLangVisual\n\n`;
+  report += `**Dataset:** Kaggle FSL + Custom Senyalita\n\n`;
 
   // Files validation
   report += `## File Validation\n\n`;

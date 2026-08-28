@@ -1,6 +1,6 @@
 {
-  "name": "SignLangVisual",
-  "short_name": "SignLang",
+  "name": "Senyalita",
+  "short_name": "Senyalita",
   "description": "Filipino Sign Language Recognition & Communication Assistant",
   "start_url": "/",
   "display": "standalone",

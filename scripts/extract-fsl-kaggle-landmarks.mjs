@@ -3,7 +3,7 @@
  * Extract MediaPipe Landmarks from FSL Kaggle Dataset Images
  * 
  * Processes all JPG images in the Kaggle FSL dataset, extracts hand landmarks,
- * and converts them to the same format used by SignLangVisual training pipeline.
+ * and converts them to the same format used by Senyalita training pipeline.
  * 
  * Usage: node scripts/extract-fsl-kaggle-landmarks.mjs
  */

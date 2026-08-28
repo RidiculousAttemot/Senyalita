@@ -3,7 +3,7 @@
 **Title:** Real-Time Sign Language Recognition and Translation System Using Deep
 Learning for Text and Speech Output
 
-**System name:** SignLangVisual
+**System name:** Senyalita
 
 > **Accuracy note.** This script was rewritten on 2026-08-10 against the code, the
 > served model, and the git history. Everything stated as a number is verifiable in
@@ -36,7 +36,7 @@ no video ever leaves the user's device.
 
 Communication is essential in daily life, yet Deaf and hard-of-hearing individuals
 face barriers when interacting with people who do not know sign language. We
-developed SignLangVisual to reduce that barrier: a system that reads hand landmarks
+developed Senyalita to reduce that barrier: a system that reads hand landmarks
 from a webcam, classifies them with a deep learning model, and produces readable
 text — and in the other direction, renders typed text as sign animation.
 

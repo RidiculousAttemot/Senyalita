@@ -196,7 +196,7 @@ const generateMappingReport = (mapping, kaggleData, customData) => {
     report += `⚠️ **Missing FSL labels:**\n`;
     report += `- Count: ${mapping.missing.length}/${EXPECTED_LABELS.length}\n`;
     report += `- Labels: ${mapping.missing.join(', ')}\n\n`;
-    report += `**Recommendation:** These missing labels can be filled from the custom SignLangVisual dataset during merge.\n\n`;
+    report += `**Recommendation:** These missing labels can be filled from the custom Senyalita dataset during merge.\n\n`;
   }
 
   // Recommendations

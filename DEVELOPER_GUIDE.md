@@ -1,4 +1,4 @@
-# SignLangVisual — Developer Guide
+# Senyalita — Developer Guide
 
 Everything a programmer needs before touching this codebase: what the system actually
 does, where the AI is, the algorithms in the hot path, and the traps that will waste

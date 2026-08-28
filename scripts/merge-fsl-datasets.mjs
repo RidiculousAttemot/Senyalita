@@ -2,7 +2,7 @@
 /**
  * Merge FSL Kaggle and Custom Datasets
  * 
- * Combines the Kaggle FSL dataset with custom SignLangVisual dataset,
+ * Combines the Kaggle FSL dataset with custom Senyalita dataset,
  * preserves source metadata, and applies stratified-by-label splitting.
  * 
  * Usage: node scripts/merge-fsl-datasets.mjs

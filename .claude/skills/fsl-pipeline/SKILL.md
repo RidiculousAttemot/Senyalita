@@ -1,6 +1,6 @@
 ---
 name: fsl-pipeline
-description: Navigate SignLangVisual's dataset/model pipeline safely — which dataset and model are current production, which of the 120+ scripts/ files are canonical vs superseded, and where raw/processed data and trained models live. Use before running any script under scripts/, touching datasets/ or models/, or being asked to retrain/audit/export the FSL recognition model.
+description: Navigate Senyalita's dataset/model pipeline safely — which dataset and model are current production, which of the 120+ scripts/ files are canonical vs superseded, and where raw/processed data and trained models live. Use before running any script under scripts/, touching datasets/ or models/, or being asked to retrain/audit/export the FSL recognition model.
 ---
 
 # FSL dataset & model pipeline

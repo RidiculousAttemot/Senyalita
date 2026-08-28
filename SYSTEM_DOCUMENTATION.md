@@ -1,4 +1,4 @@
-# SignLangVisual — Complete System Documentation
+# Senyalita — Complete System Documentation
 
 > One-file reference for the whole system: architecture, algorithms, database,
 > backend, API, data flow, UML and flowcharts.
@@ -9,7 +9,7 @@
 
 ## 1. Overview
 
-**SignLangVisual** is an AI-assisted **Filipino Sign Language (FSL) translation
+**Senyalita** is an AI-assisted **Filipino Sign Language (FSL) translation
 system**. It provides two directions:
 
 | Direction | Route | What it does |
