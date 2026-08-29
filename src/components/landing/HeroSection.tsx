@@ -1,12 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { ArrowRight, PlayCircle } from "lucide-react";
 import { LandmarkField } from "./LandmarkField";
 import { SignPlaybackDemo } from "./SignPlaybackDemo";
+import { LandingDemoModal } from "./LandingDemoModal";
 
 export function HeroSection() {
+  const [isDemoOpen, setIsDemoOpen] = useState(false);
   const prefersReducedMotion = useReducedMotion();
   const rise = (y: number) => (prefersReducedMotion ? false : { opacity: 0, y });
 
@@ -69,13 +72,14 @@ export function HeroSection() {
               Try Live Translation
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
-            <Link
-              href="#showcase"
+            <button
+              type="button"
+              onClick={() => setIsDemoOpen(true)}
               className="flex items-center justify-center gap-2 rounded-full border border-senyalita-border bg-white px-7 py-3.5 text-sm font-semibold text-senyalita-text transition-colors hover:border-senyalita-primary/30 hover:text-senyalita-primary"
             >
               <PlayCircle className="h-4 w-4" />
               Watch Demo
-            </Link>
+            </button>
           </motion.div>
 
           <motion.div
@@ -103,6 +107,8 @@ export function HeroSection() {
           <SignPlaybackDemo id="recognition" />
         </motion.div>
       </div>
+
+      <LandingDemoModal isOpen={isDemoOpen} onClose={() => setIsDemoOpen(false)} />
     </section>
   );
 }
