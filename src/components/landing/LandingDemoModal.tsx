@@ -68,7 +68,7 @@ export function LandingDemoModal({ isOpen, onClose }: LandingDemoModalProps) {
           ref={modalRef}
           role="dialog"
           aria-modal="true"
-          aria-labelledby="demo-modal-title"
+          aria-label="Demo video"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -89,7 +89,7 @@ export function LandingDemoModal({ isOpen, onClose }: LandingDemoModalProps) {
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ duration: 0.25, ease: "easeOut" }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
             className={cn(
               "relative w-full max-w-[900px] bg-white rounded-2xl shadow-[0_25px_50px_-12px_rgba(15,23,42,0.4)] overflow-hidden",
               "focus:outline-none"
@@ -110,22 +110,10 @@ export function LandingDemoModal({ isOpen, onClose }: LandingDemoModalProps) {
                 src="/demo/demo.mp4"
                 controls
                 preload="metadata"
-                className="w-full h-full rounded-t-2xl"
+                className="w-full h-full rounded-2xl border border-senyalita-border"
                 onEnded={handleVideoEnded}
                 playsInline
               />
-            </div>
-
-            <div className="px-6 py-5 text-center">
-              <h2
-                id="demo-modal-title"
-                className="font-display text-lg font-semibold text-senyalita-dark"
-              >
-                Senyalita — Filipino Sign Language Demo
-              </h2>
-              <p className="mt-1 text-sm text-senyalita-muted">
-                AI-powered recognition and landmark animation
-              </p>
             </div>
           </motion.div>
         </motion.div>

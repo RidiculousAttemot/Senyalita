@@ -35,7 +35,7 @@ const SignAnimationPlayer = dynamic(
  * page most visitors bounce from, so the cheapest sign that is still a whole
  * word wins. Next smallest are COLD (2.57MB) and SUGAR (2.59MB).
  */
-const HERO_GLOSS = "KNOW";
+const HERO_GLOSS = "HELLO";
 
 type LoadState =
   | { status: "idle" }

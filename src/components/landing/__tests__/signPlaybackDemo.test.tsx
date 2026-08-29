@@ -78,7 +78,7 @@ class FakeIntersectionObserver {
 
 const { SignPlaybackDemo } = await import("../SignPlaybackDemo");
 
-function makeAsset(label = "KNOW"): GestureAnimationAsset {
+function makeAsset(label = "HELLO"): GestureAnimationAsset {
   const frames = Array.from({ length: 30 }, (_, frame) => ({
     timestamp: Math.round(frame * (1000 / 30)),
     landmarks: [],
@@ -125,7 +125,7 @@ describe("landing sign playback demo", () => {
 
     await act(async () => { observed.forEach((fire) => fire()); });
     expect(load).toHaveBeenCalledTimes(1);
-    expect(load).toHaveBeenCalledWith("KNOW");
+    expect(load).toHaveBeenCalledWith("HELLO");
   });
 
   it("does not observe or fetch at all under reduced motion", async () => {
@@ -137,12 +137,12 @@ describe("landing sign playback demo", () => {
     expect(load).not.toHaveBeenCalled();
 
     // The panel is still usable: the control is the only trigger.
-    expect(screen.getByRole("button", { name: /play know/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /play hello/i })).toBeTruthy();
   });
 
   it("offers a play control before anything is loaded", () => {
     render(<SignPlaybackDemo />);
-    expect(screen.getByRole("button", { name: /play know/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /play hello/i })).toBeTruthy();
   });
 
   it("never claims an accuracy figure", () => {
@@ -153,7 +153,7 @@ describe("landing sign playback demo", () => {
     expect(text).not.toMatch(/confidence/i);
     expect(text).not.toMatch(/step \d+ of \d+/i);
     // What it says instead is checkable: the sign, and what the data is.
-    expect(text).toContain("KNOW");
+    expect(text).toContain("HELLO");
     expect(text).toMatch(/recorded landmark data/i);
   });
 

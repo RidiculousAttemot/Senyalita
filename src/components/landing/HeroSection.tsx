@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
@@ -7,11 +8,16 @@ import { ArrowRight, PlayCircle } from "lucide-react";
 import { LandmarkField } from "./LandmarkField";
 import { SignPlaybackDemo } from "./SignPlaybackDemo";
 import { LandingDemoModal } from "./LandingDemoModal";
+import { globalLoader } from "@/features/sign-animation/hooks/useAnimationClip";
 
 export function HeroSection() {
   const [isDemoOpen, setIsDemoOpen] = useState(false);
   const prefersReducedMotion = useReducedMotion();
   const rise = (y: number) => (prefersReducedMotion ? false : { opacity: 0, y });
+
+  useEffect(() => {
+    globalLoader.preload(["HELLO"]);
+  }, []);
 
   return (
     <section id="hero" className="relative overflow-hidden bg-senyalita-warm px-6 pb-20 pt-16 md:pb-28 md:pt-20 scroll-mt-16">

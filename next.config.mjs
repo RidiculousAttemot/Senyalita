@@ -20,12 +20,11 @@ const nextConfig = {
    * emits .next/standalone with only the modules actually reachable from the
    * server, which is what the runtime stage copies.
    *
-   * Harmless outside Docker: Vercel ignores it, and `next dev` and `next start`
-   * are unaffected. It does NOT include public/ or .next/static — those are
-   * copied separately, and forgetting them yields a server that boots and
-   * serves 404s for every asset.
+   * Only enabled in production builds. `next dev` must NOT use standalone
+   * output, or static asset generation and hot reload will break.
+   * Vercel ignores it, and `next start` works with it in Docker.
    */
-  output: "standalone",
+  output: process.env.NODE_ENV === "production" ? "standalone" : undefined,
   webpack: (config, { dev }) => {
     // Next 14.2.5's bundled webpack hardcodes output.hashFunction to
     // "xxhash64", which routes through webpack's WASM hash implementation.
