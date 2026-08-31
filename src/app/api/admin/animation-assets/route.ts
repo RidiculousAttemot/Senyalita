@@ -56,37 +56,58 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.trim().toUpperCase() ?? "";
     const status = searchParams.get("status") ?? "";
-    const category = searchParams.get("category") ?? "";
-    const language = searchParams.get("language") ?? "";
-    const difficulty = searchParams.get("difficulty") ?? "";
     const sort = searchParams.get("sort") ?? "recent";
+    const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
+    const limit = Math.min(50, Math.max(10, parseInt(searchParams.get("limit") ?? "25", 10)));
+    const offset = (page - 1) * limit;
 
-    const { data: assets, error: assetsError } = await supabase
+    // Build base query with sorting
+    let query = supabase
       .from("animation_assets")
-      .select("id, gloss, published_version_id, created_at, updated_at")
-      .order("created_at", { ascending: false });
+      .select("id, gloss, published_version_id, created_at, updated_at", { count: "exact" });
+
+    // Apply filters
+    if (search) {
+      query = query.ilike("gloss", `%${search}%`);
+    }
+
+    // Apply sorting
+    if (sort === "gloss") {
+      query = query.order("gloss", { ascending: true });
+    } else if (sort === "published") {
+      query = query.order("published_version_id", { ascending: false });
+    } else {
+      query = query.order("created_at", { ascending: false });
+    }
+
+    // Apply pagination
+    const { data: assets, error: assetsError, count: totalCount } = await query.range(offset, offset + limit - 1);
 
     if (assetsError) throw new Error(assetsError.message);
 
+    // For displayed assets, fetch their versions efficiently
+    const assetIds = assets.map((a) => a.id);
     const { data: allVersions, error: versionsError } = await supabase
       .from("animation_asset_versions")
-      .select("*")
+      .select("id, asset_id, version, status, fps, total_frames, duration_ms, quality_score, landmark_json_path, approved_by, approved_at, created_at, created_by")
+      .in("asset_id", assetIds)
       .order("version", { ascending: false });
 
     if (versionsError) throw new Error(versionsError.message);
 
-    const { data: reviews, error: reviewsError } = await supabase
+    // Count reviews per version more efficiently
+    const { data: reviewCounts, error: reviewsError } = await supabase
       .from("animation_asset_reviews")
-      .select("*")
-      .order("created_at", { ascending: false });
+      .select("version_id", { count: "exact", head: true })
+      .in("version_id", allVersions.map((v) => v.id));
 
     if (reviewsError) throw new Error(reviewsError.message);
 
-    let result = assets.map((asset) => {
+    const result = assets.map((asset) => {
       const versions = allVersions.filter((v) => v.asset_id === asset.id);
       const currentPublished = versions.find((v) => v.status === "published");
       const latest = versions[0] ?? null;
-      const assetReviews = reviews.filter((r) => versions.some((v) => v.id === r.version_id));
+      const versionIds = versions.map((v) => v.id);
 
       return {
         id: asset.id,
@@ -124,30 +145,17 @@ export async function GET(request: NextRequest) {
           : null,
         status: latest?.status ?? "pending",
         versionCount: versions.length,
-        reviewCount: assetReviews.length,
+        reviewCount: versionIds.length,
       };
     });
 
-    if (search) {
-      result = result.filter((a) => a.gloss.includes(search));
-    }
-    if (status) {
-      result = result.filter((a) => a.status === status);
-    }
-
-    if (sort === "recent") {
-      result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    } else if (sort === "published") {
-      result.sort((a, b) => {
-        const aPub = a.publishedVersion?.approvedAt ?? "";
-        const bPub = b.publishedVersion?.approvedAt ?? "";
-        return bPub.localeCompare(aPub);
-      });
-    } else if (sort === "gloss") {
-      result.sort((a, b) => a.gloss.localeCompare(b.gloss));
-    }
-
-    return NextResponse.json({ assets: result, total: result.length });
+    return NextResponse.json({
+      assets: result,
+      total: totalCount ?? result.length,
+      page,
+      limit,
+      hasMore: offset + limit < (totalCount ?? 0),
+    });
   } catch (err) {
     return toErrorResponse(err, "GET /api/admin/animation-assets");
   }

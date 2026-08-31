@@ -277,10 +277,10 @@ export function SkeletonPreviewTab({ extractionResult, videoMeta }: SkeletonPrev
           display: flex;
           gap: 4px;
           margin-bottom: 12px;
-          background: #0f172a;
+          background: #fff;
           border-radius: 8px;
           padding: 3px;
-          border: 1px solid #1e293b;
+          border: 1px solid #e2e8f0;
           width: fit-content;
         }
         .view-toggle button {
@@ -298,19 +298,19 @@ export function SkeletonPreviewTab({ extractionResult, videoMeta }: SkeletonPrev
           transition: all 0.15s;
         }
         .view-toggle button.active {
-          background: #1e293b;
-          color: #e2e8f0;
+          background: #eff6ff;
+          color: #1d4ed8;
         }
-        .view-toggle button:hover:not(.active) { color: #94a3b8; }
+        .view-toggle button:hover:not(.active) { color: #0f172a; }
         .controls-bar {
           display: flex;
           align-items: center;
           gap: 6px;
           margin-top: 12px;
           padding: 10px 14px;
-          background: #0f172a;
+          background: #fff;
           border-radius: 10px;
-          border: 1px solid #1e293b;
+          border: 1px solid #e2e8f0;
           flex-wrap: wrap;
         }
         .controls-bar button {
@@ -324,11 +324,11 @@ export function SkeletonPreviewTab({ extractionResult, videoMeta }: SkeletonPrev
           font-size: 14px;
           cursor: pointer;
           background: transparent;
-          color: #94a3b8;
+          color: #475569;
           transition: all 0.15s;
         }
-        .controls-bar button:hover { background: #1e293b; color: #e2e8f0; }
-        .controls-bar button.active { color: #60a5fa; background: rgba(96,165,250,0.1); }
+        .controls-bar button:hover { background: #f1f5f9; color: #0f172a; }
+        .controls-bar button.active { color: #2563eb; background: #eff6ff; }
         .controls-bar button:disabled { opacity: 0.3; cursor: not-allowed; }
         .controls-bar .frame-slider {
           flex: 1;
@@ -336,7 +336,7 @@ export function SkeletonPreviewTab({ extractionResult, videoMeta }: SkeletonPrev
           height: 4px;
           -webkit-appearance: none;
           appearance: none;
-          background: #1e293b;
+          background: #e2e8f0;
           border-radius: 2px;
           outline: none;
         }
@@ -345,7 +345,7 @@ export function SkeletonPreviewTab({ extractionResult, videoMeta }: SkeletonPrev
           width: 14px;
           height: 14px;
           border-radius: 50%;
-          background: #60a5fa;
+          background: #2563eb;
           cursor: pointer;
         }
         .controls-bar .frame-label {
@@ -365,9 +365,9 @@ export function SkeletonPreviewTab({ extractionResult, videoMeta }: SkeletonPrev
           color: #64748b;
         }
         .speed-control select {
-          background: #1e293b;
-          color: #e2e8f0;
-          border: 1px solid #334155;
+          background: #fff;
+          color: #0f172a;
+          border: 1px solid #e2e8f0;
           border-radius: 4px;
           padding: 2px 6px;
           font-size: 12px;

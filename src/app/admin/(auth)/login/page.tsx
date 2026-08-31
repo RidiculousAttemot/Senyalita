@@ -1,4 +1,6 @@
 import AdminLoginForm from "./AdminLoginForm";
+import Link from "next/link";
+import { SenyalitaMark } from "@/components/landing/SenyalitaMark";
 
 export const dynamic = "force-dynamic";
 
@@ -10,19 +12,17 @@ export default function AdminLoginPage({
   return (
     <div className="auth-shell">
       <header className="auth-header">
-        <a href="/" className="auth-brand" aria-label="Senyalita Home">
-          Senyalita
-        </a>
+        <Link href="/" className="auth-brand" aria-label="Senyalita Home">
+          <SenyalitaMark className="auth-brand-icon" iconClassName="h-5 w-5" />
+          <span>Senyalita</span>
+        </Link>
       </header>
       <main className="auth-content">
-        <section className="auth-card auth-card-hero">
+        <section className="auth-card">
           <div className="auth-icon" aria-hidden="true">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              <path d="M9 12l2 2 4-4" />
-            </svg>
+            <SenyalitaMark className="h-7 w-7" iconClassName="h-7 w-7 stroke-[2.25]" />
           </div>
-          <p className="admin-kicker">Senyalita Admin</p>
+          <p className="admin-kicker">SENYALITA ADMIN</p>
           <h1>Sign in to Admin</h1>
           <p className="panel-note auth-desc">
             Use your authorized administrator account to manage Senyalita.

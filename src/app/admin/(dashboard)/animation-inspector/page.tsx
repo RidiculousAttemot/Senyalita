@@ -76,15 +76,15 @@ export default function AnimationInspectorPage() {
   };
 
   return (
-    <div style={{ padding: 24, maxWidth: 1280, margin: "0 auto", color: "#e2e8f0" }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>Animation Inspector</h1>
-      <p style={{ fontSize: 13, color: "#94a3b8", margin: "0 0 16px" }}>
+    <div style={{ padding: 24, maxWidth: 1280, margin: "0 auto" }}>
+      <h1 style={{ fontSize: 24, fontWeight: 700, margin: "0 0 4px", color: "#0f172a" }}>Animation Inspector</h1>
+      <p style={{ fontSize: 14, color: "#64748b", margin: "0 0 16px" }}>
         Search glosses, inspect resolution strategy, preview skeleton, and analyze animation quality
       </p>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
         <div style={{ flex: 1, position: "relative" }}>
-          <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#475569" }} />
+          <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -92,8 +92,8 @@ export default function AnimationInspectorPage() {
             placeholder="Search glosses: HELLO, THANK_YOU, GOODBYE"
             style={{
               width: "100%", padding: "10px 14px 10px 36px",
-              background: "#0f172a", border: "1px solid #334155", borderRadius: 8,
-              color: "#e2e8f0", fontSize: 14, outline: "none",
+              background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8,
+              color: "#0f172a", fontSize: 14, outline: "none", boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
             }}
           />
         </div>
@@ -112,7 +112,7 @@ export default function AnimationInspectorPage() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
         {/* Results list */}
         <div>
-          <h2 style={{ fontSize: 14, fontWeight: 600, color: "#94a3b8", marginBottom: 8, textTransform: "uppercase" }}>
+          <h2 style={{ fontSize: 13, fontWeight: 700, color: "#475569", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>
             Results ({results.length})
           </h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -123,14 +123,14 @@ export default function AnimationInspectorPage() {
                 style={{
                   display: "flex", alignItems: "center", gap: 10,
                   padding: "10px 14px",
-                  background: selectedGloss === gloss ? "rgba(96,165,250,0.1)" : "#0f172a",
-                  border: `1px solid ${selectedGloss === gloss ? "rgba(96,165,250,0.3)" : "#1e293b"}`,
+                  background: selectedGloss === gloss ? "#eff6ff" : "#fff",
+                  border: `1px solid ${selectedGloss === gloss ? "#93c5fd" : "#e2e8f0"}`,
                   borderRadius: 8, cursor: "pointer", transition: "all 0.15s",
                 }}
               >
-                {resolution.resolved ? <CheckCircle2 size={16} color="#4ade80" /> : <XCircle size={16} color="#f87171" />}
+                {resolution.resolved ? <CheckCircle2 size={16} color="#16a34a" /> : <XCircle size={16} color="#ef4444" />}
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, fontFamily: "monospace" }}>{gloss}</div>
+                  <div style={{ fontWeight: 600, fontSize: 14, fontFamily: "monospace", color: "#0f172a" }}>{gloss}</div>
                   <div style={{ display: "flex", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
                     <span style={{
                       fontSize: 10, padding: "1px 6px", borderRadius: 3,
@@ -146,17 +146,17 @@ export default function AnimationInspectorPage() {
                       </span>
                     )}
                     {resolution.fallbackChain && resolution.fallbackChain.length > 1 && (
-                      <span style={{ fontSize: 9, color: "#64748b" }}>
+                      <span style={{ fontSize: 9, color: "#94a3b8" }}>
                         chain: {resolution.fallbackChain.join(" \u2192 ")}
                       </span>
                     )}
                   </div>
                 </div>
-                <Film size={16} color="#64748b" />
+                <Film size={16} color="#94a3b8" />
               </div>
             ))}
             {results.length === 0 && !searching && (
-              <div style={{ padding: 20, textAlign: "center", color: "#64748b", fontSize: 13 }}>
+              <div style={{ padding: 20, textAlign: "center", color: "#64748b", fontSize: 13, background: "#fff", border: "1px dashed #e2e8f0", borderRadius: 8 }}>
                 Search for glosses to inspect their resolution
               </div>
             )}
@@ -167,12 +167,12 @@ export default function AnimationInspectorPage() {
         <div>
           {selectedAsset ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ background: "#0f172a", borderRadius: 10, border: "1px solid #1e293b", overflow: "hidden" }}>
+              <div style={{ background: "#0f172a", borderRadius: 10, overflow: "hidden" }}>
                 <canvas ref={canvasRef} width={320} height={400} style={{ width: "100%", height: "auto", display: "block" }} />
               </div>
 
-              <div style={{ background: "#0f172a", borderRadius: 10, border: "1px solid #1e293b", padding: 14 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 10px", fontFamily: "monospace", color: "#60a5fa" }}>
+              <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e2e8f0", padding: 14 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 10px", fontFamily: "monospace", color: "#1d4ed8" }}>
                   {selectedGloss}
                 </h3>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -186,10 +186,10 @@ export default function AnimationInspectorPage() {
                     { icon: Hand, label: "Hands", value: selectedAsset.frames.some(f => f.landmarks.length > 0) ? "Yes" : "No" },
                     { icon: Eye, label: "Pose", value: selectedAsset.frames.some(f => (f.poseLandmarks?.length ?? 0) > 0) ? "Yes" : "No" },
                   ].map((item) => (
-                    <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#94a3b8" }}>
-                      <item.icon size={14} color="#64748b" />
+                    <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#64748b" }}>
+                      <item.icon size={14} color="#94a3b8" />
                       <span>{item.label}:</span>
-                      <span style={{ color: "#e2e8f0", fontWeight: 600 }}>{item.value}</span>
+                      <span style={{ color: "#0f172a", fontWeight: 600 }}>{item.value}</span>
                     </div>
                   ))}
                 </div>
@@ -198,10 +198,11 @@ export default function AnimationInspectorPage() {
           ) : (
             <div style={{
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              padding: 60, background: "#0f172a", borderRadius: 10, border: "1px solid #1e293b", color: "#64748b",
+              padding: 60, background: "#fff", borderRadius: 10, border: "1px dashed #e2e8f0", color: "#94a3b8", textAlign: "center", gap: 8,
             }}>
-              <Eye size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
-              <p style={{ fontSize: 13 }}>Select a result to inspect</p>
+              <Eye size={32} style={{ opacity: 0.4 }} />
+              <p style={{ fontSize: 13, color: "#475569", margin: 0, fontWeight: 600 }}>Select a result to inspect</p>
+              <p style={{ fontSize: 12, margin: 0 }}>Search a gloss and pick a result to see its skeleton and metadata.</p>
             </div>
           )}
         </div>

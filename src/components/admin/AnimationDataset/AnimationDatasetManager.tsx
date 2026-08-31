@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
-  Search, Filter, Eye, Send, CheckCircle2, Clock, Star,
-  FileJson, Play, Pause, RotateCcw, X, ChevronDown, ChevronRight,
+  Search, Eye, Play, Pause, RotateCcw, X, ChevronDown, ChevronRight,
+  Database, Video, Film, Check, Minus, Star,
 } from "lucide-react";
 import { drawFullPose, drawStylizedFace, drawFullHand } from "@/features/sign-animation/renderer/renderUtils";
 import { failureMessage } from "@/lib/http/failureMessage";
@@ -14,6 +14,14 @@ interface AssetSummary {
   filePath: string;
   frameCount: number;
   duration: number;
+  id?: string;
+  gloss?: string;
+  version?: number;
+  status?: string;
+  fps?: number;
+  durationMs?: number;
+  qualityScore?: number | null;
+  createdAt?: string | null;
 }
 
 interface DatasetResponse {
@@ -21,11 +29,18 @@ interface DatasetResponse {
   assets: AssetSummary[];
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  draft: { label: "Draft", color: "#64748b" },
-  selected: { label: "Best Pick", color: "#22c55e" },
-  published: { label: "Published", color: "#16a34a" },
-};
+/** Client-side label filters. Each one only re-slices the already-loaded list. */
+type LabelFilter = "all" | "recordings" | "multiple" | "recent";
+
+const SPEEDS = [0.5, 1, 1.5, 2];
+
+function Tick({ on }: { on: boolean }) {
+  return on ? (
+    <span className="ad-tick is-true" aria-label="available"><Check size={12} strokeWidth={3} />Available</span>
+  ) : (
+    <span className="ad-tick is-false" aria-label="unavailable"><Minus size={12} />Missing</span>
+  );
+}
 
 export function AnimationDatasetManager() {
   const [assets, setAssets] = useState<AssetSummary[]>([]);
@@ -33,10 +48,13 @@ export function AnimationDatasetManager() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<LabelFilter>("all");
   const [selectedAsset, setSelectedAsset] = useState<AssetSummary | null>(null);
   const [previewData, setPreviewData] = useState<any>(null);
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const [previewFrame, setPreviewFrame] = useState(0);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [speed, setSpeed] = useState(1);
   const [expandedLabels, setExpandedLabels] = useState<Set<string>>(new Set());
   const [bestPicks, setBestPicks] = useState<Record<string, string>>({});
 
@@ -67,25 +85,58 @@ export function AnimationDatasetManager() {
       .finally(() => setLoading(false));
   }, []);
 
-  const filteredAssets = useMemo(() => {
+  const searchFiltered = useMemo(() => {
     if (!search) return assets;
     const q = search.toLowerCase();
     return assets.filter((a) => a.label.toLowerCase().includes(q) || a.file.toLowerCase().includes(q));
   }, [assets, search]);
 
+  // Client-side labels whose assets meet the active filter. Reuses only the
+  // already-fetched metadata — no new requests.
+  const visibleLabels = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const a of searchFiltered) counts.set(a.label, (counts.get(a.label) ?? 0) + 1);
+    return [...counts.entries()]
+      .filter(([label, count]) => {
+        if (filter === "recordings") return count >= 1;
+        if (filter === "multiple") return count >= 2;
+        if (filter === "recent") {
+          const labelAssets = searchFiltered.filter((a) => a.label === label);
+          return labelAssets.some((a) => a.createdAt);
+        }
+        return true;
+      })
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([label]) => label);
+  }, [searchFiltered, filter]);
+
   const groupedAssets = useMemo(() => {
     const grouped: Record<string, AssetSummary[]> = {};
-    for (const a of filteredAssets) {
+    for (const a of searchFiltered) {
       if (!grouped[a.label]) grouped[a.label] = [];
       grouped[a.label].push(a);
     }
+    for (const label of Object.keys(grouped)) {
+      grouped[label].sort((a, b) => (b.frameCount - a.frameCount) || (a.file.localeCompare(b.file)));
+    }
     return grouped;
-  }, [filteredAssets]);
+  }, [searchFiltered]);
+
+  // "Recently added" sorts the label order by most recent recording.
+  const orderedLabels = useMemo(() => {
+    if (filter !== "recent") return visibleLabels;
+    return [...visibleLabels].sort((a, b) => {
+      const aMax = Math.max(...groupedAssets[a].map((x) => new Date(x.createdAt ?? 0).getTime()));
+      const bMax = Math.max(...groupedAssets[b].map((x) => new Date(x.createdAt ?? 0).getTime()));
+      return bMax - aMax;
+    });
+  }, [visibleLabels, filter, groupedAssets]);
 
   const loadPreview = useCallback(async (asset: AssetSummary) => {
     setSelectedAsset(asset);
     setPreviewPlaying(false);
     setPreviewFrame(0);
+    setPreviewLoading(true);
     if (animRef.current) { cancelAnimationFrame(animRef.current); animRef.current = null; }
 
     try {
@@ -95,6 +146,8 @@ export function AnimationDatasetManager() {
       setPreviewData(data);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load preview");
+    } finally {
+      setPreviewLoading(false);
     }
   }, []);
 
@@ -145,16 +198,17 @@ export function AnimationDatasetManager() {
   }, [previewData]);
 
   useEffect(() => {
-    if (previewData && selectedAsset) {
+    if (previewData && selectedAsset && !previewLoading) {
       renderPreviewFrame(previewFrame);
     }
-  }, [previewFrame, previewData, selectedAsset, renderPreviewFrame]);
+  }, [previewFrame, previewData, selectedAsset, renderPreviewFrame, previewLoading]);
 
   useEffect(() => {
-    if (!previewPlaying || !previewData) return;
+    if (!previewPlaying || !previewData || previewLoading) return;
     const total = previewData.totalFrames ?? previewData.frames?.length ?? 0;
     const fps = previewData.fps ?? 30;
-
+    // The interval delay folds playback speed in, reusing the same frame
+    // stepping engine — no new playback implementation.
     const interval = setInterval(() => {
       setPreviewFrame((prev) => {
         const next = prev + 1;
@@ -164,10 +218,10 @@ export function AnimationDatasetManager() {
         }
         return next;
       });
-    }, 1000 / fps);
+    }, 1000 / (fps * speed));
 
     return () => clearInterval(interval);
-  }, [previewPlaying, previewData]);
+  }, [previewPlaying, previewData, speed, previewLoading]);
 
   const toggleLabel = (label: string) => {
     setExpandedLabels((prev) => {
@@ -179,58 +233,54 @@ export function AnimationDatasetManager() {
   };
 
   const totalFrames = assets.reduce((s, a) => s + a.frameCount, 0);
+  const previewFrames = previewData?.totalFrames ?? previewData?.frames?.length ?? 0;
+  const previewFps = previewData?.fps ?? 30;
+  const previewDurationMs = previewData?.duration ?? previewData?.durationMs ?? 0;
+  const frame0 = previewData?.frames?.[0];
+  const metaPose = frame0?.poseLandmarks?.length ?? 0;
+  const metaFace = frame0?.faceLandmarks?.length ?? 0;
+  const metaHands = frame0?.landmarks?.length ?? 0;
+  const currentTime = (previewFrame / previewFps);
+  const totalTime = (previewFrames / previewFps);
+
+  const formatClock = (s: number) => {
+    if (!isFinite(s) || s < 0) return "0:00.0";
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec < 10 ? "0" : ""}${sec.toFixed(1)}`;
+  };
+
+  const renditionLabel = (file: string) => file.replace("_asset.json", "");
 
   return (
-    <div style={{ color: "#e2e8f0" }}>
-      <style>{`
-        .ad-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
-        .ad-header h1 { font-size: 24px; font-weight: 700; margin: 0; color: #f1f5f9; }
-        .ad-header .stats { display: flex; gap: 24px; font-size: 13px; color: #94a3b8; }
-        .ad-header .stats strong { color: #e2e8f0; }
-        .ad-search { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
-        .ad-search input { flex: 1; min-width: 200px; padding: 10px 14px; border-radius: 10px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 14px; outline: none; }
-        .ad-search input:focus { border-color: #60a5fa; }
-        .ad-layout { display: grid; grid-template-columns: 1fr 400px; gap: 20px; }
-        @media (max-width: 1000px) { .ad-layout { grid-template-columns: 1fr; } }
-        .ad-list { background: #0f172a; border-radius: 12px; border: 1px solid #1e293b; overflow: hidden; }
-        .ad-label { display: flex; align-items: center; gap: 8px; padding: 10px 16px; cursor: pointer; border-bottom: 1px solid #1e293b; transition: background 0.1s; }
-        .ad-label:hover { background: rgba(30,41,59,0.5); }
-        .ad-label .name { font-weight: 600; font-size: 14px; min-width: 80px; }
-        .ad-label .count { font-size: 12px; color: #64748b; }
-        .ad-label .best { font-size: 10px; background: rgba(34,197,94,0.15); color: #4ade80; padding: 2px 6px; border-radius: 4px; }
-        .ad-asset { display: flex; align-items: center; gap: 8px; padding: 8px 16px 8px 44px; border-bottom: 1px solid #1e293b; font-size: 13px; cursor: pointer; transition: background 0.1s; }
-        .ad-asset:hover { background: rgba(30,41,59,0.5); }
-        .ad-asset.selected { background: rgba(59,130,246,0.08); border-left: 3px solid #60a5fa; }
-        .ad-asset .name { flex: 1; color: #94a3b8; }
-        .ad-asset .frames { color: #64748b; font-size: 11px; }
-        .ad-asset .dur { color: #64748b; font-size: 11px; min-width: 50px; text-align: right; }
-        .ad-preview { background: #0f172a; border-radius: 12px; border: 1px solid #1e293b; padding: 16px; }
-        .ad-preview h3 { font-size: 14px; font-weight: 600; margin: 0 0 12px; color: #e2e8f0; }
-        .ad-preview canvas { width: 100%; aspect-ratio: 4/5; border-radius: 8px; background: #0f172a; }
-        .ad-preview-controls { display: flex; gap: 8px; margin-top: 10px; align-items: center; justify-content: center; }
-        .ad-preview-controls button { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid #334155; border-radius: 6px; background: #1e293b; color: #94a3b8; cursor: pointer; }
-        .ad-preview-controls button:hover { background: #334155; color: #e2e8f0; }
-        .ad-preview-controls button.active { color: #60a5fa; border-color: #60a5fa; }
-        .ad-preview-controls .slider { flex: 1; margin: 0 8px; }
-        .ad-preview-meta { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; color: #94a3b8; }
-        .ad-preview-meta .val { color: #e2e8f0; font-weight: 600; }
-        .ad-preview-actions { display: flex; gap: 8px; margin-top: 12px; }
-        .ad-preview-actions button { flex: 1; padding: 8px; border: 1px solid #334155; border-radius: 8px; background: #1e293b; color: #e2e8f0; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
-        .ad-preview-actions button:hover { background: #334155; }
-        .ad-preview-actions .publish { background: #2563eb; border-color: #2563eb; }
-        .ad-preview-actions .publish:hover { background: #1d4ed8; }
-        .ad-loading { display: flex; align-items: center; justify-content: center; height: 200px; color: #64748b; gap: 10px; }
-        .ad-empty { text-align: center; padding: 60px 20px; color: #64748b; }
-        .ad-error { padding: 12px 16px; background: rgba(220,38,38,0.12); border: 1px solid rgba(220,38,38,0.3); border-radius: 10px; color: #fca5a5; font-size: 13px; margin-bottom: 16px; }
-      `}</style>
-
-      <div className="ad-header">
+    <div className="ad-workspace">
+      {/* Page header: title + compact stats */}
+      <div className="ad-hero">
         <div>
           <h1>Animation Dataset</h1>
-          <div className="stats">
-            <span><strong>{labels.length}</strong> labels</span>
-            <span><strong>{assets.length}</strong> recordings</span>
-            <span><strong>{totalFrames.toLocaleString()}</strong> frames</span>
+          <p className="ad-hero-sub">Manage, inspect, and preview recorded sign-language landmark data.</p>
+        </div>
+        <div className="ad-stat-row" aria-label="Dataset statistics">
+          <div className="ad-stat-card">
+            <span className="ad-stat-icon" aria-hidden="true"><Database size={16} /></span>
+            <span className="ad-stat-text">
+              <span className="ad-stat-label">Labels</span>
+              <span className="ad-stat-value">{labels.length}</span>
+            </span>
+          </div>
+          <div className="ad-stat-card">
+            <span className="ad-stat-icon" aria-hidden="true"><Video size={16} /></span>
+            <span className="ad-stat-text">
+              <span className="ad-stat-label">Recordings</span>
+              <span className="ad-stat-value">{assets.length}</span>
+            </span>
+          </div>
+          <div className="ad-stat-card">
+            <span className="ad-stat-icon" aria-hidden="true"><Film size={16} /></span>
+            <span className="ad-stat-text">
+              <span className="ad-stat-label">Frames</span>
+              <span className="ad-stat-value">{totalFrames.toLocaleString()}</span>
+            </span>
           </div>
         </div>
       </div>
@@ -238,92 +288,229 @@ export function AnimationDatasetManager() {
       {error && <div className="ad-error">{error}</div>}
 
       {loading ? (
-        <div className="ad-loading">
-          <div style={{ width: 20, height: 20, border: "2px solid #334155", borderTopColor: "#60a5fa", borderRadius: "50%", animation: "ad-spin 0.8s linear infinite" }} />
-          Loading dataset...
+        <div className="ad-skeleton" role="status" aria-label="Loading dataset">
+          {Array.from({ length: 5 }).map((_, i) => <div className="ad-skeleton-row" key={i} />)}
         </div>
       ) : (
         <div className="ad-layout">
-          <div>
-            <div className="ad-search">
-              <input placeholder="Search labels or filenames..." value={search} onChange={(e) => setSearch(e.target.value)} />
-              <span style={{ fontSize: 12, color: "#64748b", alignSelf: "center" }}>
-                {filteredAssets.length} of {assets.length}
-              </span>
+          {/* Left: search + list */}
+          <section className="ad-list-panel" aria-label="Dataset labels">
+            <div className="ad-toolbar">
+              <div className="ad-search-wrap">
+                <span className="ad-search-icon" aria-hidden="true"><Search size={16} /></span>
+                <input
+                  type="search"
+                  className="ad-search-input"
+                  placeholder="Search labels or filenames..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  aria-label="Search labels or filenames"
+                />
+              </div>
+              <select
+                className="ad-filter-select"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value as LabelFilter)}
+                aria-label="Filter labels"
+              >
+                <option value="all">All labels</option>
+                <option value="recordings">Has recording</option>
+                <option value="multiple">Multiple recordings</option>
+                <option value="recent">Recently added</option>
+              </select>
             </div>
+
+            <p className="ad-countline" aria-live="polite">
+              {searchFiltered.length} of {assets.length} recordings
+              {search && <> · {visibleLabels.length} labels match</>}
+            </p>
 
             <div className="ad-list">
-              {Object.entries(groupedAssets).length === 0 ? (
-                <div className="ad-empty">No matching assets found</div>
+              {orderedLabels.length === 0 ? (
+                <div className="ad-empty">
+                  <Search size={32} aria-hidden="true" />
+                  <p className="ad-empty-title">No results</p>
+                  <p className="ad-empty-sub">No labels match your search or filter. Try a different term.</p>
+                </div>
               ) : (
-                Object.entries(groupedAssets).sort(([a], [b]) => a.localeCompare(b)).map(([label, labelAssets]) => (
-                  <div key={label}>
-                    <div className="ad-label" onClick={() => toggleLabel(label)}>
-                      {expandedLabels.has(label) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                      <span className="name">{label}</span>
-                      <span className="count">{labelAssets.length} recordings</span>
-                      {bestPicks[label] && <span className="best">Best: {bestPicks[label].replace("_asset.json", "")}</span>}
-                    </div>
-                    {expandedLabels.has(label) && labelAssets.map((asset) => (
-                      <div
-                        key={asset.file}
-                        className={`ad-asset ${selectedAsset?.file === asset.file && selectedAsset?.label === label ? "selected" : ""}`}
-                        onClick={() => loadPreview(asset)}
+                orderedLabels.map((label) => {
+                  const labelAssets = groupedAssets[label] ?? [];
+                  const isExpanded = expandedLabels.has(label);
+                  const isLabelSelected = selectedAsset?.label === label;
+                  const best = bestPicks[label];
+                  const hasMultiple = labelAssets.length >= 2;
+                  return (
+                    <div className="ad-group" key={label}>
+                      <button
+                        type="button"
+                        className={`ad-label-row${isLabelSelected ? " is-selected" : ""}`}
+                        onClick={() => toggleLabel(label)}
+                        aria-expanded={isExpanded}
+                        aria-controls={`ad-group-${label}`}
                       >
-                        <CheckCircle2 size={12} color={bestPicks[label] === asset.file ? "#22c55e" : "#334155"} />
-                        <span className="name">{asset.file.replace("_asset.json", "")}</span>
-                        <span className="frames">{asset.frameCount} frames</span>
-                        <span className="dur">{(asset.duration / 1000).toFixed(1)}s</span>
-                      </div>
-                    ))}
-                  </div>
-                ))
+                        <span className={`ad-chev${isExpanded ? " is-open" : ""}`} aria-hidden="true">
+                          {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                        </span>
+                        <span className="ad-label-name">{label}</span>
+                        <span className="ad-label-count">
+                          {labelAssets.length} recording{labelAssets.length !== 1 ? "s" : ""}
+                        </span>
+                        {hasMultiple && <span className="ad-pill ad-pill-muted">multi</span>}
+                        {best && (
+                          <span className="ad-label-best ad-pill ad-pill-best">
+                            <Star size={11} fill="currentColor" aria-hidden="true" />
+                            Best {renditionLabel(best)}
+                          </span>
+                        )}
+                      </button>
+
+                      {isExpanded && (
+                        <div id={`ad-group-${label}`} className="ad-expand">
+                          {labelAssets.map((asset) => {
+                            const isSelected = selectedAsset?.file === asset.file && selectedAsset?.label === label;
+                            const isBest = best === asset.file;
+                            const hasPose = asset.frameCount > 0;
+                            return (
+                              <button
+                                type="button"
+                                key={asset.file}
+                                className={`ad-asset-row${isSelected ? " is-selected" : ""}`}
+                                onClick={() => loadPreview(asset)}
+                                aria-pressed={isSelected}
+                              >
+                                <span className="ad-asset-version">{renditionLabel(asset.file)}</span>
+                                <span className="ad-asset-meta">
+                                  <span>{asset.frameCount} frames</span>
+                                  <span>{asset.fps ? `${asset.fps} FPS` : "—"}</span>
+                                  <span>{(asset.duration / 1000).toFixed(1)}s</span>
+                                  <Tick on={hasPose} />
+                                </span>
+                                <span className="ad-asset-flag" aria-hidden="true">
+                                  {isBest ? <Star size={14} fill="#22C55E" stroke="#22C55E" /> : null}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
-          </div>
+          </section>
 
-          <div className="ad-preview">
-            {selectedAsset && previewData ? (
+          {/* Right: preview panel */}
+          <aside className="ad-panel-card ad-preview-panel" aria-label="Landmark preview">
+            {selectedAsset && previewData && !previewLoading ? (
               <>
-                <h3>{selectedAsset.label} / {selectedAsset.file.replace("_asset.json", "")}</h3>
-                <canvas ref={canvasRef} width={360} height={450} />
-                <div className="ad-preview-controls">
-                  <button onClick={() => { setPreviewPlaying(false); setPreviewFrame(0); }}>
-                    <RotateCcw size={14} />
-                  </button>
-                  <button onClick={() => setPreviewPlaying(!previewPlaying)} className={previewPlaying ? "active" : ""}>
-                    {previewPlaying ? <Pause size={14} /> : <Play size={14} />}
-                  </button>
-                  <input
-                    type="range"
-                    className="slider"
-                    min={0}
-                    max={(previewData.totalFrames ?? previewData.frames?.length ?? 1) - 1}
-                    value={previewFrame}
-                    onChange={(e) => { setPreviewPlaying(false); setPreviewFrame(Number(e.target.value)); }}
-                    style={{ width: "100%" }}
-                  />
+                <div className="ad-preview-head">
+                  <div className="ad-preview-title">
+                    <span className="ad-preview-label">{selectedAsset.label}</span>
+                    <span className="ad-preview-summary">
+                      {renditionLabel(selectedAsset.file)}{selectedAsset.version ? ` · Version ${selectedAsset.version}` : ""}
+                      {bestPicks[selectedAsset.label] === selectedAsset.file ? " · Best recording" : ""}
+                    </span>
+                  </div>
+                  <span className="ad-preview-stage">
+                    {bestPicks[selectedAsset.label] === selectedAsset.file ? (
+                      <span className="ad-pill ad-pill-best"><Star size={11} fill="currentColor" aria-hidden="true" />Best</span>
+                    ) : (
+                      <span className="ad-pill ad-pill-muted">{selectedAsset.status ?? "ready"}</span>
+                    )}
+                  </span>
                 </div>
-                <div className="ad-preview-meta">
-                  <div>Frames <span className="val">{previewData.totalFrames ?? previewData.frames?.length ?? 0}</span></div>
-                  <div>FPS <span className="val">{previewData.fps ?? 30}</span></div>
-                  <div>Duration <span className="val">{((previewData.duration ?? 0) / 1000).toFixed(2)}s</span></div>
-                  <div>Pose <span className="val">{(previewData.frames?.[0]?.poseLandmarks?.length ?? 0) > 0 ? "Yes" : "No"}</span></div>
-                  <div>Face <span className="val">{(previewData.frames?.[0]?.faceLandmarks?.length ?? 0) > 0 ? "Yes" : "No"}</span></div>
-                  <div>Hands <span className="val">{(previewData.frames?.[0]?.landmarks?.length ?? 0) > 0 ? "Yes" : "No"}</span></div>
+
+                <div className="ad-canvas-zone">
+                  <canvas ref={canvasRef} width={360} height={450} className="ad-preview-canvas" />
+                  {previewLoading && (
+                    <div className="ad-canvas-loading"><span><span className="ad-spinner ad-spinner--light" />Loading landmarks…</span></div>
+                  )}
+                </div>
+
+                <div className="ad-playback">
+                  <div className="ad-play-controls">
+                    <button
+                      type="button"
+                      className="ad-ctl-btn"
+                      onClick={() => { setPreviewPlaying(false); setPreviewFrame(0); }}
+                      aria-label="Restart playback"
+                      title="Restart"
+                    >
+                      <RotateCcw size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      className={`ad-ctl-btn is-primary${previewPlaying ? " is-active" : ""}`}
+                      onClick={() => setPreviewPlaying(!previewPlaying)}
+                      aria-label={previewPlaying ? "Pause playback" : "Play playback"}
+                      title={previewPlaying ? "Pause" : "Play"}
+                    >
+                      {previewPlaying ? <Pause size={15} /> : <Play size={15} />}
+                    </button>
+                    <input
+                      type="range"
+                      className="ad-range ad-time-range"
+                      min={0}
+                      max={Math.max(0, previewFrames - 1)}
+                      value={previewFrame}
+                      onChange={(e) => { setPreviewPlaying(false); setPreviewFrame(Number(e.target.value)); }}
+                      aria-label="Seek frame"
+                    />
+                    <div className="ad-speed" role="group" aria-label="Playback speed">
+                      {SPEEDS.map((s) => (
+                        <button
+                          type="button"
+                          key={s}
+                          className={speed === s ? "is-active" : ""}
+                          onClick={() => setSpeed(s)}
+                          aria-pressed={speed === s}
+                        >
+                          {s}×
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="ad-play-readout">
+                    <span>Frame {previewFrame + 1} / {previewFrames}</span>
+                    <span>{formatClock(currentTime)} / {formatClock(totalTime)}</span>
+                  </div>
+                </div>
+
+                <div className="ad-meta">
+                  <p className="ad-meta-title">Recording details</p>
+                  <dl className="ad-meta-grid">
+                    <div className="ad-meta-row"><dt>Frames</dt><dd>{previewFrames}</dd></div>
+                    <div className="ad-meta-row"><dt>FPS</dt><dd>{previewFps}</dd></div>
+                    <div className="ad-meta-row"><dt>Duration</dt><dd>{(previewDurationMs / 1000).toFixed(2)}s</dd></div>
+                    <div className="ad-meta-row"><dt>Pose</dt><dd>{metaPose > 0 ? "Available" : "Missing"}</dd></div>
+                    <div className="ad-meta-row"><dt>Face</dt><dd>{metaFace > 0 ? "Available" : "Missing"}</dd></div>
+                    <div className="ad-meta-row"><dt>Hands</dt><dd>{metaHands > 0 ? "Available" : "Missing"}</dd></div>
+                    {selectedAsset.createdAt && (
+                      <div className="ad-meta-row"><dt>Created</dt><dd>{new Date(selectedAsset.createdAt).toLocaleDateString()}</dd></div>
+                    )}
+                    {typeof selectedAsset.qualityScore === "number" && (
+                      <div className="ad-meta-row"><dt>Quality</dt><dd>{Math.round(selectedAsset.qualityScore * 100)}%</dd></div>
+                    )}
+                  </dl>
                 </div>
               </>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 400, color: "#64748b", textAlign: "center", gap: 10 }}>
-                <FileJson size={40} />
-                <p style={{ fontSize: 13 }}>Select an asset to preview</p>
+              <div className="ad-empty" role="status">
+                {previewLoading ? (
+                  <><span className="ad-spinner" /> <p className="ad-empty-sub">Loading landmarks…</p></>
+                ) : (
+                  <>
+                    {error ? <X size={32} aria-hidden="true" /> : <Eye size={32} aria-hidden="true" />}
+                    <p className="ad-empty-title">Select a recording</p>
+                    <p className="ad-empty-sub">Choose a dataset label from the list to preview its landmark animation and metadata.</p>
+                  </>
+                )}
               </div>
             )}
-          </div>
+          </aside>
         </div>
       )}
-
-      <style>{`@keyframes ad-spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

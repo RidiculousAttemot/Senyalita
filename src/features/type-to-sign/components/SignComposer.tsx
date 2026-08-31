@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { AlertCircle, ArrowRight, ClipboardPaste, Loader2, Mic, Volume2, X } from "lucide-react";
+import { AlertCircle, ArrowRight, ClipboardPaste, Loader2, Mic, Volume2, X, Copy, Trash2 } from "lucide-react";
 import type { DetectedLanguage } from "@/features/translation-pipeline/types";
 
 const LANGUAGE_LABEL: Record<DetectedLanguage, string> = {
@@ -124,7 +124,7 @@ export function SignComposer({
         <ComposerChip onClick={onSpeak} disabled={!value.trim()} icon={<Volume2 className="h-3.5 w-3.5" />}>
           Read aloud
         </ComposerChip>
-        <ComposerChip onClick={() => onChange("")} disabled={!value} icon={<X className="h-3.5 w-3.5" />}>
+        <ComposerChip onClick={() => onChange("")} disabled={!value} icon={<Trash2 className="h-3.5 w-3.5" />}>
           Clear
         </ComposerChip>
       </div>

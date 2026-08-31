@@ -20,14 +20,14 @@ import { AliasEditor } from "./AliasEditor";
 
 type SortOption = "recent" | "published" | "gloss";
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof Clock }> = {
-  pending: { label: "Draft", color: "#64748b", icon: Clock },
-  processing: { label: "Processing", color: "#eab308", icon: Clock },
-  failed: { label: "Failed", color: "#ef4444", icon: XCircle },
-  ready: { label: "Needs Review", color: "#3b82f6", icon: Eye },
-  approved: { label: "Approved", color: "#22c55e", icon: CheckCircle2 },
-  published: { label: "Published", color: "#16a34a", icon: Star },
-  archived: { label: "Archived", color: "#6b7280", icon: Archive },
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: typeof Clock }> = {
+  pending: { label: "Draft", color: "#475569", bg: "#F1F5F9", icon: Clock },
+  processing: { label: "Processing", color: "#B45309", bg: "#FEF3C7", icon: Clock },
+  failed: { label: "Failed", color: "#B91C1C", bg: "#FEE2E2", icon: XCircle },
+  ready: { label: "Needs Review", color: "#1D4ED8", bg: "#DBEAFE", icon: Eye },
+  approved: { label: "Approved", color: "#047857", bg: "#D1FAE5", icon: CheckCircle2 },
+  published: { label: "Published", color: "#047857", bg: "#D1FAE5", icon: Star },
+  archived: { label: "Archived", color: "#64748B", bg: "#F1F5F9", icon: Archive },
 };
 
 export function AnimationLibraryPage() {
@@ -55,7 +55,7 @@ export function AnimationLibraryPage() {
     setError("");
     try {
       const result = await animationLibrary.list({ search, status: statusFilter, sort });
-      setAssets(result);
+      setAssets(result.assets);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
     } finally {
@@ -141,64 +141,67 @@ export function AnimationLibraryPage() {
       <style>{`
         .al-container { padding: 24px; max-width: 1400px; margin: 0 auto; }
         .al-header { margin-bottom: 24px; }
-        .al-header h1 { font-size: 24px; font-weight: 700; color: #f1f5f9; margin: 0 0 4px; }
-        .al-header p { font-size: 14px; color: #94a3b8; margin: 0; }
+        .al-header h1 { font-size: 24px; font-weight: 700; color: #0f172a; margin: 0 0 4px; }
+        .al-header p { font-size: 14px; color: #64748b; margin: 0; }
         .al-toolbar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
         .al-search { flex: 1; min-width: 200px; position: relative; }
         .al-search input {
-          width: 100%; padding: 8px 12px 8px 36px;
-          background: #1e293b; border: 1px solid #334155; border-radius: 8px;
-          color: #e2e8f0; font-size: 13px; outline: none; box-sizing: border-box;
+          width: 100%; padding: 9px 12px 9px 36px;
+          background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+          color: #0f172a; font-size: 13px; outline: none; box-sizing: border-box;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
         }
-        .al-search input:focus { border-color: #60a5fa; }
-        .al-search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: #64748b; }
+        .al-search input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+        .al-search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: #94a3b8; }
         .al-filter { display: flex; gap: 8px; align-items: center; }
         .al-filter select {
-          padding: 8px 12px; background: #1e293b; border: 1px solid #334155;
-          border-radius: 8px; color: #e2e8f0; font-size: 13px; outline: none;
+          padding: 9px 12px; background: #fff; border: 1px solid #e2e8f0;
+          border-radius: 8px; color: #334155; font-size: 13px; outline: none;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
         }
-        .al-filter select:focus { border-color: #60a5fa; }
+        .al-filter select:focus { border-color: #2563eb; }
         .al-stats { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
-        .al-stat { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #94a3b8; }
-        .al-stat strong { color: #e2e8f0; font-weight: 600; }
+        .al-stat { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #475569; background: #fff; border: 1px solid #e2e8f0; border-radius: 999px; padding: 4px 12px; }
+        .al-stat strong { color: #0f172a; font-weight: 600; }
         .al-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
         .al-card {
-          background: #0f172a; border: 1px solid #1e293b; border-radius: 10px;
+          background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
           padding: 16px; transition: all 0.15s; cursor: pointer;
+          box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
         }
-        .al-card:hover { border-color: #334155; }
+        .al-card:hover { border-color: #bfdbfe; box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08); }
         .al-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-        .al-card-gloss { font-size: 18px; font-weight: 700; color: #f1f5f9; }
+        .al-card-gloss { font-size: 18px; font-weight: 700; color: #0f172a; }
         .al-card-status {
           display: flex; align-items: center; gap: 4px;
           padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 500;
         }
         .al-card-body { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
         .al-card-stat { display: flex; flex-direction: column; gap: 1px; }
-        .al-card-stat .lbl { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
-        .al-card-stat .val { font-size: 13px; font-weight: 600; color: #cbd5e1; }
-        .al-card-actions { display: flex; gap: 4px; flex-wrap: wrap; border-top: 1px solid #1e293b; padding-top: 10px; }
+        .al-card-stat .lbl { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+        .al-card-stat .val { font-size: 13px; font-weight: 600; color: #334155; }
+        .al-card-actions { display: flex; gap: 4px; flex-wrap: wrap; border-top: 1px solid #e2e8f0; padding-top: 10px; }
         .al-card-actions button {
           display: flex; align-items: center; gap: 4px;
-          padding: 5px 10px; border: 1px solid #334155; border-radius: 6px;
+          padding: 5px 10px; border: 1px solid #e2e8f0; border-radius: 6px;
           font-size: 11px; font-weight: 500; cursor: pointer;
-          background: transparent; color: #94a3b8; transition: all 0.12s;
+          background: #fff; color: #475569; transition: all 0.12s;
         }
-        .al-card-actions button:hover { background: #1e293b; color: #e2e8f0; }
+        .al-card-actions button:hover { background: #f1f5f9; color: #0f172a; }
         .al-card-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
         .al-card-actions button svg { width: 13px; height: 13px; }
-        .al-card-actions .primary { color: #60a5fa; border-color: #1e3a5f; }
-        .al-card-actions .primary:hover { background: #1e3a5f; }
-        .al-card-actions .success { color: #4ade80; border-color: #14532d; }
-        .al-card-actions .success:hover { background: #14532d; }
-        .al-card-actions .danger { color: #f87171; border-color: #7f1d1d; }
-        .al-card-actions .danger:hover { background: #2d1a1a; }
-        .al-card-version { font-size: 10px; color: #475569; margin-top: 6px; }
+        .al-card-actions .primary { color: #2563eb; border-color: #bfdbfe; background: #eff6ff; }
+        .al-card-actions .primary:hover { background: #dbeafe; }
+        .al-card-actions .success { color: #047857; border-color: #a7f3d0; background: #ecfdf5; }
+        .al-card-actions .success:hover { background: #d1fae5; }
+        .al-card-actions .danger { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
+        .al-card-actions .danger:hover { background: #fee2e2; }
+        .al-card-version { font-size: 10px; color: #94a3b8; margin-top: 6px; }
         .al-empty { grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: #64748b; }
         .al-empty svg { width: 40px; height: 40px; opacity: 0.3; margin-bottom: 12px; }
         .al-error {
-          padding: 10px 14px; background: rgba(220,38,38,0.1); border: 1px solid rgba(220,38,38,0.3);
-          border-radius: 8px; color: #fca5a5; font-size: 13px; margin-bottom: 16px;
+          padding: 10px 14px; background: #fef2f2; border: 1px solid #fecaca;
+          border-radius: 8px; color: #b91c1c; font-size: 13px; margin-bottom: 16px;
           display: flex; align-items: center; gap: 8px;
         }
         .loading-spinner {
@@ -280,7 +283,7 @@ export function AnimationLibraryPage() {
                   <div key={asset.id} className="al-card" onClick={() => handlePreview(asset)}>
                     <div className="al-card-header">
                       <span className="al-card-gloss">{asset.gloss}</span>
-                      <span className="al-card-status" style={{ background: `${cfg.color}1a`, color: cfg.color }}>
+                      <span className="al-card-status" style={{ background: cfg.bg, color: cfg.color }}>
                         <StatusIcon size={12} />
                         {cfg.label}
                       </span>
@@ -291,7 +294,7 @@ export function AnimationLibraryPage() {
                     {glossesWithWords && !glossesWithWords.has(asset.gloss.toUpperCase()) && (
                       <span
                         className="al-card-status"
-                        style={{ background: "#FFFBEB", color: "#92400E", marginTop: 6, width: "fit-content" }}
+                        style={{ background: "#FEF3C7", color: "#92400E", marginTop: 6, width: "fit-content" }}
                       >
                         <AlertTriangle size={12} />
                         No words — cannot be typed

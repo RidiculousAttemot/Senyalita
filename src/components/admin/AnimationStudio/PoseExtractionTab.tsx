@@ -175,7 +175,7 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
   const isRunning = progress.status !== "idle" && progress.status !== "complete" && progress.status !== "error";
 
   return (
-    <div style={{ color: "#e2e8f0" }}>
+    <div>
       <style>{`
         .pext-split {
           display: grid;
@@ -217,9 +217,9 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
           flex-direction: column;
           gap: 6px;
           padding: 20px;
-          background: #0f172a;
+          background: #fff;
           border-radius: 10px;
-          border: 1px solid #1e293b;
+          border: 1px solid #e2e8f0;
         }
         .pext-step {
           display: flex;
@@ -231,11 +231,11 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
           color: #64748b;
           transition: all 0.2s;
         }
-        .pext-step.active { color: #60a5fa; background: rgba(96,165,250,0.08); }
-        .pext-step.done { color: #4ade80; }
-        .pext-step.error { color: #f87171; background: rgba(248,113,113,0.08); }
+        .pext-step.active { color: #1d4ed8; background: #eff6ff; }
+        .pext-step.done { color: #047857; }
+        .pext-step.error { color: #b91c1c; background: #fef2f2; }
         .pext-step svg { width: 18px; height: 18px; flex-shrink: 0; }
-        .pext-bar { height: 4px; background: #1e293b; border-radius: 2px; overflow: hidden; margin: 12px 0; }
+        .pext-bar { height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden; margin: 12px 0; }
         .pext-fill { height: 100%; background: linear-gradient(90deg, #2563eb, #60a5fa); border-radius: 2px; transition: width 0.3s ease; }
         .pext-fps { text-align: center; font-size: 12px; color: #64748b; margin-top: 8px; }
         .pext-actions { display: flex; gap: 8px; margin-top: 12px; justify-content: center; }
@@ -244,16 +244,16 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
           align-items: center;
           gap: 8px;
           padding: 10px 24px;
-          border: 1px solid #334155;
+          border: 1px solid #e2e8f0;
           border-radius: 10px;
           font-size: 14px;
           font-weight: 600;
           cursor: pointer;
-          background: #1e293b;
-          color: #e2e8f0;
+          background: #fff;
+          color: #0f172a;
           transition: all 0.15s;
         }
-        .pext-btn:hover:not(:disabled) { background: #334155; }
+        .pext-btn:hover:not(:disabled) { background: #f1f5f9; }
         .pext-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .pext-btn-primary { background: #2563eb; border-color: #2563eb; color: #fff; }
         .pext-btn-primary:hover:not(:disabled) { background: #1d4ed8; }
@@ -263,10 +263,10 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
           align-items: center;
           gap: 8px;
           padding: 10px 14px;
-          background: rgba(220,38,38,0.1);
-          border: 1px solid rgba(220,38,38,0.3);
+          background: #fef2f2;
+          border: 1px solid #fecaca;
           border-radius: 8px;
-          color: #fca5a5;
+          color: #b91c1c;
           font-size: 13px;
           margin-top: 12px;
         }
@@ -275,10 +275,10 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
           align-items: center;
           gap: 10px;
           padding: 14px 18px;
-          background: rgba(22,163,74,0.1);
-          border: 1px solid rgba(22,163,74,0.3);
+          background: #ecfdf5;
+          border: 1px solid #a7f3d0;
           border-radius: 10px;
-          color: #86efac;
+          color: #047857;
           font-size: 14px;
           margin-top: 16px;
         }
@@ -286,8 +286,8 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
         .pext-gloss {
           margin-top: 16px;
           padding: 16px;
-          background: #0f172a;
-          border: 1px solid #1e293b;
+          background: #fff;
+          border: 1px solid #e2e8f0;
           border-radius: 10px;
         }
         .pext-gloss-header {
@@ -296,7 +296,7 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
           gap: 8px;
           font-size: 13px;
           font-weight: 600;
-          color: #60a5fa;
+          color: #1d4ed8;
           margin-bottom: 12px;
         }
         .pext-gloss-main {
@@ -306,8 +306,8 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
           flex-wrap: wrap;
         }
         .pext-gloss-label { font-size: 12px; color: #64748b; }
-        .pext-gloss-value { font-size: 20px; font-weight: 700; color: #e2e8f0; font-family: monospace; letter-spacing: 1px; }
-        .pext-gloss-conf { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #1e293b; color: #4ade80; }
+        .pext-gloss-value { font-size: 20px; font-weight: 700; color: #0f172a; font-family: monospace; letter-spacing: 1px; }
+        .pext-gloss-conf { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #ecfdf5; color: #047857; font-weight: 600; }
         .pext-gloss-alts {
           display: flex;
           align-items: center;
@@ -319,9 +319,9 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
           font-size: 11px;
           padding: 3px 8px;
           border-radius: 4px;
-          background: #1e293b;
-          color: #94a3b8;
-          border: 1px solid #334155;
+          background: #f1f5f9;
+          color: #334155;
+          border: 1px solid #e2e8f0;
           font-family: monospace;
         }
         .pext-gloss-alt small { color: #64748b; }
@@ -330,7 +330,7 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
           align-items: center;
           gap: 6px;
           font-size: 12px;
-          color: #fca5a5;
+          color: #b91c1c;
         }
         @keyframes pext-spin { to { transform: rotate(360deg); } }
       `}</style>
@@ -380,7 +380,7 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
                   {icon}
                   <span>{step.label}</span>
                   {order === currentOrder && progress.status === "extracting" && (
-                    <span style={{ marginLeft: "auto", fontSize: 11, color: "#94a3b8" }}>
+                    <span style={{ marginLeft: "auto", fontSize: 11, color: "#64748b" }}>
                       {progress.currentFrame}/{progress.totalFrames}
                     </span>
                   )}
@@ -430,7 +430,7 @@ export function PoseExtractionTab({ videoMeta, onExtractionComplete }: PoseExtra
             <CheckCircle2 />
             <div>
               <strong>Extraction complete!</strong>
-              <div style={{ fontSize: 12, marginTop: 2, color: "#6ee7b7" }}>{progress.message}</div>
+              <div style={{ fontSize: 12, marginTop: 2, color: "#047857" }}>{progress.message}</div>
             </div>
           </div>
 

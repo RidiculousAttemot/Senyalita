@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { signInWithPassword } from "@/lib/supabase/actions";
+import { ArrowRight } from "lucide-react";
 
 type FormState = { error?: string; success?: boolean; redirectTo?: string } | null;
 
@@ -12,7 +13,8 @@ const SubmitButton = () => {
   const { pending } = useFormStatus();
   return (
     <button className="button" type="submit" disabled={pending}>
-      {pending ? "Signing in..." : "Sign in"}
+      <span>{pending ? "Signing in..." : "Sign in"}</span>
+      <ArrowRight aria-hidden="true" />
     </button>
   );
 };
@@ -33,11 +35,11 @@ export default function AdminLoginForm() {
 
   return (
     <form className="auth-form" action={formAction}>
-      {state?.error && <p className="auth-error">{state.error}</p>}
+      {state?.error && <p className="auth-error" role="alert">{state.error}</p>}
 
       <label className="auth-field">
         <span>Email</span>
-        <input name="email" type="email" autoComplete="email" required />
+        <input name="email" type="email" autoComplete="email" required aria-describedby="email-desc" />
       </label>
 
       <label className="auth-field">
@@ -47,6 +49,7 @@ export default function AdminLoginForm() {
           type="password"
           autoComplete="current-password"
           required
+          aria-describedby="password-desc"
         />
       </label>
 

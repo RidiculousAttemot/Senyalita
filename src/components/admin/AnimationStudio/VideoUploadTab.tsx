@@ -604,7 +604,7 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
   };
 
   return (
-    <div style={{ color: "#e2e8f0" }}>
+    <div>
       <style>{`
         .vupload-grid {
           display: grid;
@@ -622,30 +622,30 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
           justify-content: center;
           gap: 12px;
           min-height: 420px;
-          border: 2px dashed #334155;
+          border: 2px dashed #cbd5e1;
           border-radius: 16px;
           padding: 40px 24px;
           text-align: center;
           cursor: pointer;
           transition: all 0.2s;
-          background: #0f172a;
+          background: #fff;
         }
         .vupload-zone:hover {
           border-color: #60a5fa;
-          background: rgba(96,165,250,0.06);
+          background: #f8fafc;
         }
         .vupload-zone.drag-over {
-          border-color: #60a5fa;
-          background: rgba(96,165,250,0.12);
+          border-color: #2563eb;
+          background: #eff6ff;
           border-style: solid;
         }
         .vupload-zone-icon {
           width: 64px;
           height: 64px;
-          color: #475569;
+          color: #94a3b8;
         }
         .vupload-zone h3 {
-          color: #e2e8f0;
+          color: #0f172a;
           font-size: 20px;
           font-weight: 600;
           margin: 0;
@@ -656,7 +656,7 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
           margin: 0;
         }
         .vupload-zone .vupload-formats {
-          color: #475569;
+          color: #94a3b8;
           font-size: 12px;
           margin-top: 4px;
         }
@@ -665,16 +665,16 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
           align-items: center;
           gap: 8px;
           padding: 10px 24px;
-          border: 1px solid #334155;
+          border: 1px solid #e2e8f0;
           border-radius: 10px;
           font-size: 14px;
           font-weight: 600;
           cursor: pointer;
-          background: #1e293b;
-          color: #e2e8f0;
+          background: #fff;
+          color: #0f172a;
           transition: all 0.15s;
         }
-        .vupload-btn:hover:not(:disabled) { background: #334155; }
+        .vupload-btn:hover:not(:disabled) { background: #f1f5f9; }
         .vupload-btn:disabled { opacity: 0.4; cursor: not-allowed; }
         .vupload-btn-primary {
           background: #2563eb;
@@ -781,9 +781,9 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
           gap: 12px;
           margin-top: 16px;
           padding: 16px;
-          background: #0f172a;
+          background: #fff;
           border-radius: 10px;
-          border: 1px solid #1e293b;
+          border: 1px solid #e2e8f0;
         }
         .vupload-meta-item {
           display: flex;
@@ -792,14 +792,14 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
         }
         .vupload-meta-item .vlabel {
           font-size: 11px;
-          color: #64748b;
+          color: #94a3b8;
           text-transform: uppercase;
           letter-spacing: 0.5px;
         }
         .vupload-meta-item .vvalue {
           font-size: 15px;
           font-weight: 600;
-          color: #e2e8f0;
+          color: #0f172a;
         }
         .vupload-actions {
           display: flex;
@@ -812,10 +812,10 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
           align-items: center;
           gap: 8px;
           padding: 12px 16px;
-          background: rgba(220,38,38,0.12);
-          border: 1px solid rgba(220,38,38,0.3);
+          background: #fef2f2;
+          border: 1px solid #fecaca;
           border-radius: 10px;
-          color: #fca5a5;
+          color: #b91c1c;
           font-size: 13px;
           margin-top: 16px;
         }
@@ -825,20 +825,20 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
           align-items: center;
           gap: 8px;
           font-size: 12px;
-          color: #94a3b8;
+          color: #64748b;
         }
         .vupload-camera-select select {
-          background: #1e293b;
-          border: 1px solid #334155;
+          background: #fff;
+          border: 1px solid #e2e8f0;
           border-radius: 6px;
-          color: #e2e8f0;
+          color: #0f172a;
           padding: 4px 8px;
           font-size: 12px;
         }
         .vupload-progress-bar {
           width: 100%;
           height: 4px;
-          background: #1e293b;
+          background: #e2e8f0;
           border-radius: 2px;
           overflow: hidden;
           margin-top: 12px;
@@ -852,8 +852,8 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
         .vupload-spinner {
           width: 32px;
           height: 32px;
-          border: 3px solid #1e293b;
-          border-top-color: #60a5fa;
+          border: 3px solid #e2e8f0;
+          border-top-color: #2563eb;
           border-radius: 50%;
           animation: vupload-spin 0.8s linear infinite;
         }
@@ -895,7 +895,7 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
 
           {/* Right: Webcam */}
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 600, color: "#e2e8f0", margin: 0 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: "#0f172a", margin: 0 }}>
               Record with webcam
             </h3>
             {cameraLoading ? (
@@ -1013,22 +1013,22 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
             )}
           </div>
 
-          <div style={{ display: "flex", gap: 12, padding: "6px 10px", background: "#0f172a", borderRadius: 8, border: "1px solid #1e293b", fontSize: 11, alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ color: webcamActive ? "#4ade80" : "#64748b", display: "flex", alignItems: "center", gap: 4 }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: webcamActive ? "#4ade80" : "#64748b" }} />
+          <div style={{ display: "flex", gap: 14, padding: "10px 14px", background: "#fff", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 11, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ color: webcamActive ? "#047857" : "#64748b", display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: webcamActive ? "#16a34a" : "#94a3b8" }} />
               Camera {webcamActive ? "Ready" : "Off"}
             </span>
-            <span style={{ color: holisticReady ? "#4ade80" : holisticLoading ? "#60a5fa" : "#64748b" }}>
+            <span style={{ color: holisticReady ? "#047857" : holisticLoading ? "#1d4ed8" : "#64748b" }}>
               Holistic: {holisticReady ? "Ready" : holisticLoading ? "Loading..." : "Off"}
             </span>
             {holisticReady && (
               <>
-                <span style={{ color: "#94a3b8" }}>{diagFps} FPS</span>
-                <span style={{ color: "#94a3b8" }}>{diagFrameCount} frames</span>
+                <span style={{ color: "#64748b" }}>{diagFps} FPS</span>
+                <span style={{ color: "#64748b" }}>{diagFrameCount} frames</span>
               </>
             )}
             {recordPhase === "recording" && (
-              <span style={{ color: "#fca5a5" }}>Recording {formatDuration(recordDuration)}</span>
+              <span style={{ color: "#dc2626" }}>Recording {formatDuration(recordDuration)}</span>
             )}
           </div>
 
@@ -1071,10 +1071,10 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
                   setTimeout(() => startWebcam(e.target.value), 300);
                 }}
                 style={{
-                  background: "#1e293b",
-                  border: "1px solid #334155",
+                  background: "#fff",
+                  border: "1px solid #e2e8f0",
                   borderRadius: 6,
-                  color: "#e2e8f0",
+                  color: "#0f172a",
                   padding: "6px 8px",
                   fontSize: 12,
                 }}
@@ -1092,11 +1092,11 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
           <div style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
-            gap: 4, marginTop: 8,
-            padding: 8,
-            background: "#0f172a",
+            gap: 8, marginTop: 8,
+            padding: 12,
+            background: "#fff",
             borderRadius: 8,
-            border: "1px solid #1e293b",
+            border: "1px solid #e2e8f0",
             fontSize: 11,
           }}>
             {[
@@ -1114,12 +1114,10 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
               <div key={d.label} style={{
                 display: "flex", alignItems: "center", gap: 6,
                 padding: "4px 6px", borderRadius: 4,
-                background: "rgba(30,41,59,0.5)",
+                background: d.ok ? "#ECFDF5" : "#F1F5F9",
               }}>
-                <span style={{ color: d.ok ? "#4ade80" : "#64748b", fontSize: 13 }}>
-                  {d.ok ? "✅" : "❌"}
-                </span>
-                <span style={{ color: "#94a3b8", whiteSpace: "nowrap" }}>{d.label}</span>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: d.ok ? "#16a34a" : "#94a3b8", flexShrink: 0 }} />
+                <span style={{ color: d.ok ? "#047857" : "#64748b", whiteSpace: "nowrap" }}>{d.label}</span>
               </div>
             ))}
           </div>
@@ -1128,17 +1126,17 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
             <div className="vupload-recorded-preview">
               <video ref={previewVideoRef} src={recordedUrl} controls />
               <div style={{ display: "flex", flexDirection: "column", gap: 8, justifyContent: "center" }}>
-                <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>
+                <p style={{ margin: 0, fontSize: 13, color: "#475569" }}>
                   Recording: {formatDuration(recordDuration)} &middot;{" "}
                   {formatSize(recordedBlob.size)}
                 </p>
                 {recordedLandmarkCount > 0 && (
-                  <p style={{ margin: 0, fontSize: 11, color: "#4ade80" }}>
+                  <p style={{ margin: 0, fontSize: 11, color: "#047857" }}>
                     {recordedLandmarkCount} landmark frames captured
                   </p>
                 )}
                 {recordedFramesRef.current.length > 0 && recordedLandmarkCount === 0 && (
-                  <p style={{ margin: 0, fontSize: 11, color: "#fde68a" }}>
+                  <p style={{ margin: 0, fontSize: 11, color: "#b45309" }}>
                     Processing landmarks...
                   </p>
                 )}
@@ -1174,7 +1172,7 @@ export function VideoUploadTab({ onVideoReady }: VideoUploadTabProps) {
       {/* UPLOAD PROGRESS */}
       {source === "file" && uploadProgress > 0 && uploadProgress < 100 && !metadata && (
         <div style={{ marginTop: 16 }}>
-          <p style={{ fontSize: 13, color: "#94a3b8", marginBottom: 8 }}>
+          <p style={{ fontSize: 13, color: "#475569", marginBottom: 8 }}>
             Processing video... {Math.round(uploadProgress)}%
           </p>
           <div className="vupload-progress-bar">

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2, Copy, Download, FileText } from "lucide-react";
 
 export interface TranslationEntry {
   gloss: string;
@@ -82,6 +82,24 @@ export function TranslationResult({
 }: TranslationResultProps) {
   const spelled = entries.filter((e) => e.fingerspelled);
 
+  const handleCopy = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Clipboard API not available
+    }
+  };
+
+  const handleDownload = (text: string, filename: string) => {
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <motion.section
       aria-labelledby="translation-heading"
@@ -95,9 +113,27 @@ export function TranslationResult({
         <h2 id="translation-heading" className="font-display text-lg font-bold tracking-tight text-senyalita-dark">
           Translation
         </h2>
-        <span className="rounded-full border border-senyalita-accent/20 bg-senyalita-accent/10 px-2.5 py-1 text-[0.6875rem] font-semibold text-senyalita-accent">
-          {language}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full border border-senyalita-accent/20 bg-senyalita-accent/10 px-2.5 py-1 text-[0.6875rem] font-semibold text-senyalita-accent">
+            {language}
+          </span>
+          <button
+            type="button"
+            onClick={() => handleCopy(source, "Input text")}
+            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-senyalita-border bg-white px-3 text-xs font-medium transition-all duration-150 hover:-translate-y-0.5 hover:border-senyalita-primary/30 hover:text-senyalita-dark hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary"
+            title="Copy input text"
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => handleDownload(source, "translation-input.txt")}
+            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-senyalita-border bg-white px-3 text-xs font-medium transition-all duration-150 hover:-translate-y-0.5 hover:border-senyalita-primary/30 hover:text-senyalita-dark hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary"
+            title="Download input text"
+          >
+            <Download className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       <div className="space-y-2 px-6 py-4">
@@ -145,9 +181,6 @@ export function TranslationResult({
           className="border-t border-senyalita-border/70 bg-amber-50/60 px-6 py-3 text-[0.75rem] leading-relaxed text-amber-800"
         >
           <span className="font-semibold">Spelled letter by letter:</span>{" "}
-          {/* The source words, matching the letters actually signed. Naming the
-              gloss here told the user "HOW ARE YOU" was spelled when the stage
-              was spelling k-a-m-u-s-t-a. */}
           {spelled.map((e) => e.original || e.gloss).join(", ")} — no recorded sign for these yet.
         </motion.p>
       )}

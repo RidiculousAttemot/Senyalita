@@ -1,0 +1,44 @@
+{
+  "app\\translate\\page.tsx -> @/features/sign-to-text/SignToTextInterface": {
+    "id": "app\\translate\\page.tsx -> @/features/sign-to-text/SignToTextInterface",
+    "files": [
+      "static/chunks/_app-pages-browser_src_features_sign-to-text_SignToTextInterface_tsx.js"
+    ]
+  },
+  "components\\landing\\InteractiveShowcaseSection.tsx -> @/features/sign-animation/publishedGlosses": {
+    "id": "components\\landing\\InteractiveShowcaseSection.tsx -> @/features/sign-animation/publishedGlosses",
+    "files": [
+      "static/chunks/_app-pages-browser_src_features_sign-animation_publishedGlosses_ts.js"
+    ]
+  },
+  "components\\landing\\InteractiveShowcaseSection.tsx -> @/features/translation-pipeline": {
+    "id": "components\\landing\\InteractiveShowcaseSection.tsx -> @/features/translation-pipeline",
+    "files": [
+      "static/chunks/_app-pages-browser_src_features_translation-pipeline_index_ts.js"
+    ]
+  },
+  "components\\landing\\SignPlaybackDemo.tsx -> @/features/sign-animation/activeSpan": {
+    "id": "components\\landing\\SignPlaybackDemo.tsx -> @/features/sign-animation/activeSpan",
+    "files": [
+      "static/chunks/_app-pages-browser_src_features_sign-animation_activeSpan_ts.js"
+    ]
+  },
+  "components\\landing\\SignPlaybackDemo.tsx -> @/features/sign-animation/hooks/useAnimationClip": {
+    "id": "components\\landing\\SignPlaybackDemo.tsx -> @/features/sign-animation/hooks/useAnimationClip",
+    "files": [
+      "static/chunks/_app-pages-browser_src_features_sign-animation_hooks_useAnimationClip_ts.js"
+    ]
+  },
+  "components\\landing\\SignPlaybackDemo.tsx -> @/features/sign-animation/player/SignAnimationPlayer": {
+    "id": "components\\landing\\SignPlaybackDemo.tsx -> @/features/sign-animation/player/SignAnimationPlayer",
+    "files": [
+      "static/chunks/_app-pages-browser_src_features_sign-animation_player_SignAnimationPlayer_tsx.js"
+    ]
+  },
+  "features\\sign-to-text\\handLandmarkerConfig.ts -> @mediapipe/tasks-vision": {
+    "id": "features\\sign-to-text\\handLandmarkerConfig.ts -> @mediapipe/tasks-vision",
+    "files": [
+      "static/chunks/_app-pages-browser_node_modules_mediapipe_tasks-vision_vision_bundle_mjs.js"
+    ]
+  }
+}

@@ -64,51 +64,74 @@ export function AnimationStudio() {
         .animation-studio-header h1 {
           font-size: 24px;
           font-weight: 700;
-          color: #f1f5f9;
+          color: #0f172a;
           margin: 0 0 4px 0;
         }
         .animation-studio-header p {
           font-size: 14px;
-          color: #94a3b8;
+          color: #64748b;
           margin: 0;
         }
-        .animation-studio-tabs {
-          display: flex;
-          gap: 4px;
+        .animation-studio-stepper {
+          display: grid;
+          grid-auto-flow: column;
+          grid-auto-columns: 1fr;
+          gap: 8px;
           margin-bottom: 24px;
-          border-bottom: 1px solid #1e293b;
-          padding-bottom: 0;
+        }
+        @media (max-width: 640px) {
+          .animation-studio-stepper { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
         }
         .animation-studio-tab {
           display: flex;
           align-items: center;
-          gap: 8px;
-          padding: 10px 18px;
-          border: none;
-          background: none;
+          gap: 10px;
+          padding: 12px 16px;
+          border: 1px solid #e2e8f0;
+          border-radius: 10px;
+          background: #fff;
           color: #64748b;
-          font-size: 14px;
-          font-weight: 500;
+          font-size: 13px;
+          font-weight: 600;
           cursor: pointer;
-          border-bottom: 2px solid transparent;
-          margin-bottom: -1px;
           transition: all 0.15s ease;
+          text-align: left;
         }
-        .animation-studio-tab:hover {
-          color: #94a3b8;
-          background: rgba(148,163,184,0.05);
+        .animation-studio-tab:hover:not(:disabled) {
+          border-color: #bfdbfe;
+          background: #f8fafc;
+          color: #1d4ed8;
         }
         .animation-studio-tab.active {
-          color: #60a5fa;
-          border-bottom-color: #60a5fa;
+          color: #1d4ed8;
+          border-color: #2563eb;
+          background: #eff6ff;
+          box-shadow: 0 1px 3px rgba(37,99,235,0.1);
         }
         .animation-studio-tab:disabled {
-          opacity: 0.4;
+          opacity: 0.45;
           cursor: not-allowed;
         }
         .animation-studio-tab svg {
           width: 16px;
           height: 16px;
+          flex-shrink: 0;
+        }
+        .animation-studio-stepnum {
+          display: grid;
+          width: 22px;
+          height: 22px;
+          place-items: center;
+          border-radius: 50%;
+          background: #f1f5f9;
+          color: #64748b;
+          font-size: 11px;
+          font-weight: 700;
+          flex-shrink: 0;
+        }
+        .animation-studio-tab.active .animation-studio-stepnum {
+          background: #2563eb;
+          color: #fff;
         }
         .animation-studio-content {
           min-height: 400px;
@@ -131,7 +154,7 @@ export function AnimationStudio() {
         .tab-placeholder h3 {
           font-size: 18px;
           font-weight: 600;
-          color: #94a3b8;
+          color: #334155;
           margin: 0;
         }
         .tab-placeholder p {
@@ -147,14 +170,16 @@ export function AnimationStudio() {
         <p>Upload FSL videos, extract pose landmarks, review skeleton preview, and publish animation assets</p>
       </div>
 
-      <div className="animation-studio-tabs">
-        {TABS.map((tab) => (
+      <div className="animation-studio-stepper">
+        {TABS.map((tab, idx) => (
           <button
             key={tab.id}
             className={`animation-studio-tab ${activeTab === tab.id ? "active" : ""}`}
             onClick={() => setActiveTab(tab.id)}
             disabled={!canProceed(tab.id) && tab.id !== "upload"}
+            aria-current={activeTab === tab.id ? "step" : undefined}
           >
+            <span className="animation-studio-stepnum">{idx + 1}</span>
             <tab.icon />
             {tab.label}
           </button>

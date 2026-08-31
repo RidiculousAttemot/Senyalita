@@ -45,6 +45,16 @@ export interface AnimationLibraryQuery {
   language?: string;
   difficulty?: string;
   sort?: "recent" | "published" | "gloss";
+  page?: number;
+  limit?: number;
+}
+
+export interface AnimationLibraryResponse {
+  assets: AnimationLibraryAsset[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
 }
 
 export interface AnimationValidationResult {
@@ -65,21 +75,23 @@ export interface AnimationValidationResult {
 }
 
 export const animationLibrary = {
-  async list(query?: AnimationLibraryQuery): Promise<AnimationLibraryAsset[]> {
+  async list(query?: AnimationLibraryQuery): Promise<AnimationLibraryResponse> {
     const params = new URLSearchParams();
     if (query?.search) params.set("search", query.search);
     if (query?.status) params.set("status", query.status);
     if (query?.sort) params.set("sort", query.sort);
+    if (query?.page) params.set("page", String(query.page));
+    if (query?.limit) params.set("limit", String(query.limit));
     const qs = params.toString();
     const res = await fetch(`/api/admin/animation-assets${qs ? `?${qs}` : ""}`);
     if (!res.ok) throw new Error(await failureMessage(res, "Failed to list animation assets"));
     const data = await res.json();
-    return data.assets as AnimationLibraryAsset[];
+    return data as AnimationLibraryResponse;
   },
 
   async get(gloss: string): Promise<AnimationLibraryAsset | null> {
-    const all = await this.list({ search: gloss });
-    return all.find((a) => a.gloss === gloss.toUpperCase()) ?? null;
+    const response = await this.list({ search: gloss });
+    return response.assets.find((a) => a.gloss === gloss.toUpperCase()) ?? null;
   },
 
   async loadPublished(gloss: string): Promise<GestureAnimationAsset | null> {

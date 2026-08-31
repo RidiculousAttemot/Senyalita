@@ -1,0 +1,92 @@
+[harness] building into .next-prod (dev servers on .next are untouched)
+(node:13080) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+  ▲ Next.js 14.2.5
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+ ⚠ Compiled with warnings
+
+./node_modules/@supabase/supabase-js/dist/index.mjs
+A Node.js API is used (process.version at line: 27) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+./node_modules/@supabase/supabase-js/dist/index.mjs
+./node_modules/@supabase/ssr/dist/module/createBrowserClient.js
+./node_modules/@supabase/ssr/dist/module/index.js
+./src/lib/supabase/middleware.ts
+
+   Linting and checking validity of types ...
+
+./src/components/admin/AnimationStudio/PublishTab.tsx
+226:6  Warning: React Hook useCallback has a missing dependency: 'sourceFile'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/admin/AnimationStudio/VideoUploadTab.tsx
+301:6  Warning: React Hook useEffect has missing dependencies: 'stopHolistic' and 'stopWebcam'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+425:6  Warning: React Hook useCallback has a missing dependency: 'stopRecording'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+503:6  Warning: React Hook useCallback has a missing dependency: 'processFile'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+512:6  Warning: React Hook useCallback has a missing dependency: 'processFile'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+538:6  Warning: React Hook useCallback has a missing dependency: 'analyzeVideo'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+591:6  Warning: React Hook useCallback has a missing dependency: 'stopWebcam'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/features/sign-animation/hooks/useAnimationClip.ts
+110:6  Warning: React Hook useEffect has a missing dependency: 'gestureLabels'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules
+   Collecting page data ...
+   Generating static pages (0/16) ...
+   Generating static pages (4/16) 
+   Generating static pages (8/16) 
+   Generating static pages (12/16) 
+[landing] could not read the published sign count: Error: Dynamic server usage: no-store fetch https://tfhpcbasfugqaimcoios.supabase.co/rest/v1/animation_assets?select=gloss&published_version_id=not.is.null&order=gloss.asc /
+[landing] could not read the published sign count: Error: Dynamic server usage: no-store fetch https://tfhpcbasfugqaimcoios.supabase.co/rest/v1/animation_assets?select=gloss&published_version_id=not.is.null&order=gloss.asc /
+ ✓ Generating static pages (16/16)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                         Size     First Load JS
+┌ ○ /                                               16.9 kB         165 kB
+├ ○ /_not-found                                     879 B          88.8 kB
+├ ƒ /admin                                          1.15 kB        96.5 kB
+├ ƒ /admin/animation-dataset                        6.9 kB         94.8 kB
+├ ƒ /admin/animation-inspector                      4.15 kB         107 kB
+├ ƒ /admin/animation-library                        11.6 kB        99.5 kB
+├ ƒ /admin/animation-studio                         36.8 kB         389 kB
+├ ƒ /admin/login                                    897 B          88.8 kB
+├ ƒ /admin/logout                                   0 B                0 B
+├ ƒ /admin/system                                   955 B          88.9 kB
+├ ƒ /api/admin/active-learning                      0 B                0 B
+├ ƒ /api/admin/aliases                              0 B                0 B
+├ ƒ /api/admin/animation-assets                     0 B                0 B
+├ ƒ /api/admin/animation-assets/[versionId]/action  0 B                0 B
+├ ƒ /api/admin/animation-assets/upload              0 B                0 B
+├ ƒ /api/admin/health                               0 B                0 B
+├ ƒ /api/ai/replies                                 0 B                0 B
+├ ƒ /api/animations                                 0 B                0 B
+├ ƒ /api/animations/[gloss]                         0 B                0 B
+├ ƒ /api/animations/[gloss]/video                   0 B                0 B
+├ ƒ /api/animations/aliases                         0 B                0 B
+├ ƒ /api/assets/dataset                             0 B                0 B
+├ ƒ /api/videos/[label]/[file]                      0 B                0 B
+├ ○ /evaluation                                     70.5 kB         423 kB
+├ ○ /learn                                          8.11 kB         142 kB
+└ ○ /translate                                      41.6 kB         212 kB
++ First Load JS shared by all                       87.9 kB
+  ├ chunks/7023-1a8181301010e875.js                 31.7 kB
+  ├ chunks/fd9d1056-ac80162f7d201d07.js             53.6 kB
+  └ other shared chunks (total)                     2.6 kB
+
+
+ƒ Middleware                                        83.1 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+[harness] starting production server on :3500
+  ▲ Next.js 14.2.5
+  - Local:        http://localhost:3500
+
+ ✓ Starting...
+ ⚠ "next start" does not work with "output: standalone" configuration. Use "node .next/standalone/server.js" instead.
+ ✓ Ready in 660ms

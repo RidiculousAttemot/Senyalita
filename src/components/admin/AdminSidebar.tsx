@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LogOut, PanelLeftClose, PanelLeftOpen, Sparkles, X } from 'lucide-react';
+import { LogOut, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import { ADMIN_NAVIGATION, isAdminNavigationItemActive, navigationItemName } from '@/lib/admin/navigation';
+import { SenyalitaMark } from '@/components/landing/SenyalitaMark';
 import styles from './AdminSidebar.module.css';
 
 type AdminSidebarProps = {
@@ -28,7 +29,7 @@ export default function AdminSidebar({
     >
       <div className={styles.branding}>
         <Link href="/admin" className={styles.brandLink} onClick={() => onMobileOpenChange(false)}>
-          <span className={styles.brandIcon} aria-hidden="true"><Sparkles size={18} strokeWidth={2.25} /></span>
+          <SenyalitaMark className={styles.brandIcon} iconClassName="h-5 w-5" aria-hidden="true" />
           {!collapsed && <span className={styles.brandText}>Senyalita</span>}
         </Link>
         <button
@@ -76,7 +77,9 @@ export default function AdminSidebar({
                  */
                 const content = (
                   <>
-                    <Icon size={17} strokeWidth={1.9} />
+                    <span className={styles.itemIcon} aria-hidden="true">
+                      <Icon size={18} strokeWidth={2} />
+                    </span>
                     {!collapsed && <span className={styles.itemLabel}>{item.label}</span>}
                   </>
                 );
@@ -114,7 +117,7 @@ export default function AdminSidebar({
 
       <div className={styles.sidebarFooter}>
         <Link href="/admin/logout" className={styles.logoutButton} aria-label="Logout" title="Logout">
-          <LogOut size={17} />
+          <span className={styles.itemIcon} aria-hidden="true"><LogOut size={18} strokeWidth={2} /></span>
           {!collapsed && <span>Logout</span>}
         </Link>
       </div>

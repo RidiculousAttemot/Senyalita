@@ -236,9 +236,9 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
     return (
       <div style={{ textAlign: "center", padding: "60px 20px" }}>
         <style>{`
-          .publish-success svg { width: 56px; height: 56px; color: #4ade80; }
-          .publish-success h2 { color: #e2e8f0; font-size: 22px; margin: 16px 0 8px; }
-          .publish-success p { color: #64748b; font-size: 14px; }
+          .publish-success svg { width: 56px; height: 56px; color: #16a34a; }
+          .publish-success h2 { color: #0f172a; font-size: 22px; margin: 16px 0 8px; }
+          .publish-success p { color: #475569; font-size: 14px; }
         `}</style>
         <div className="publish-success">
           <CheckCircle2 />
@@ -251,7 +251,7 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
             landmarks live in the animation library now, which is the fact worth
             stating.
           */}
-          <p style={{ fontSize: 12, color: "#475569", marginTop: 4 }}>
+          <p style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
             The landmarks are stored in the Animation Library and available for Type-to-Sign playback.
           </p>
         </div>
@@ -264,48 +264,48 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
       <style>{`
         .publish-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
         @media (max-width: 768px) { .publish-grid { grid-template-columns: 1fr; } }
-        .publish-section { background: #0f172a; border: 1px solid #1e293b; border-radius: 10px; padding: 20px; }
-        .publish-section h3 { font-size: 15px; font-weight: 600; color: #e2e8f0; margin: 0 0 16px; display: flex; align-items: center; gap: 8px; }
-        .publish-section h3 svg { width: 18px; height: 18px; color: #60a5fa; }
+        .publish-section { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(15,23,42,0.05); }
+        .publish-section h3 { font-size: 15px; font-weight: 600; color: #0f172a; margin: 0 0 16px; display: flex; align-items: center; gap: 8px; }
+        .publish-section h3 svg { width: 18px; height: 18px; color: #2563eb; }
         .form-group { margin-bottom: 14px; }
-        .form-group label { display: block; font-size: 12px; font-weight: 500; color: #94a3b8; margin-bottom: 4px; }
+        .form-group label { display: block; font-size: 12px; font-weight: 500; color: #475569; margin-bottom: 4px; }
         .form-group input, .form-group select, .form-group textarea {
-          width: 100%; padding: 8px 12px; border: 1px solid #334155; border-radius: 6px;
-          font-size: 13px; background: #1e293b; color: #e2e8f0; outline: none;
-          transition: border-color 0.15s; box-sizing: border-box;
+          width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px;
+          font-size: 13px; background: #fff; color: #0f172a; outline: none;
+          transition: border-color 0.15s, box-shadow 0.15s; box-sizing: border-box;
         }
-        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: #60a5fa; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
         .form-group textarea { min-height: 60px; resize: vertical; font-family: inherit; }
         .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .stat-card { background: #1e293b; border-radius: 8px; padding: 12px; text-align: center; }
-        .stat-card .stat-value { font-size: 20px; font-weight: 700; color: #e2e8f0; }
-        .stat-card .stat-label { font-size: 11px; color: #64748b; margin-top: 2px; }
-        .quality-bar { height: 6px; background: #1e293b; border-radius: 3px; overflow: hidden; margin-top: 8px; }
+        .stat-card { background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 8px; padding: 12px; text-align: center; }
+        .stat-card .stat-value { font-size: 20px; font-weight: 700; color: #0f172a; }
+        .stat-card .stat-label { font-size: 11px; color: #64748b; margin-top: 2px; display: flex; align-items: center; justify-content: center; gap: 4px; }
+        .quality-bar { height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; margin-top: 8px; }
         .quality-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
-        .action-buttons { display: flex; gap: 10px; margin-top: 24px; grid-column: 1 / -1; justify-content: center; }
+        .action-buttons { display: flex; gap: 10px; margin-top: 24px; grid-column: 1 / -1; justify-content: center; flex-wrap: wrap; }
         .btn-publish { display: flex; align-items: center; gap: 8px; padding: 12px 28px; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
         .btn-publish:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-publish svg { width: 18px; height: 18px; }
         .btn-publish.primary { background: #2563eb; color: #fff; }
         .btn-publish.primary:hover:not(:disabled) { background: #1d4ed8; }
-        .btn-publish.secondary { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
-        .btn-publish.secondary:hover:not(:disabled) { background: #334155; }
-        .btn-publish.danger { background: #1e293b; color: #f87171; border: 1px solid #7f1d1d; }
-        .btn-publish.danger:hover:not(:disabled) { background: #2d1a1a; }
-        .btn-check { background: #1e293b; color: #60a5fa; border: 1px solid #1e3a5f; }
-        .btn-check:hover:not(:disabled) { background: #1e3a5f; }
+        .btn-publish.secondary { background: #fff; color: #334155; border: 1px solid #e2e8f0; }
+        .btn-publish.secondary:hover:not(:disabled) { background: #f1f5f9; }
+        .btn-publish.danger { background: #fff; color: #b91c1c; border: 1px solid #fecaca; }
+        .btn-publish.danger:hover:not(:disabled) { background: #fef2f2; }
+        .btn-check { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+        .btn-check:hover:not(:disabled) { background: #dbeafe; }
         .error-box, .validation-box {
           padding: 10px 14px; border-radius: 8px; font-size: 13px;
           grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 8px;
         }
-        .error-box { background: rgba(220,38,38,0.1); border: 1px solid rgba(220,38,38,0.3); color: #fca5a5; }
-        .validation-box.valid { background: rgba(22,163,74,0.1); border: 1px solid rgba(22,163,74,0.3); color: #86efac; }
-        .validation-box.invalid { background: rgba(220,38,38,0.1); border: 1px solid rgba(220,38,38,0.3); color: #fca5a5; }
+        .error-box { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; }
+        .validation-box.valid { background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; }
+        .validation-box.invalid { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; }
         .validation-box svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px; }
         .validation-details { margin-top: 8px; }
         .validation-details li { font-size: 12px; margin-bottom: 3px; }
-        .validation-details .warn { color: #fde68a; }
-        .validation-details .err { color: #fca5a5; }
+        .validation-details .warn { color: #b45309; }
+        .validation-details .err { color: #b91c1c; }
       `}</style>
 
       <div className="publish-grid">
@@ -423,7 +423,7 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
                   <span>Landmark completeness</span>
                   <span>{aiMeta.landmarkCompleteness}%</span>
                 </div>
-                <div style={{ height: 4, background: "#1e293b", borderRadius: 2, overflow: "hidden" }}>
+                <div style={{ height: 4, background: "#e2e8f0", borderRadius: 2, overflow: "hidden" }}>
                   <div style={{ height: "100%", width: `${aiMeta.landmarkCompleteness}%`, background: aiMeta.landmarkCompleteness > 70 ? "#16a34a" : aiMeta.landmarkCompleteness > 40 ? "#eab308" : "#dc2626", borderRadius: 2 }} />
                 </div>
               </div>
@@ -432,7 +432,7 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
                   <span>Movement score</span>
                   <span>{aiMeta.movementScore}%</span>
                 </div>
-                <div style={{ height: 4, background: "#1e293b", borderRadius: 2, overflow: "hidden" }}>
+                <div style={{ height: 4, background: "#e2e8f0", borderRadius: 2, overflow: "hidden" }}>
                   <div style={{ height: "100%", width: `${Math.max(1, aiMeta.movementScore / 100 * 100)}%`, background: aiMeta.movementScore > 50 ? "#16a34a" : aiMeta.movementScore > 20 ? "#eab308" : "#dc2626", borderRadius: 2 }} />
                 </div>
               </div>
@@ -440,10 +440,10 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
           )}
 
           {aiValidation && (
-            <div style={{ marginTop: 12, padding: "8px 12px", borderRadius: 6, fontSize: 12,
-              background: aiValidation.verdict === "pass" ? "rgba(22,163,74,0.1)" : aiValidation.verdict === "warn" ? "rgba(234,179,8,0.1)" : "rgba(220,38,38,0.1)",
-              border: `1px solid ${aiValidation.verdict === "pass" ? "rgba(22,163,74,0.3)" : aiValidation.verdict === "warn" ? "rgba(234,179,8,0.3)" : "rgba(220,38,38,0.3)"}`,
-              color: aiValidation.verdict === "pass" ? "#86efac" : aiValidation.verdict === "warn" ? "#fde68a" : "#fca5a5" }}>
+            <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 8, fontSize: 12,
+              background: aiValidation.verdict === "pass" ? "#ECFDF5" : aiValidation.verdict === "warn" ? "#FFFBEB" : "#FEF2F2",
+              border: `1px solid ${aiValidation.verdict === "pass" ? "#A7F3D0" : aiValidation.verdict === "warn" ? "#FDE68A" : "#FECACA"}`,
+              color: aiValidation.verdict === "pass" ? "#047857" : aiValidation.verdict === "warn" ? "#92400E" : "#B91C1C" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}>
                 {aiValidation.verdict === "pass" ? <CheckCircle2 size={14} /> : aiValidation.verdict === "warn" ? <AlertTriangle size={14} /> : <XCircle size={14} />}
                 {aiValidation.verdict.toUpperCase()} — {aiValidation.summary}
@@ -457,7 +457,7 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
               {aiQuality.issues.slice(0, 4).map((issue, i) => (
                 <div key={i} style={{
                   display: "flex", alignItems: "flex-start", gap: 6, padding: "4px 0",
-                  fontSize: 11, color: issue.severity === "error" ? "#fca5a5" : issue.severity === "warning" ? "#fde68a" : "#94a3b8",
+                  fontSize: 11, color: issue.severity === "error" ? "#B91C1C" : issue.severity === "warning" ? "#92400E" : "#64748B",
                 }}>
                   {issue.severity === "error" ? <XCircle size={12} style={{ marginTop: 1, flexShrink: 0 }} /> :
                    issue.severity === "warning" ? <AlertTriangle size={12} style={{ marginTop: 1, flexShrink: 0 }} /> :
@@ -471,10 +471,10 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
             </div>
           )}
 
-          <div style={{ marginTop: 16, padding: 12, background: "#1e293b", borderRadius: 8 }}>
+          <div style={{ marginTop: 16, padding: 12, background: "#f8fafc", border: "1px solid #f1f5f9", borderRadius: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <FileJson size={16} color="#60a5fa" />
-              <span style={{ fontSize: 13, color: "#94a3b8" }}>{gloss || "UNTITLED"}.json</span>
+              <FileJson size={16} color="#2563eb" />
+              <span style={{ fontSize: 13, color: "#334155" }}>{gloss || "UNTITLED"}.json</span>
             </div>
             <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.6 }}>
               <div>Frames: {asset.frames.length}</div>
@@ -498,19 +498,19 @@ export function PublishTab({ extractionResult, sourceFile, onPublish }: PublishT
                 marginTop: 16,
                 padding: 12,
                 borderRadius: 8,
-                background: payloadBudget.status === "over" ? "#450a0a" : "#422006",
-                border: `1px solid ${payloadBudget.status === "over" ? "#dc2626" : "#a16207"}`,
+                background: payloadBudget.status === "over" ? "#FEF2F2" : "#FFFBEB",
+                border: `1px solid ${payloadBudget.status === "over" ? "#FECACA" : "#FDE68A"}`,
               }}
             >
               <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                <AlertTriangle size={16} color={payloadBudget.status === "over" ? "#f87171" : "#fbbf24"} style={{ flexShrink: 0, marginTop: 1 }} />
-                <span style={{ fontSize: 12, color: "#e2e8f0", lineHeight: 1.6 }}>{payloadBudget.message}</span>
+                <AlertTriangle size={16} color={payloadBudget.status === "over" ? "#DC2626" : "#D97706"} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span style={{ fontSize: 12, color: "#334155", lineHeight: 1.6 }}>{payloadBudget.message}</span>
               </div>
             </div>
           )}
 
-          <div style={{ marginTop: 16, padding: 12, background: "#1e293b", borderRadius: 8 }}>
-            <span style={{ fontSize: 11, color: "#64748b" }}>
+          <div style={{ marginTop: 16, padding: 12, background: "#f8fafc", border: "1px solid #f1f5f9", borderRadius: 8 }}>
+            <span style={{ fontSize: 11, color: "#64748b", lineHeight: 1.6 }}>
               Publishing registers this asset in the Animation Library with full versioning.
               The Type-to-Sign system will automatically use the published version.
               Raw video remains private. Only landmark JSON is used publicly.
