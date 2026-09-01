@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Keyboard, Video } from "lucide-react";
 import { LandingNav } from "@/components/landing/LandingNav";
+import { SenyalitaMark } from "@/components/landing/SenyalitaMark";
 
 // The anchor list that used to live here went with the template header below.
 // It was never the landing nav — LandingNav owns its own links — so those
@@ -56,12 +57,7 @@ export function Header() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
               <span className="sr-only">Back to home</span>
             </span>
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-senyalita-primary shadow-lg shadow-senyalita-primary/25">
-              <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2v11z"/>
-                <circle cx="12" cy="13" r="4" fill="transparent" stroke="white" strokeWidth="2"/>
-              </svg>
-            </span>
+            <SenyalitaMark className="h-9 w-9" iconClassName="h-5 w-5" />
             <span className="font-display text-xl font-bold leading-none tracking-tight text-senyalita-dark">Senyalita</span>
           </Link>
 
@@ -158,12 +154,7 @@ export function Header() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
             <span className="sr-only">Back to home</span>
           </span>
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-senyalita-primary shadow-lg shadow-senyalita-primary/25">
-            <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2v11z"/>
-              <circle cx="12" cy="13" r="4" fill="transparent" stroke="white" strokeWidth="2"/>
-            </svg>
-          </span>
+          <SenyalitaMark className="h-9 w-9" iconClassName="h-5 w-5" />
           <span className="font-display text-xl font-bold leading-none tracking-tight text-senyalita-dark">Senyalita</span>
         </Link>
 

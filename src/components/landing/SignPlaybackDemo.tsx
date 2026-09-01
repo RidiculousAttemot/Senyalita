@@ -168,20 +168,7 @@ export function SignSurface({
    */
   useEffect(() => {
     if (trigger !== "visible" || prefersReducedMotion || !gloss) return;
-    const el = surfaceRef.current;
-    if (!el || typeof IntersectionObserver === "undefined") return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          observer.disconnect();
-          void fetchClip(gloss);
-        }
-      },
-      { rootMargin: "0px 0px -10% 0px" },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
+    void fetchClip(gloss);
   }, [fetchClip, prefersReducedMotion, trigger, gloss]);
 
   useEffect(() => {

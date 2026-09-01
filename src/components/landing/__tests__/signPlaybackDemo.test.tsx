@@ -114,18 +114,21 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("landing sign playback demo", () => {
-  it("fetches nothing on mount", () => {
+  it("fetches immediately on mount when the page is first accessed", async () => {
     render(<SignPlaybackDemo />);
-    expect(load).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(load).toHaveBeenCalledTimes(1);
+      expect(load).toHaveBeenCalledWith("HELLO");
+    });
   });
 
-  it("fetches once the panel scrolls into view", async () => {
+  it("does not wait for scroll to load the visible hero asset", async () => {
     render(<SignPlaybackDemo />);
-    expect(load).not.toHaveBeenCalled();
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(1));
+    expect(load).toHaveBeenCalledWith("HELLO");
 
     await act(async () => { observed.forEach((fire) => fire()); });
     expect(load).toHaveBeenCalledTimes(1);
-    expect(load).toHaveBeenCalledWith("HELLO");
   });
 
   it("does not observe or fetch at all under reduced motion", async () => {
@@ -140,9 +143,11 @@ describe("landing sign playback demo", () => {
     expect(screen.getByRole("button", { name: /play hello/i })).toBeTruthy();
   });
 
-  it("offers a play control before anything is loaded", () => {
+  it("shows a loading state immediately when the page is first accessed", async () => {
     render(<SignPlaybackDemo />);
-    expect(screen.getByRole("button", { name: /play hello/i })).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByText(/loading recorded landmarks/i)).toBeTruthy();
+    });
   });
 
   it("never claims an accuracy figure", () => {

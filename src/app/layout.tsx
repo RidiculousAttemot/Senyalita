@@ -43,6 +43,12 @@ const inter = localFont({
 export const metadata = {
   title: "SignLang FSL - AI-Powered Filipino Sign Language Translation",
   description: "Real-time FSL recognition, text-to-sign animation, and an interactive learning platform.",
+  icons: {
+    icon: "/senyalita-mark.svg",
+    shortcut: "/senyalita-mark.svg",
+    apple: "/senyalita-mark.svg",
+  },
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({
