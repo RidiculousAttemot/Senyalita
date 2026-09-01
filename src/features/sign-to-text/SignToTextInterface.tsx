@@ -805,7 +805,14 @@ export function SignToTextInterface() {
                   className="absolute bottom-4 right-4 min-w-[132px] overflow-hidden rounded-2xl bg-black/55 px-4 pb-3 pt-2.5 ring-1 ring-inset ring-white/15 backdrop-blur-md"
                 >
                   <p className="text-[0.5625rem] font-bold uppercase tracking-[0.16em] text-white/55">Detected</p>
-                  <p className="mt-0.5 font-display text-3xl font-bold leading-none text-white">
+                  {/* data-prediction carries the bare label so a test can read what
+                      the model said without parsing the human-facing string, which
+                      also holds a confidence percentage and localised copy. */}
+                  <p
+                    className="mt-0.5 font-display text-3xl font-bold leading-none text-white"
+                    data-testid="recognition-readout"
+                    data-prediction={currentPrediction ? translateLabel(currentPrediction.label) : ""}
+                  >
                     {translateLabel(currentPrediction.label)}
                   </p>
                   <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-white/20">
@@ -880,35 +887,6 @@ export function SignToTextInterface() {
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
-
-          {/* Recognition bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-senyalita-border/70 bg-white/60 px-5 py-4">
-            <div className="min-w-0">
-              <p className="text-[0.6875rem] font-bold uppercase tracking-[0.14em] text-senyalita-muted">Recognition model</p>
-              {/* data-prediction carries the bare label so a test can read what
-                  the model said without parsing the human-facing string, which
-                  also holds a confidence percentage and localised copy. */}
-              <p
-                className="mt-1 truncate text-sm font-semibold text-senyalita-dark"
-                data-testid="recognition-readout"
-                data-prediction={currentPrediction ? translateLabel(currentPrediction.label) : ""}
-              >
-                {recognition.state.stage === "loading-model" ? "Loading on-device model"
-                  : recognition.state.stage === "error" ? recognition.state.message
-                  : currentPrediction ? `${translateLabel(currentPrediction.label)} · ${Math.round(currentPrediction.confidence * 100)}%`
-                  : "Waiting for a stable sign"}
-              </p>
-            </div>
-            <motion.button
-              type="button"
-              onClick={commitPrediction}
-              disabled={!currentPrediction}
-              whileTap={{ scale: 0.97 }}
-              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-senyalita-primary px-6 text-sm font-semibold text-white shadow-lg shadow-senyalita-primary/25 transition-all hover:shadow-xl hover:shadow-senyalita-primary/35 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-senyalita-primary disabled:bg-slate-300 disabled:shadow-none sm:w-auto"
-            >
-              <Zap className="h-4 w-4" />Add detected sign
-            </motion.button>
           </div>
         </section>
 
