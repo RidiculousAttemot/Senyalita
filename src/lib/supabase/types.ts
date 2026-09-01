@@ -154,15 +154,6 @@ export type ModelVersion = {
   created_at: string;
 };
 
-export type LanguageProfile = {
-  id: string;
-  code: string;
-  name: string;
-  is_active: boolean;
-  display_order: number;
-  created_at: string;
-};
-
 export type TranslationEntry = {
   id: string;
   language_code: string;
@@ -266,18 +257,6 @@ export type DatasetVersion = {
   checksum: string | null;
 };
 
-export type DatasetSnapshot = {
-  id: string;
-  dataset_version_id: string;
-  gesture_label: string;
-  sample_count: number;
-  unique_signers: number;
-  avg_confidence: number | null;
-  min_samples_threshold: number;
-  meets_threshold: boolean;
-  created_at: string;
-};
-
 export type SignerProfile = {
   id: string;
   signer_id: string;
@@ -344,21 +323,6 @@ export type TextToSignLog = {
   source: "web" | "api" | "mobile";
   success: boolean;
   error_message: string | null;
-  created_at: string;
-};
-
-export type DriftSnapshot = {
-  id: string;
-  snapshot_date: string;
-  model_version: string;
-  total_samples: number;
-  class_accuracy: Record<string, number>;
-  overall_accuracy: number | null;
-  drift_score: number | null;
-  distribution_shift: Record<string, unknown> | null;
-  low_confidence_rate: number | null;
-  unknown_rate: number | null;
-  notes: string | null;
   created_at: string;
 };
 
@@ -764,26 +728,6 @@ type Tables = {
     };
     Relationships: [];
   };
-  language_profiles: {
-    Row: LanguageProfile;
-    Insert: {
-      id?: string;
-      code: string;
-      name: string;
-      is_active?: boolean;
-      display_order?: number;
-      created_at?: string;
-    };
-    Update: {
-      id?: string;
-      code?: string;
-      name?: string;
-      is_active?: boolean;
-      display_order?: number;
-      created_at?: string;
-    };
-    Relationships: [];
-  };
   translations: {
     Row: TranslationEntry;
     Insert: {
@@ -956,30 +900,6 @@ type Tables = {
     };
     Relationships: [];
   };
-  dataset_snapshots: {
-    Row: DatasetSnapshot;
-    Insert: {
-      id?: string;
-      dataset_version_id: string;
-      gesture_label: string;
-      sample_count?: number;
-      unique_signers?: number;
-      avg_confidence?: number | null;
-      min_samples_threshold?: number;
-      created_at?: string;
-    };
-    Update: {
-      id?: string;
-      dataset_version_id?: string;
-      gesture_label?: string;
-      sample_count?: number;
-      unique_signers?: number;
-      avg_confidence?: number | null;
-      min_samples_threshold?: number;
-      created_at?: string;
-    };
-    Relationships: [{ foreignKeyName: "fk_dataset_version", columns: ["dataset_version_id"], referencedRelation: "dataset_versions", referencedColumns: ["id"] }];
-  };
   signer_profiles: {
     Row: SignerProfile;
     Insert: {
@@ -1090,38 +1010,6 @@ type Tables = {
     };
     Relationships: [];
   };
-  communication_profiles: {
-    Row: CommunicationProfile;
-    Insert: {
-      id?: string;
-      session_token: string;
-      preferred_language?: "en" | "tl";
-      preferred_reply_style?: "concise" | "detailed" | "casual" | "formal";
-      conversation_speed?: "slow" | "normal" | "fast";
-      frequently_used_gestures?: string[];
-      commonly_selected_replies?: string[];
-      accessibility_preferences?: Record<string, unknown>;
-      total_sessions?: number;
-      last_active_at?: string | null;
-      created_at?: string;
-      updated_at?: string;
-    };
-    Update: {
-      id?: string;
-      session_token?: string;
-      preferred_language?: "en" | "tl";
-      preferred_reply_style?: "concise" | "detailed" | "casual" | "formal";
-      conversation_speed?: "slow" | "normal" | "fast";
-      frequently_used_gestures?: string[];
-      commonly_selected_replies?: string[];
-      accessibility_preferences?: Record<string, unknown>;
-      total_sessions?: number;
-      last_active_at?: string | null;
-      created_at?: string;
-      updated_at?: string;
-    };
-    Relationships: [];
-  };
   gesture_difficulty_tracking: {
     Row: GestureDifficultyTracking;
     Insert: {
@@ -1144,118 +1032,6 @@ type Tables = {
       confusion_count?: number;
       retry_count?: number;
       last_updated?: string | null;
-      created_at?: string;
-    };
-    Relationships: [];
-  };
-  gesture_retry_log: {
-    Row: GestureRetryLog;
-    Insert: {
-      id?: string;
-      session_token?: string | null;
-      gesture_label: string;
-      retry_count?: number;
-      original_confidence?: number | null;
-      final_confidence?: number | null;
-      was_successful?: boolean | null;
-      created_at?: string;
-    };
-    Update: {
-      id?: string;
-      session_token?: string | null;
-      gesture_label?: string;
-      retry_count?: number;
-      original_confidence?: number | null;
-      final_confidence?: number | null;
-      was_successful?: boolean | null;
-      created_at?: string;
-    };
-    Relationships: [];
-  };
-  learning_recommendations: {
-    Row: LearningRecommendation;
-    Insert: {
-      id?: string;
-      session_token: string;
-      gesture_label: string;
-      recommendation_reason: string;
-      priority_score?: number;
-      is_dismissed?: boolean;
-      is_completed?: boolean;
-      created_at?: string;
-    };
-    Update: {
-      id?: string;
-      session_token?: string;
-      gesture_label?: string;
-      recommendation_reason?: string;
-      priority_score?: number;
-      is_dismissed?: boolean;
-      is_completed?: boolean;
-      created_at?: string;
-    };
-    Relationships: [];
-  };
-  prediction_explanations: {
-    Row: PredictionExplanation;
-    Insert: {
-      id?: string;
-      gesture_label: string;
-      predicted_label: string;
-      confidence: number;
-      explanation_text: string;
-      explanation_category: "high_confidence" | "low_confidence" | "confusion" | "motion" | "edge_case";
-      top_alternatives?: Array<{ label: string; confidence: number }>;
-      contributing_factors?: Record<string, unknown>;
-      created_at?: string;
-    };
-    Update: {
-      id?: string;
-      gesture_label?: string;
-      predicted_label?: string;
-      confidence?: number;
-      explanation_text?: string;
-      explanation_category?: "high_confidence" | "low_confidence" | "confusion" | "motion" | "edge_case";
-      top_alternatives?: Array<{ label: string; confidence: number }>;
-      contributing_factors?: Record<string, unknown>;
-      created_at?: string;
-    };
-    Relationships: [];
-  };
-  conversation_intelligence: {
-    Row: ConversationIntelligence;
-    Insert: {
-      id?: string;
-      day: string;
-      total_conversations?: number;
-      successful_conversations?: number;
-      total_messages?: number;
-      avg_response_delay_ms?: number | null;
-      avg_corrections_per_conversation?: number | null;
-      avg_confidence?: number | null;
-      acceptance_rate?: number | null;
-      low_confidence_trend?: number | null;
-      top_topics?: Array<{ topic: string; count: number }>;
-      gesture_difficulty_summary?: Record<string, unknown>;
-      correction_heatmap?: Record<string, unknown>;
-      dataset_growth?: number;
-      created_at?: string;
-    };
-    Update: {
-      id?: string;
-      day?: string;
-      total_conversations?: number;
-      successful_conversations?: number;
-      total_messages?: number;
-      avg_response_delay_ms?: number | null;
-      avg_corrections_per_conversation?: number | null;
-      avg_confidence?: number | null;
-      acceptance_rate?: number | null;
-      low_confidence_trend?: number | null;
-      top_topics?: Array<{ topic: string; count: number }>;
-      gesture_difficulty_summary?: Record<string, unknown>;
-      correction_heatmap?: Record<string, unknown>;
-      dataset_growth?: number;
       created_at?: string;
     };
     Relationships: [];
@@ -1290,30 +1066,6 @@ type Tables = {
     };
     Relationships: [];
   };
-  reply_selection_log: {
-    Row: ReplySelectionLog;
-    Insert: {
-      id?: string;
-      gesture_label: string;
-      reply_text: string;
-      session_token?: string | null;
-      was_accepted?: boolean;
-      context_topic?: string | null;
-      conversation_id?: string | null;
-      created_at?: string;
-    };
-    Update: {
-      id?: string;
-      gesture_label?: string;
-      reply_text?: string;
-      session_token?: string | null;
-      was_accepted?: boolean;
-      context_topic?: string | null;
-      conversation_id?: string | null;
-      created_at?: string;
-    };
-    Relationships: [];
-  };
   text_to_sign_logs: {
     Row: TextToSignLog;
     Insert: {
@@ -1344,38 +1096,6 @@ type Tables = {
       source?: TextToSignLog["source"];
       success?: boolean;
       error_message?: string | null;
-      created_at?: string;
-    };
-    Relationships: [];
-  };
-  drift_snapshots: {
-    Row: DriftSnapshot;
-    Insert: {
-      id?: string;
-      snapshot_date?: string;
-      model_version: string;
-      total_samples?: number;
-      class_accuracy?: Record<string, number>;
-      overall_accuracy?: number | null;
-      drift_score?: number | null;
-      distribution_shift?: Record<string, unknown> | null;
-      low_confidence_rate?: number | null;
-      unknown_rate?: number | null;
-      notes?: string | null;
-      created_at?: string;
-    };
-    Update: {
-      id?: string;
-      snapshot_date?: string;
-      model_version?: string;
-      total_samples?: number;
-      class_accuracy?: Record<string, number>;
-      overall_accuracy?: number | null;
-      drift_score?: number | null;
-      distribution_shift?: Record<string, unknown> | null;
-      low_confidence_rate?: number | null;
-      unknown_rate?: number | null;
-      notes?: string | null;
       created_at?: string;
     };
     Relationships: [];
@@ -1668,22 +1388,6 @@ export type GestureReplyRelationship = {
   created_at: string;
 };
 
-// Phase 35 — Adaptive Communication Intelligence
-export type CommunicationProfile = {
-  id: string;
-  session_token: string;
-  preferred_language: "en" | "tl";
-  preferred_reply_style: "concise" | "detailed" | "casual" | "formal";
-  conversation_speed: "slow" | "normal" | "fast";
-  frequently_used_gestures: string[];
-  commonly_selected_replies: string[];
-  accessibility_preferences: Record<string, unknown>;
-  total_sessions: number;
-  last_active_at: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
 export type GestureDifficultyTracking = {
   id: string;
   gesture_label: string;
@@ -1694,58 +1398,6 @@ export type GestureDifficultyTracking = {
   retry_count: number;
   difficulty_score: number;
   last_updated: string | null;
-  created_at: string;
-};
-
-export type GestureRetryLog = {
-  id: string;
-  session_token: string | null;
-  gesture_label: string;
-  retry_count: number;
-  original_confidence: number | null;
-  final_confidence: number | null;
-  was_successful: boolean | null;
-  created_at: string;
-};
-
-export type LearningRecommendation = {
-  id: string;
-  session_token: string;
-  gesture_label: string;
-  recommendation_reason: string;
-  priority_score: number;
-  is_dismissed: boolean;
-  is_completed: boolean;
-  created_at: string;
-};
-
-export type PredictionExplanation = {
-  id: string;
-  gesture_label: string;
-  predicted_label: string;
-  confidence: number;
-  explanation_text: string;
-  explanation_category: "high_confidence" | "low_confidence" | "confusion" | "motion" | "edge_case";
-  top_alternatives: Array<{ label: string; confidence: number }>;
-  contributing_factors: Record<string, unknown>;
-  created_at: string;
-};
-
-export type ConversationIntelligence = {
-  id: string;
-  day: string;
-  total_conversations: number;
-  successful_conversations: number;
-  total_messages: number;
-  avg_response_delay_ms: number | null;
-  avg_corrections_per_conversation: number | null;
-  avg_confidence: number | null;
-  acceptance_rate: number | null;
-  low_confidence_trend: number | null;
-  top_topics: Array<{ topic: string; count: number }>;
-  gesture_difficulty_summary: Record<string, unknown>;
-  correction_heatmap: Record<string, unknown>;
-  dataset_growth: number;
   created_at: string;
 };
 
@@ -1760,17 +1412,6 @@ export type CommunicationQualityLog = {
   conversation_duration_seconds: number | null;
   successful_exchanges: number;
   total_exchanges: number;
-  created_at: string;
-};
-
-export type ReplySelectionLog = {
-  id: string;
-  gesture_label: string;
-  reply_text: string;
-  session_token: string | null;
-  was_accepted: boolean;
-  context_topic: string | null;
-  conversation_id: string | null;
   created_at: string;
 };
 

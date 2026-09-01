@@ -1,6 +1,20 @@
-import type { CommunicationProfile } from "@/lib/supabase/types";
+// Local session profile type (communication_profiles table removed in Phase 46)
+export type SessionProfile = {
+  id: string;
+  session_token: string;
+  preferred_language: "en" | "tl";
+  preferred_reply_style: "concise" | "detailed" | "casual" | "formal";
+  conversation_speed: "slow" | "normal" | "fast";
+  frequently_used_gestures: string[];
+  commonly_selected_replies: string[];
+  accessibility_preferences: Record<string, unknown>;
+  total_sessions: number;
+  last_active_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
 
-export type ProfileUpdate = Partial<Pick<CommunicationProfile,
+export type ProfileUpdate = Partial<Pick<SessionProfile,
   | "preferred_language"
   | "preferred_reply_style"
   | "conversation_speed"
@@ -10,7 +24,7 @@ export type ProfileUpdate = Partial<Pick<CommunicationProfile,
 >>;
 
 export class CommunicationProfileManager {
-  private profile: CommunicationProfile | null = null;
+  private profile: SessionProfile | null = null;
   private sessionToken: string;
   private storageKey = "signlang_profile_session";
 
@@ -22,11 +36,11 @@ export class CommunicationProfileManager {
     return this.sessionToken;
   }
 
-  getProfile(): CommunicationProfile | null {
+  getProfile(): SessionProfile | null {
     return this.profile;
   }
 
-  setProfile(profile: CommunicationProfile): void {
+  setProfile(profile: SessionProfile): void {
     this.profile = profile;
   }
 

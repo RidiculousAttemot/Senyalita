@@ -423,7 +423,7 @@ export function AnimationLibraryPage() {
               </h3>
             </div>
             <p style={{ margin: '0 0 20px', fontSize: '14px', color: '#475569' }}>
-              Are you sure you want to <strong>{confirmAction.action}</strong> "{confirmAction.assetGloss}"?
+              Are you sure you want to <strong>{confirmAction.action}</strong> “{confirmAction.assetGloss}”?
               {confirmAction.action === 'archive' && ' This can be undone by restoring it later.'}
               {confirmAction.action === 'unarchive' && ' This will restore the asset to its previous state.'}
               {confirmAction.action === 'publish' && ' This will make it available for use in Type-to-Sign.'}
