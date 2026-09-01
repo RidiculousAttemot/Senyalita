@@ -295,7 +295,6 @@ export default async function AdminDashboardOverview() {
             <Link href="/admin/animation-studio">Create Animation <ArrowUpRight size={15} /></Link>
             <Link href="/admin/animation-library">Animation Library <ArrowUpRight size={15} /></Link>
             <Link href="/admin/animation-dataset">Animation Dataset <ArrowUpRight size={15} /></Link>
-            <Link href="/admin/animation-inspector">Animation Inspector <ArrowUpRight size={15} /></Link>
             <Link href="/admin/system">System Health <ArrowUpRight size={15} /></Link>
           </div>
         </article>

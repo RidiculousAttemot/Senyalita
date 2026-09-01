@@ -19,12 +19,21 @@ export type SystemHealthData = {
 
 type ServiceTone = "healthy" | "attention" | "unknown";
 
-const formatPercent = (value: number | null) => value === null ? "Unavailable" : `${(value * 100).toFixed(1)}%`;
+const formatMetricNumber = (value: number | null | undefined, fallback = "No data") => {
+  if (value === null || value === undefined || Number.isNaN(value)) return fallback;
+  return value.toLocaleString();
+};
+
+const formatPercent = (value: number | null) => {
+  if (value === null || value === undefined || Number.isNaN(value)) return "No data";
+  return `${(value * 100).toFixed(1)}%`;
+};
 
 export function SystemHealthOverviewView({ health }: { health: SystemHealthData }) {
   const serverServicesAvailable = health.databaseAvailable && health.storageAvailable;
   const modelRuntimeAvailable = health.model.status === "ready";
   const sourceEntries = Object.entries(health.sourceBreakdown).sort(([, left], [, right]) => right - left);
+  const noRecognitionActivity = sourceEntries.length === 0 && health.totalPredictions === 0;
 
   return (
     <div className="admin-system-health">
@@ -39,14 +48,14 @@ export function SystemHealthOverviewView({ health }: { health: SystemHealthData 
         <Service icon={<Radio size={18} />} label="Telemetry" detail={health.telemetryAvailable ? "Assistant usage events are available" : "Telemetry unavailable"} tone={health.telemetryAvailable ? "healthy" : "unknown"} />
       </section>
       <section className="admin-metric-grid" aria-label="Recognition operations summary">
-        <Metric icon={<Bot size={17} />} label="All predictions" note="Recorded translation logs" value={health.totalPredictions?.toLocaleString() ?? "Unavailable"} />
-        <Metric icon={<Gauge size={17} />} label="Predictions, 30 days" note="Recent recognition activity" value={health.recentPredictions?.toLocaleString() ?? "Unavailable"} />
-        <Metric icon={<ShieldCheck size={17} />} label="Average latency" note="Recent translation-log inference" value={health.averageLatencyMs === null ? "Unavailable" : `${health.averageLatencyMs.toFixed(1)} ms`} />
-        <Metric icon={<ListChecks size={17} />} label="Review backlog" note="Pending review queue items" value={health.pendingReviewCount?.toLocaleString() ?? "Unavailable"} />
+        <Metric icon={<Bot size={17} />} label="All predictions" note="Recorded translation logs" value={formatMetricNumber(health.totalPredictions)} />
+        <Metric icon={<Gauge size={17} />} label="Predictions, 30 days" note="Recent recognition activity" value={formatMetricNumber(health.recentPredictions)} />
+        <Metric icon={<ShieldCheck size={17} />} label="Average latency" note="Recent translation-log inference" value={health.averageLatencyMs === null ? "No data" : `${health.averageLatencyMs.toFixed(1)} ms`} />
+        <Metric icon={<ListChecks size={17} />} label="Review backlog" note="Pending review queue items" value={formatMetricNumber(health.pendingReviewCount)} />
       </section>
       <section className="admin-system-health-grid">
-        <article className="admin-panel admin-system-source-panel"><div className="admin-panel-heading"><div><p className="admin-overline">30-day activity</p><h2>Recognition sources</h2></div><FolderArchive size={18} aria-hidden="true" /></div>{sourceEntries.length === 0 ? <p className="admin-empty-state">No recent recognition source data is available.</p> : <div className="admin-system-source-list">{sourceEntries.map(([source, count]) => <div key={source}><code>{source}</code><strong>{count.toLocaleString()}</strong></div>)}</div>}</article>
-        <article className="admin-panel admin-system-assistant-panel"><div className="admin-panel-heading"><div><p className="admin-overline">Assistant usage</p><h2>Conversation signals</h2></div><Bot size={18} aria-hidden="true" /></div><dl><div><dt>AI replies used</dt><dd>{health.aiRepliesSent?.toLocaleString() ?? "Unavailable"}</dd></div><div><dt>Reply acceptance</dt><dd>{formatPercent(health.aiAcceptanceRate)}</dd></div><div><dt>Captured samples</dt><dd>{health.captureCount?.toLocaleString() ?? "Unavailable"}</dd></div></dl></article>
+        <article className="admin-panel admin-system-source-panel"><div className="admin-panel-heading"><div><p className="admin-overline">30-day activity</p><h2>Recognition sources</h2></div><FolderArchive size={18} aria-hidden="true" /></div>{sourceEntries.length === 0 ? <p className="admin-empty-state">{noRecognitionActivity ? "No data" : "Not tracked"}</p> : <div className="admin-system-source-list">{sourceEntries.map(([source, count]) => <div key={source}><code>{source}</code><strong>{count.toLocaleString()}</strong></div>)}</div>}</article>
+        <article className="admin-panel admin-system-assistant-panel"><div className="admin-panel-heading"><div><p className="admin-overline">Assistant usage</p><h2>Conversation signals</h2></div><Bot size={18} aria-hidden="true" /></div><dl><div><dt>AI replies used</dt><dd>{health.aiRepliesSent === null ? "No data" : health.aiRepliesSent === 0 ? "0" : health.aiRepliesSent.toLocaleString()}</dd></div><div><dt>Reply acceptance</dt><dd>{health.aiAcceptanceRate === null ? (health.aiRepliesSent === 0 ? "Not tracked" : "No data") : formatPercent(health.aiAcceptanceRate)}</dd></div><div><dt>Captured samples</dt><dd>{health.captureCount === null ? "No data" : health.captureCount === 0 ? "0" : health.captureCount.toLocaleString()}</dd></div></dl></article>
       </section>
     </div>
   );
@@ -57,7 +66,8 @@ function Status({ label, tone }: { label: string; tone: ServiceTone }) {
 }
 
 function Service({ detail, icon, label, tone }: { detail: string; icon: React.ReactNode; label: string; tone: ServiceTone }) {
-  return <article className="admin-system-service"><span className="admin-system-service-icon">{icon}</span><div><div><h2>{label}</h2><Status label={tone === "healthy" ? "Available" : "Unavailable"} tone={tone} /></div><p>{detail}</p></div></article>;
+  const statusLabel = tone === "healthy" ? "Available" : detail.includes("unavailable") || detail.includes("failed") ? "Unavailable" : "Not tracked";
+  return <article className="admin-system-service"><span className="admin-system-service-icon">{icon}</span><div><div><h2>{label}</h2><Status label={statusLabel} tone={tone} /></div><p>{detail}</p></div></article>;
 }
 
 function Metric({ icon, label, note, value }: { icon: React.ReactNode; label: string; note: string; value: string }) {

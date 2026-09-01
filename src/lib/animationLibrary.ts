@@ -106,7 +106,7 @@ export const animationLibrary = {
 
   async performAction(
     versionId: string,
-    action: "complete-processing" | "approve" | "reject" | "publish" | "unpublish" | "archive",
+    action: "complete-processing" | "approve" | "reject" | "publish" | "unpublish" | "archive" | "unarchive",
     options?: { asset?: unknown; qualityScore?: number; notes?: string; language?: string },
   ): Promise<{ ok: boolean; status: string }> {
     // Quantise before serialising, not after: the point is the size of the

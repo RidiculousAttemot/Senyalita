@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Activity, Database, Film, Gauge, LayoutDashboard, Wand2 } from "lucide-react";
+import { Database, Film, Gauge, LayoutDashboard, Wand2 } from "lucide-react";
 
 export type AdminNavigationItem = {
   /**
@@ -59,7 +59,6 @@ export const ADMIN_NAVIGATION: AdminNavigationSection[] = [
       { label: "Studio", fullLabel: "Animation Studio", href: "/admin/animation-studio", icon: Wand2 },
       { label: "Dataset", fullLabel: "Animation Dataset", href: "/admin/animation-dataset", icon: Database },
       { label: "Library", fullLabel: "Animation Library", href: "/admin/animation-library", icon: Film },
-      { label: "Inspector", fullLabel: "Animation Inspector", href: "/admin/animation-inspector", icon: Activity },
     ],
   },
   {

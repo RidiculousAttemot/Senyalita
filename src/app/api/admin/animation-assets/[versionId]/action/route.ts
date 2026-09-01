@@ -20,7 +20,7 @@ export async function POST(request: NextRequest, { params }: { params: { version
   try {
     const admin = await requireAdmin();
     const body = await request.json() as {
-      action?: "complete-processing" | "approve" | "reject" | "publish" | "unpublish" | "archive";
+      action?: "complete-processing" | "approve" | "reject" | "publish" | "unpublish" | "archive" | "unarchive";
       asset?: unknown;
       qualityScore?: number;
       notes?: string;
@@ -179,6 +179,16 @@ export async function POST(request: NextRequest, { params }: { params: { version
         .eq("id", version.id);
       if (archiveError) throw new Error(archiveError.message);
       return NextResponse.json({ ok: true, status: "archived" });
+    }
+
+    if (body.action === "unarchive") {
+      // Restore archived asset to approved status (can be published again)
+      const { error: unarchiveError } = await supabase
+        .from("animation_asset_versions")
+        .update({ status: "approved" })
+        .eq("id", version.id);
+      if (unarchiveError) throw new Error(unarchiveError.message);
+      return NextResponse.json({ ok: true, status: "approved" });
     }
 
     return NextResponse.json({ error: "Unsupported asset action." }, { status: 400 });

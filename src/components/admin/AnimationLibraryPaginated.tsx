@@ -29,9 +29,9 @@ export function AnimationLibraryPage() {
   const [limit] = useState(25);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
-  const [selectedAsset, setSelectedAsset] = useState<AnimationLibraryAsset | null>(null);
   const [glossesWithWords, setGlossesWithWords] = useState<Set<string> | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ versionId: string; action: string; assetGloss: string } | null>(null);
 
   const loadAssets = useCallback(async () => {
     setLoading(true);
@@ -74,12 +74,12 @@ export function AnimationLibraryPage() {
     void loadAssets();
   }, [loadAssets]);
 
-  const handleAction = useCallback(
-    async (versionId: string, action: 'approve' | 'publish' | 'archive') => {
+  const handleConfirmAction = useCallback(
+    async (versionId: string, action: string) => {
       setActionLoading(versionId);
+      setConfirmAction(null);
       try {
         await animationLibrary.performAction(versionId, action as any);
-        // Reload current page
         await loadAssets();
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Action failed');
@@ -88,6 +88,13 @@ export function AnimationLibraryPage() {
       }
     },
     [loadAssets]
+  );
+
+  const handleAction = useCallback(
+    (versionId: string, action: string, assetGloss: string) => {
+      setConfirmAction({ versionId, action, assetGloss });
+    },
+    []
   );
 
   const statuses = useMemo(() => {
@@ -122,7 +129,7 @@ export function AnimationLibraryPage() {
 
   const handleNewSearch = (newSearch: string) => {
     setSearch(newSearch);
-    setPage(1); // Reset to first page on new search
+    setPage(1);
   };
 
   return (
@@ -185,7 +192,6 @@ export function AnimationLibraryPage() {
         .al-card-actions .success:hover { background: #d1fae5; }
         .al-card-actions .danger { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
         .al-card-actions .danger:hover { background: #fee2e2; }
-        .al-card-version { font-size: 10px; color: #94a3b8; margin-top: 6px; }
         .al-empty { grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: #64748b; }
         .al-empty svg { width: 40px; height: 40px; opacity: 0.3; margin-bottom: 12px; }
         .al-error {
@@ -328,7 +334,7 @@ export function AnimationLibraryPage() {
                         <button
                           className="primary"
                           disabled={actionLoading === asset.latestVersion?.id}
-                          onClick={() => handleAction(asset.latestVersion?.id!, 'approve')}
+                          onClick={() => handleAction(asset.latestVersion?.id!, 'approve', asset.gloss)}
                         >
                           {actionLoading === asset.latestVersion?.id ? <Loader size={13} className="spin" /> : <CheckCircle2 size={13} />}
                           Approve
@@ -338,17 +344,27 @@ export function AnimationLibraryPage() {
                         <button
                           className="success"
                           disabled={actionLoading === asset.latestVersion?.id}
-                          onClick={() => handleAction(asset.latestVersion?.id!, 'publish')}
+                          onClick={() => handleAction(asset.latestVersion?.id!, 'publish', asset.gloss)}
                         >
                           {actionLoading === asset.latestVersion?.id ? <Loader size={13} className="spin" /> : <Send size={13} />}
                           Publish
+                        </button>
+                      )}
+                      {asset.status === 'archived' && (
+                        <button
+                          className="primary"
+                          disabled={actionLoading === asset.latestVersion?.id}
+                          onClick={() => handleAction(asset.latestVersion?.id!, 'unarchive', asset.gloss)}
+                        >
+                          {actionLoading === asset.latestVersion?.id ? <Loader size={13} className="spin" /> : <CheckCircle2 size={13} />}
+                          Restore
                         </button>
                       )}
                       {asset.status !== 'archived' && (
                         <button
                           className="danger"
                           disabled={actionLoading === asset.latestVersion?.id}
-                          onClick={() => handleAction(asset.latestVersion?.id!, 'archive')}
+                          onClick={() => handleAction(asset.latestVersion?.id!, 'archive', asset.gloss)}
                         >
                           <Archive size={13} />
                           Archive
@@ -378,6 +394,83 @@ export function AnimationLibraryPage() {
           </>
         )}
       </div>
+
+      {confirmAction && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: '12px',
+            padding: '24px',
+            maxWidth: '400px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+            border: '1px solid #e2e8f0',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+              <AlertTriangle size={20} color="#d97706" />
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#0f172a' }}>
+                Confirm Action
+              </h3>
+            </div>
+            <p style={{ margin: '0 0 20px', fontSize: '14px', color: '#475569' }}>
+              Are you sure you want to <strong>{confirmAction.action}</strong> "{confirmAction.assetGloss}"?
+              {confirmAction.action === 'archive' && ' This can be undone by restoring it later.'}
+              {confirmAction.action === 'unarchive' && ' This will restore the asset to its previous state.'}
+              {confirmAction.action === 'publish' && ' This will make it available for use in Type-to-Sign.'}
+            </p>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setConfirmAction(null)}
+                style={{
+                  padding: '8px 16px',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '6px',
+                  background: '#f1f5f9',
+                  color: '#475569',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.12s',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleConfirmAction(confirmAction.versionId, confirmAction.action)}
+                disabled={actionLoading === confirmAction.versionId}
+                style={{
+                  padding: '8px 16px',
+                  border: 'none',
+                  borderRadius: '6px',
+                  background: confirmAction.action === 'archive' ? '#dc2626' : '#2563eb',
+                  color: '#fff',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  cursor: actionLoading === confirmAction.versionId ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.12s',
+                  opacity: actionLoading === confirmAction.versionId ? 0.6 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                {actionLoading === confirmAction.versionId && <Loader size={13} style={{ animation: 'al-spin 0.8s linear infinite' }} />}
+                {confirmAction.action === 'archive' ? 'Archive' : confirmAction.action === 'unarchive' ? 'Restore' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -29,4 +29,30 @@ describe("SystemHealthOverviewView", () => {
     expect(screen.getByText("Browser runtime monitoring unavailable")).toBeTruthy();
     expect(screen.getByText("Telemetry unavailable")).toBeTruthy();
   });
+
+  it("renders empty-data states honestly instead of unavailable placeholders", () => {
+    render(
+      <SystemHealthOverviewView
+        health={{
+          aiAcceptanceRate: null,
+          aiRepliesSent: 0,
+          averageLatencyMs: null,
+          captureCount: 0,
+          databaseAvailable: true,
+          model: { status: "ready", modelType: "BiLSTM", classes: 131 },
+          pendingReviewCount: 0,
+          recentPredictions: 0,
+          sourceBreakdown: {},
+          storageAvailable: true,
+          storageFileCount: 0,
+          telemetryAvailable: true,
+          totalPredictions: 0,
+        }}
+      />
+    );
+
+    expect(screen.getAllByText("No data").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("0").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Not tracked").length).toBeGreaterThan(0);
+  });
 });
